@@ -1,0 +1,12 @@
+# RP-11 H-1 controlled artifact — runtime dependency set.
+#
+# The consumer is the artifact `infra/rp11-h1/build.py` assembles, run by PID 1
+# as `/usr/bin/python3.14 -I -S …/rp11_h1.py`. Under `-I -S` no site-packages
+# directory is importable, so the client is vendored into the artifact's `lib/`
+# from the hash-pinned wheel in `requirements.lock`, never copied from a host.
+#
+# jeepney: maintained pure-Python D-Bus client, no dependencies of its own, MIT
+# licence (shipped in the wheel's dist-info and kept in the artifact). The 0.9
+# line has the blocking API with signal filtering that
+# `adapters/systemd/jeepney_bus.py` uses.
+jeepney>=0.9,<0.10

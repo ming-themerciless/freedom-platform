@@ -1,11 +1,10 @@
 # Freedom Blades Platform — Master Implementation Plan
 
-Status: Controlled baseline v1.8 — EX-1/EX-2 boundary amendment accepted
-2026-10-09; Phase 3 gate approved 2026-08-28; Phase 4 gate approved 2026-08-29
-and Phase 5 package planning released subject to package-specific readiness and
-gates
+Status: Controlled baseline v1.9 — implementation-first delivery reset accepted
+2026-10-12; Phase 3 and Phase 4 gates remain approved; Phase 5 development and
+full disposable-server testing are authorized under the active delivery plan
 
-Baseline date: 2026-10-09
+Baseline date: 2026-10-12
 
 Document owner: Peter Duscha, Product Owner
 
@@ -98,6 +97,17 @@ Clarifications that do not change those matters may be recorded without a new
 baseline, but still need a dated change-log entry. Git history is evidence of
 edits, not evidence of project approval.
 
+**Baseline v1.9 delivery amendment (2026-10-12).** Research, proof and contract
+artifacts are supporting evidence, not preconditions that must be made complete
+before reversible implementation begins. Agents implement small slices, test
+them comprehensively on `oracle-test`, and base review on running behavior.
+Reversible implementation details do not require separate change control.
+Formal approval remains required for product scope, production data authority,
+authorization/privacy policy, destructive production behavior, irreversible
+architecture and production activation. This amendment supersedes older
+research-only hard stops and WP-4 through WP-7 documentation gates for
+development; it does not authorize production or staging mutation.
+
 Archiving verbatim superseded status or handover blocks is a documentation
 clarification, not a baseline change, when the canonical paths remain as
 current-state entry points, archive hashes and navigation are recorded, and no
@@ -128,13 +138,11 @@ Current assignment: Peter Duscha is Product Sponsor, Acceptance Authority,
 Product Owner, Data Owner, Operations Owner and Delivery Lead. For each package,
 Peter designates the implementing agent as the working Technical Lead.
 
-At a **mandatory review checkpoint** — every subject listed in §16.4, and every
-gate whose row in the `docs/project-management/README.md` gate-authority table
-requires an Independent Reviewer recommendation — a **different** Independent
-Reviewer than the implementer is **required**. If none is available, the package
-remains `deferred`; the gate is not approved, not conditionally approved, and
-not closed on the implementer's own recommendation. *Where practical* applies
-only to reviews that neither list mandates.
+At a mandatory production, security, authorization/privacy,
+migration/data-integrity, financial/rules, Foundry-write or destructive-cutover
+checkpoint, a different Independent Reviewer than the implementer is required.
+Ordinary reversible implementation and disposable-host testing do not wait for
+an independent review gate.
 
 Security-sensitive work receives a separate security-focused review before Peter
 decides its gate. Tool names such as Claude, Gemini and Codex describe delivery
@@ -2392,103 +2400,51 @@ Gate: bot-retirement review. Required recommendations from the Product Owner,
 Technical Lead, Operations Owner and an Independent Reviewer; approval by the
 Acceptance Authority.
 
-## 16. Claude Code working protocol
+## 16. Agent working protocol
 
-Agents that support skills carry parts of this protocol as procedures under
-`.claude/skills/`: `handoff-checklist` for §16.3, `run-suites` for the
-testing procedure, `migration-staging` for schema work and `rules-sourcing`
-for game-rule changes. They cite this section and `.agents/AGENTS.md` rather
-than restating them, and no always-applicable rule is held only in a skill.
-Two `PreToolUse` guards under `.claude/hooks/` enforce the secrets rule and
-refuse Git history rewrites. This protocol binds every agent regardless.
+### 16.1 Start
 
-### 16.1 Before each milestone
+Before changing code, read the canonical agent agreement, this plan's reading
+map and current handover. Inspect the working tree and the relevant code/tests.
+Use historical review material only when it answers a concrete implementation
+question.
 
-Claude Code must:
+For an authorized slice, proceed without another planning gate. Ask Peter only
+when a choice changes product scope, production data authority,
+authorization/privacy policy, destructive production behavior, irreversible
+architecture or production activation.
 
-1. read `.agents/AGENTS.md` completely;
-2. read this document and applicable ADRs;
-3. inspect `git status`;
-4. preserve unrelated changes;
-5. trace affected production paths;
-6. identify rules and source sections;
-7. state assumptions and unresolved decisions;
-8. propose a milestone-sized plan; and
-9. wait for maintainer approval when a decision changes architecture, data
-   ownership, permissions, or production behavior.
+### 16.2 Implement and test
 
-### 16.2 Implementation rules
+- Work in small vertical slices and add or update tests with behavior.
+- Reversible details may be chosen by the implementer and documented briefly.
+- Use the full capabilities of `oracle-test`, including root/systemd, packages,
+  network, PostgreSQL, destructive recovery drills and end-to-end tests.
+- Never use production secrets or real player data on the disposable host.
+- Never mutate production or staging without separate explicit authority.
+- Stop only for an actual safety boundary or an external blocker, not because a
+  historical research question lacks formal closure.
 
-- Work on one milestone or explicitly scoped slice.
-- Add tests before or with behavior.
-- Do not use real credentials or player data.
-- Do not mutate live Sheets, Foundry, Discord, or production PostgreSQL.
-- Do not bypass failing tests or authorization.
-- Do not introduce drive-by frameworks or mass rewrites.
-- Update migrations, configuration examples, and operations docs together.
-- Keep external I/O outside the domain.
-- Use application services from both web and bot adapters.
-- Stop on ambiguous rule conflicts and document them.
+### 16.3 Handoff and review
 
-### 16.3 Milestone handoff
+Write one concise handback per implementation slice containing:
 
-The canonical `docs/review/Handover information` contains only the active
-assignment, its controlling restrictions, the immediate handoff and archive
-links. Consumed and superseded blocks move verbatim to dated snapshots beside
-the canonical file, preserving their original relative-link base, and are
-indexed under `docs/review/handover-archive/`; dedicated handbacks and reviews
-remain the durable records. Agents update the current entry point rather than
-appending an unbounded history to it.
+- behavior delivered and files changed;
+- exact tests/checks run and results, including skips;
+- deployment, migration or recovery effects;
+- remaining production risks; and
+- the next implementation action.
 
-Every assignment names a dedicated repository-relative handback path under
-`docs/review/`. The executor writes the complete terminal handback there before
-returning it in chat and links it from the current handover. When an operational
-authority forbids repository writes, the controller or assigning agent instead
-preserves the exact, unabridged terminal output at that path before review is
-requested. Chat-only or truncated handbacks are not durable evidence. The
-canonical `Handover information` remains concise and links to the dedicated
-record rather than containing a large transcript.
+Do not add byte/hash ledgers, transcript-style reading logs, prompt activation
+records or recursive remediation packages unless Peter explicitly requests
+them. Review running behavior and material risk at a useful package boundary;
+do not create a gate for each reversible parameter or documentation edit.
 
-Claude Code reports:
-
-- requirements implemented;
-- files changed;
-- migrations added;
-- security implications;
-- commands/tests run and exact results;
-- checks not run;
-- configuration/deployment changes;
-- rollback/recovery steps;
-- unresolved questions; and
-- proposed reviewer focus areas.
-
-### 16.4 Reviewer checkpoints
-
-Codex review is required for:
-
-- architecture and initial schema;
-- authentication and authorization;
-- first database mutation;
-- import/reconciliation;
-- bot write cutover;
-- trades and multi-actor atomicity;
-- Foundry connector;
-- approval centre;
-- mission attendance;
-- reward settlement;
-- Bastion state machine;
-- facility framework; and
-- production readiness.
-
-Review findings are classified:
-
-- **Blocking**: security, data loss, authorization, rule correctness, migration,
-  atomicity, or production reliability issue.
-- **Important**: material maintainability, testing, performance, or operational
-  weakness.
-- **Optional**: improvement that does not block the milestone.
-
-Blocking findings must be resolved and re-reviewed before proceeding.
+Independent review remains required before production activation and for
+security, authorization, privacy, migration/data-integrity, financial/rules,
+Foundry-write and destructive cutover boundaries. Ordinary implementation may
+continue across non-production slices while non-blocking review comments are
+addressed.
 
 ## 17. Decision governance
 
@@ -2501,9 +2457,10 @@ decisions remain valid unless superseded through §0.2 change control.
 Before baselining any phase or package, the Delivery Lead verifies that every
 decision marked as blocking it is closed. Each open decision must have an
 accountable role, required-by milestone and management action. A deadline is
-added when a calendar forecast is established. If it is not resolved by the
-package's ready date, that package remains `not ready`; implementation does not
-choose policy by default.
+added when a calendar forecast is established. If a material product or
+production policy is not resolved by the package's ready date, that package
+remains `not ready`. Reversible implementation details are not policy decisions
+and may be selected and tested by the implementer.
 
 At minimum, decisions that govern authorization, field/data ownership,
 privacy/retention, game rules, production topology, migration authority,
@@ -2558,41 +2515,33 @@ A production feature is complete when:
 
 ## 20. Immediate next actions
 
-Peter Duscha accepts DEC-1 through DEC-6 exactly as recommended in the accepted
-OH-S3 R8 proposal and commissions the LIT-FULL/R3-ROOT Route 3 readiness
-investigation, WP-1 through WP-7 in dependency order. This preserves the
-accepted Route 3 boundary, opens no §0.2 scope change and does not select
-LIT-FULL for implementation.
+Baseline v1.9 replaces the research-first WP-3/WP-4 gate sequence with the
+[active implementation-first delivery plan](project-management/active-delivery-plan.md).
+All earlier WP-1 through WP-3 proof, contract and review records are historical
+background. Their open Q3/Q6 labels and integration observations do not block
+development and need no further documentation-only closure.
 
-Independent Codex re-review of the cumulative WP-1 R6 remediation found no
-Blocking, Important or Optional findings. Peter accepts WP-1 and records the
-recommended choices: PD-2a is B2-F; PD-2b puts both `AP-2` and the OS-6 `stop`
-in the final root-procedure set; and PD-3 is B3-OUT for H-1, RB-1, RS-1 and
-H-1R. The pre-decision state is preserved in dated, indexed snapshots.
+**Current state: IMPLEMENTATION AND FULL DISPOSABLE-SERVER TESTING AUTHORIZED.**
 
-**Current state:** **WP-3 SOURCE-COMPLETION EVIDENCE ACCEPTED — CONTRACT-INTEGRATION ASSIGNMENT PREPARATION AUTHORIZED**
+Peter Duscha accepted the complete inactive Route 3 role series on 2026-10-14
+after independent review. The implemented sequence is:
 
-Peter Duscha accepts the cumulative, R1- and R2-corrected source-completion
-record as the evidence basis for a later, separately reviewed contract-
-integration step. The accepted record identity is 1,758 lines, 240,533 bytes,
-SHA-256 `4c2a1b76a72002de77ca885ba248f086c302b5e9aebebd117cfa90b8989a1049`.
+1. shared cleanup and `stop-post` — accepted;
+2. `backstop` over that cleanup engine — accepted; and
+3. `hold`, including GRR inspection- and descriptor-close exception safety —
+   accepted.
 
-Peter accepts the disclosed `R-M.1` basis for this readiness investigation,
-without characterizing the Ubuntu kernel delta as archive-chain authenticated.
-Preparation of one bounded contract-integration assignment is authorized; its
-exact bytes require independent review and Peter's acceptance before execution.
+The adapter and roles remain inactive in production. Activation still requires
+the selected `tmpfiles.d` Polkit ordering to be installed and proved across a
+real reboot, an explicit decision on the transient inspection-failure risk, and
+an independent security review of the completed series.
 
-**Preserved effective boundary:** baseline v1.8, F-1 B2-F, both lifecycle acts
-in, B3-OUT, effective EX-1/EX-2 and no EX-3 remain unchanged. Concrete Route 3
-remains unestablished, BC-2 remains a later WP-9 question and WP-4 through WP-7
-remain separately gated and unauthorized. No Q3 question, Q6-6 or Q6-7 is
-closed; D-1 through D-14 remain undecided. The accepted WP-3 HARD STOP remains
-in force until reviewed integration and Peter's later gate decision. The R5
-and H-0G retained paths remain untouched.
+All testing levels are authorized on `oracle-test`, including root/systemd,
+network, packages, PostgreSQL and destructive recovery drills. Production and
+staging mutation, real secrets and real player data remain outside this
+authority.
 
-[Evidence acceptance and integration direction](review/project-review-2026-10-11-p5-r5-rp11-h1-oh-s3-lit-full-wp3-source-completion-evidence-acceptance-and-contract-integration-direction.md)
-· [R2 remediation acceptance](review/project-review-2026-10-11-p5-r5-rp11-h1-oh-s3-lit-full-wp3-source-completion-r2-remediation-acceptance.md)
-· [Independent Codex R2 re-review](review/project-review-2026-10-11-p5-r5-rp11-h1-oh-s3-lit-full-wp3-source-completion-r2-remediation.md)
-· [Corrected source-completion record](review/phase-5-0-p5-r5-rp11-h1-oh-s3-lit-full-wp3-source-completion-record.md)
-· [Archived pre-decision §20](implementation-plan-through-2026-10-11-lit-full-wp3-source-completion-r2-remediation-acceptance.md)
-· [Implementation-plan archive](implementation-plan-archive/README.md).
+[Active handover](review/Handover%20information) ·
+[Active delivery plan](project-management/active-delivery-plan.md) ·
+[Disposable test server](operations/disposable-test-server.md) ·
+[Historical review index](review/README.md).

@@ -1,5 +1,67 @@
 # Decision register
 
+## Decision — complete inactive Route 3 role series accepted — 2026-10-14
+
+Peter Duscha accepts the complete inactive Route 3 role series for continued
+development: shared cleanup/`stop-post`, `backstop`, and `hold`, including the
+GRR inspection- and descriptor-close exception-safety remediations. Independent
+review found no remaining finding, and the final executable comparisons
+introduced no Route 3 regression against the established repository baseline.
+
+This decision closes the current role implementation and review sequence. It
+does not authorize production or staging activation. Before activation, the
+selected `tmpfiles.d` Polkit ordering must be installed and proved across a real
+reboot, the transient inspection-failure risk needs an explicit decision, and
+the completed series needs an independent security review. Baseline v1.9,
+product scope and the production safety boundary are unchanged.
+
+[Accepted handback](../review/route-3-hold-role-implementation-handback.md) ·
+[Active delivery plan](active-delivery-plan.md) ·
+[Change record](change-log.md).
+
+## Decision — Route 3 backstop accepted; hold proceeds — 2026-10-13
+
+Peter Duscha accepts the independently reviewed and remediated Route 3
+`backstop` slice and its Q6-7 behavior: an unconfirmed terminal DI-4 result is
+reported and left, is never retried within that firing and is never described as
+stopped; later firings remain terminal until the bounded journal cap.
+
+For the observed polkitd-127 behavior, Peter accepts a `tmpfiles.d` entry
+(`d /run/polkit-1/rules.d 0755 root root -`) as the preferred future
+installer/activation design. Installation and real-reboot proof are deferred to
+the installer/activation slice and remain required before production
+activation. They are not part of the current `hold` implementation slice and
+this decision authorizes no production or staging mutation.
+
+The disposable-host `hold` harness must create the directory before Polkit
+starts and may restart Polkit only as harness setup. It must separately prove
+that creating the directory after Polkit starts makes AV-1 fail closed. The
+holder itself must never restart or reload Polkit.
+
+[Backstop handback](../review/route-3-backstop-role-implementation-handback.md)
+· [Current hold prompt](../review/route-3-hold-role-implementation-claude-prompt.md)
+· [Change clarification](change-log.md).
+
+## Decision — implementation-first delivery and full disposable testing — 2026-10-12
+
+Peter Duscha adopts baseline v1.9. The WP-1 through WP-3 research chain and its
+open Q3/Q6 labels are historical inputs, not development gates. Reversible
+implementation choices are made in code and proved through tests; additional
+proof-document closure is not required.
+
+All testing levels are authorized on `oracle-test`, including SSH, packages,
+network, root/systemd, PostgreSQL, destructive migration and recovery drills,
+failure injection and end-to-end tests. Production/staging mutation and real
+secrets or player data remain excluded.
+
+The current Route 3 adapter slice receives one implementation and remediation
+cycle. Peter then decides from executable evidence whether to keep it or choose
+a simpler approach.
+
+[Active delivery plan](active-delivery-plan.md) ·
+[Change record](change-log.md) ·
+[Active handover](../review/Handover%20information).
+
 ## Decision — LIT-FULL WP-2 accepted — 2026-10-09
 
 Peter Duscha accepts the clean independent WP-2 R5 re-review recommendation

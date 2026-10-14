@@ -11,19 +11,13 @@ description: Run the Freedom Blades test suites correctly and report the result 
 disagree, they win and the disagreement is a defect to report, not a choice to
 make.
 
-## Before anything: check for a task-specific restriction
+## Authority
 
-`.agents/AGENTS.md` states that the environment instructions **do not override a
-task-specific restriction** on SSH, host inspection, database operations or
-destructive tests. Package 5.0 evidence work has carried such restrictions
-continuously.
-
-1. Read the active handover, `docs/review/Handover information`.
-2. Read the restriction banner at the top of
-   `docs/operations/disposable-test-server.md`.
-3. If either forbids SSH, synchronization or host operations, **do not run the
-   remote commands below.** Run only what the restriction permits, and report
-   every check not run and why.
+Baseline v1.9 authorizes every testing level on `oracle-test`, including SSH,
+packages, network, root/systemd, PostgreSQL, destructive migration/recovery
+drills and end-to-end tests. Read the active handover for the current slice,
+but do not revive restrictions from archived Package 5.0 evidence work.
+Production/staging and real secrets/player data remain excluded.
 
 ## The two facts that make a false green possible
 
@@ -65,13 +59,6 @@ export TEST_DATABASE_URL='postgresql+psycopg:///freedom_test'
 /opt/freedom-blades/runtime/venv-web/bin/python -m pytest -q -rs tests/web
 node --test "foundry-module/tests/"*.test.mjs
 ```
-
-## Restricted local pass
-
-When a task forbids SSH, a handover may name fallback interpreters for a local
-run. They are an exception for that task only and **must be verified before
-use**. Keep `TEST_DATABASE_URL` unset, keep the suites serial, and record that
-every database skip is an unverified assertion rather than PostgreSQL evidence.
 
 ## Reporting
 

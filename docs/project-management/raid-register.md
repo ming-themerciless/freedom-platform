@@ -1,5 +1,20 @@
 # RAID register
 
+**Current-state note, 2026-10-14.** Peter Duscha accepted the complete inactive
+Route 3 role series after independent review. No implementation finding remains
+open. Production activation is still gated on installing and proving the
+selected `tmpfiles.d` Polkit ordering across a real reboot, an explicit decision
+on the transient inspection-failure risk, and independent security review.
+
+**Current-state note, 2026-10-12.** Baseline v1.9 supersedes every historical
+Package 5.0 `not ready`, `implementation unauthorized`, proof-gap and
+documentation-gate status below. Those entries remain append-only history; they
+do not block the active implementation slice or testing on `oracle-test`.
+Current delivery risks are limited to the production safeguards and concrete
+implementation risks stated in
+[`active-delivery-plan.md`](active-delivery-plan.md). Add a new current entry
+only for a risk discovered through implementation or testing.
+
 **Current-state note, 2026-09-22.** PR-20260920-LAB-I3-R6-1 and
 PR-20260920-LAB-I3-R6-2 are Closed by maintainer disposition, and I3 is Closed
 on the accepted R8 replacement evidence. Lower entries retaining their earlier

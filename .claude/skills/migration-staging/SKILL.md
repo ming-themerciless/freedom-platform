@@ -57,6 +57,7 @@ before it is done.
 
 ## Stop conditions
 
-Stop and ask a maintainer before: applying a migration to any non-disposable
-database; changing data ownership or authority; a cutover or rollback rehearsal
-against live state; or any migration whose gate has not been approved.
+All migration and destructive recovery testing is authorized on `oracle-test`.
+Stop and ask a maintainer before applying a migration to any non-disposable
+database, changing data ownership or authority, or rehearsing a cutover or
+rollback against live state.

@@ -1,0 +1,6 @@
+# RP-11 H-1 controlled artifact — resolved, hash-pinned dependency set.
+# pip-compatible: `pip download --no-deps --only-binary=:all: --require-hashes
+# -r infra/rp11-h1/requirements.lock -d <dir>` fetches the wheel; build.py refuses
+# any wheel whose SHA-256 differs from the hash below.
+jeepney==0.9.0 \
+    --hash=sha256:97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683

@@ -9,16 +9,14 @@ Before planning or implementing any task in this repository, read:
    criteria. Read its **reading map** at the top, then §0, §16 and §20, then the
    sections your task actually touches. It is cited by section number from
    roughly 126 other documents and is deliberately not split.
-3. `docs/review/Handover information` — the **active task assignment and its
-   restrictions**. A task-specific restriction overrides the general
-   environment and server instructions, and several are usually in force. It is
-   intentionally concise; consumed history is indexed under
-   `docs/review/handover-archive/`.
+3. `docs/review/Handover information` — the **active task assignment and safety
+   boundary**. Baseline v1.9 defaults to implementation and full disposable-
+   server testing. Consumed history is not current authority.
 
-Work only within the approved milestone or explicitly scoped task. Do not
-continue past a review gate without the required maintainer and Codex review.
-If the documents conflict or a rule, authority, privacy, migration, or
-architecture decision is unresolved, stop and ask a maintainer.
+Work within the active implementation slice. Choose reversible technical
+details and test them; do not create another planning or proof gate. Ask the
+maintainer before a product-scope, production, authorization/privacy,
+data-authority or irreversible architecture decision.
 
 Use `docs/project-management/status.md` for current delivery state. Its
 verbatim historical snapshots are indexed under
@@ -67,7 +65,7 @@ A dedicated, explicitly disposable Linux test server is available for isolated
 test suites and destructive drills, away from production and staging. See
 canonical
 [`docs/operations/disposable-test-server.md`](docs/operations/disposable-test-server.md)
-for environment profiles, synchronization recipes and test commands, and check
-its restriction banner before running anything against it. The `run-suites`
+for environment profiles, synchronization recipes and test commands. Every
+testing level is authorized there under baseline v1.9. The `run-suites`
 skill carries the same procedure with the skip-count and serial-execution traps
 that otherwise produce a green run proving nothing.

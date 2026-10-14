@@ -5,3 +5,7 @@ pytest>=8.2,<9
 # than only in `requirements-web-dev.txt` so that `pytest.ini`'s asyncio options
 # are recognised by whichever interpreter runs the suite.
 pytest-asyncio>=0.24,<0.25
+# The Route 3 systemd adapter's tests import its D-Bus client. Its runtime
+# consumer is the RP-11 H-1 artifact, which vendors it from its own hash-pinned
+# set; here it is a test dependency only.
+-r infra/rp11-h1/requirements.txt

@@ -7,7 +7,7 @@ description: Verify and report a change before handing it to a maintainer or rev
 
 **This skill is a procedural aid, not a source of rules.** The authority is
 `.agents/AGENTS.md` "Contributor and agent workflow / Before handing off" and
-`docs/implementation-plan.md` §16.3 and §16.4. If this file disagrees with
+`docs/implementation-plan.md` §16.3. If this file disagrees with
 either, they win.
 
 ## Verify, in this order
@@ -21,19 +21,19 @@ either, they win.
 4. Check `git status` and confirm unrelated user changes are preserved.
 5. Run `git diff --check`.
 
-## Report these, every time
+## Concise handback
 
 From `.agents/AGENTS.md` and plan §16.3:
 
-* requirements implemented, and requirements **proposed but not implemented**;
-* files changed and migrations added;
-* security implications;
+* behavior implemented and files changed;
 * **exact commands run, the interpreter used, and the exact results**;
 * **checks not run, and why**;
-* configuration and deployment changes;
-* rollback or recovery steps;
-* unresolved questions and assumptions stated as assumptions; and
-* proposed reviewer focus areas.
+* configuration, migration, deployment and recovery effects;
+* remaining production risks; and
+* the next implementation action.
+
+Do not add reading ledgers, file hashes, prompt histories or per-question proof
+records unless Peter explicitly asks for them.
 
 ## Claims that may not be made
 
@@ -48,13 +48,10 @@ From `.agents/AGENTS.md` and plan §16.3:
 * Separate **observations, assumptions, proof obligations, proposed decisions
   and unresolved dependencies**. Do not present one as another.
 
-## Then stop
+## Continue or stop
 
-Work sits within one approved milestone or explicitly scoped slice. At the
-review gates named in `docs/implementation-plan.md`, provide the complete handoff
-and **wait**. Blocking findings involving security, data integrity,
-authorization, rule correctness, migrations, atomicity or production reliability
-must be fixed and re-reviewed before dependent work continues.
-
-Stop and ask a maintainer when a decision changes architecture, data authority,
-authorization, privacy, production behavior, or migration and rollback strategy.
+Continue through authorized non-production slices. Stop and ask a maintainer
+when a decision changes product scope, production data authority,
+authorization/privacy policy, destructive production behavior, irreversible
+architecture or production activation. Blocking safety findings must be fixed
+before the affected production boundary is crossed.

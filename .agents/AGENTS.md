@@ -19,6 +19,20 @@ silently choosing one.
 The root `AGENTS.md` and `CLAUDE.md` files are discovery entry points. This
 file is the canonical working agreement and must not be bypassed.
 
+### Implementation-first delivery policy
+
+Baseline v1.9 makes implementation and executable testing the default. Prior
+WP-1/WP-2/WP-3 proof chains, open Q3/Q6 labels and research hard stops are
+historical inputs, not current development gates. Use
+`docs/project-management/active-delivery-plan.md` for the current slice.
+
+Choose reversible technical details, document them briefly and prove them with
+tests. Ask the maintainer before changing product scope, production data
+authority, authorization/privacy policy, destructive production behavior,
+irreversible architecture or production activation. Do not create recursive
+prompt/review/remediation records or exhaustive proof documents unless the
+maintainer explicitly requests them.
+
 ### Skills and enforced guards — aids, never authority
 
 Agents that support them additionally load four procedural skills under
@@ -586,9 +600,13 @@ export TEST_DATABASE_URL='postgresql+psycopg:///freedom_test'
 node --test "foundry-module/tests/"*.test.mjs
 ```
 
-These environment instructions do not override a task-specific restriction on
-SSH, host inspection, database operations or destructive tests. When such a
-restriction applies, report the checks not run and the reason.
+Baseline v1.9 authorizes every level of testing on `oracle-test`, including
+SSH, host inspection, dependency installation, root/systemd operations,
+database work, destructive migration/recovery drills, network tests and
+end-to-end runs. A narrower task may select fewer tests for relevance, but an
+older archived restriction does not revoke this authority. Production and
+staging remain outside it, and real secrets or player data must not be copied
+to the disposable host.
 
 Re-run the full set against the tree you are actually submitting. A figure
 carried over from an earlier tree is an assertion about a state that no longer
@@ -603,93 +621,48 @@ for environment specifications, safe synchronization procedures, and test execut
 
 ## Contributor and agent workflow
 
-### Gemini assignment invocation
+### Current authority and archives
 
-Every assignment to Gemini must be handed to Gemini with this `/goal`
-invocation, replacing `<PATH_TO_ASSIGNMENT>` with the repository-relative path
-of the active assignment:
+Read `docs/review/Handover information` and
+`docs/project-management/active-delivery-plan.md` first. Dated prompts,
+handbacks, reviews, evidence records and snapshots not linked as current are
+historical evidence only. Do not revive their restrictions or closure machinery
+because they remain in the repository.
 
-```text
-/goal Execute the active assignment in <PATH_TO_ASSIGNMENT>. Proceed autonomously through every authorized step in order until the defined terminal state (PASS, INVALID RUN, or HARD STOP). Do not post intermediate progress updates, do not yield turns for user confirmation on background tasks, and do not stop until the final handback and closing record are fully written.
-```
+### Before editing
 
-The assignment author or activator must include the resolved invocation in the
-handoff or activation record so that it can be copied without interpretation.
-This instruction prevents conversational pauses; it does not broaden the
-assignment, authorize an omitted command, suppress a genuine tool-permission
-prompt, permit a retry or remediation, or override any HARD STOP. At the first
-defined terminal state Gemini writes the complete prescribed handback and
-closing record, then stops.
+1. inspect `git status` and preserve unrelated changes;
+2. inspect the relevant code and tests end to end;
+3. identify the requirement or rule being implemented; and
+4. choose the smallest useful implementation slice.
 
-### Current-state documents and archives
+Do not pause for a new plan or approval when the active handover already covers
+the slice. Ask the maintainer only for a material product, production,
+authorization/privacy, data-authority or irreversible architecture decision.
 
-`docs/project-management/status.md` and `docs/review/Handover information` are
-concise current-state entry points. Their verbatim historical snapshots live in
-the same directories as the canonical files so their original relative links
-continue to resolve; `docs/project-management/status-archive/` and
-`docs/review/handover-archive/` index them.
+### While editing and testing
 
-Read the canonical current files first. Consult an archive only when a current
-record links to it or the task requires historical evidence. Archived text must
-not be silently rewritten, and a superseded assignment or authorization in an
-archive does not become active because it is read or cited. Corrections use a
-new current record or a dated erratum that identifies the affected snapshot.
-Moving text to an archive never changes a decision, finding, gate, authority or
-disposition.
+- keep changes focused and add tests with behavior;
+- prefer executable evidence over additional speculative documentation;
+- use `oracle-test` freely for all authorized test levels;
+- keep production/staging and real secrets/player data untouched;
+- preserve authorization, validation, audit and recovery controls; and
+- record a reversible implementation choice in code, a test or a short ADR
+  instead of opening a separate decision package.
 
-Before editing:
+### Handoff
 
-1. read this file, `docs/implementation-plan.md`, relevant modules,
-   `.env.example`, and current tests;
-2. check `git status` and preserve unrelated user changes;
-3. trace the complete path from input through mutation and persistence;
-4. identify the applicable rule and existing behavior; and
-5. state assumptions when requirements are genuinely ambiguous.
+Write one concise handback for a meaningful implementation slice. Include only
+behavior delivered, files changed, exact tests and results, skipped checks,
+deployment/migration/recovery effects, remaining production risks and the next
+action. Do not include reading ledgers, file hashes, transcripts or recursive
+prompt histories unless specifically requested.
 
-Work within one approved implementation-plan milestone or an explicitly scoped
-slice of it. Do not silently continue past a review gate. Stop for maintainer
-direction when a decision changes architecture, data authority, authorization,
-privacy, production behavior, or migration/rollback strategy.
-
-While editing:
-
-- keep changes scoped and avoid opportunistic rewrites;
-- separate mechanical refactors from behavior changes;
-- add or update tests with the implementation;
-- update documentation, configuration examples, migrations, and adapters when
-  their contracts change;
-- never mutate live services or production data during development; and
-- never bypass authorization, validation, audit logging, or failing checks to
-  make a feature appear complete.
-
-Before handing off — the `handoff-checklist` skill carries this list and the
-plan's §16.3 report contents together, and does not replace either:
-
-1. run narrow relevant tests, then the full available suite;
-2. run configured formatting, linting, and type checks;
-3. review the diff for secrets, generated files, unrelated changes, unsafe
-   logs, and migration reversibility;
-4. report commands run and checks that could not be run; and
-5. call out deployment, configuration, data migration, and rollback steps.
-
-Every assignment must name a repository-relative durable handback file under
-`docs/review/`. At every terminal state, including a refusal, INVALID RUN or
-HARD STOP, the executor writes the complete handback there before returning it
-in chat, then links it from `docs/review/Handover information`. If the active
-authority forbids repository writes, the assignment must instead require the
-controller or assigning agent to preserve the executor's exact, unabridged
-terminal output in a dedicated `docs/review/` handback file before requesting
-review, and to link that file from the current handover. Chat text alone is not
-durable handoff evidence. Do not put a large transcript directly into the
-concise `Handover information` entry point.
-
-Do not claim a check passed unless it was actually run.
-
-At the review gates named in `docs/implementation-plan.md`, provide a complete
-handoff and wait for the required review. Blocking findings involving security,
-data integrity, authorization, rule correctness, migrations, atomicity, or
-production reliability must be fixed and re-reviewed before dependent work
-continues.
+Do not claim a check passed unless it was actually run. Independent review is
+required before production activation and for security, authorization, privacy,
+migration/data-integrity, financial/rules, Foundry-write and destructive
+cutover boundaries; it is not required for every reversible implementation
+parameter.
 
 ## Definition of done
 

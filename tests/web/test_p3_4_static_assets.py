@@ -842,6 +842,58 @@ PERMITTED_DISPOSABLE_SERVER_REMEDIATION = frozenset({
 })
 
 
+#: The Route 3 manager/Polkit adapter slice (active delivery plan, 2026-10-12):
+#: an application-owned boundary and its system-bus adapter. It is inactive in
+#: production configuration and no runtime path imports it; that is asserted by
+#: `tests/test_systemd_unit_control.py`. Strictly enumerated, not a prefix.
+PERMITTED_ROUTE_3_ADAPTER = frozenset({
+    "application/unit_control.py",
+    "adapters/systemd/__init__.py",
+    "adapters/systemd/artifact.py",  # pre-execution invariant (security remediation)
+    "adapters/systemd/bus.py",
+    "adapters/systemd/jeepney_bus.py",
+    "adapters/systemd/manager.py",
+    "adapters/systemd/polkit.py",
+    "adapters/systemd/subject.py",
+    # The controlled role artifact its commands run (remediation, 2026-10-12):
+    # entry point, unimplemented roles, its own dependency set and its builder.
+    "infra/rp11-h1/build.py",
+    "infra/rp11-h1/requirements.lock",
+    "infra/rp11-h1/requirements.txt",
+    "infra/rp11-h1/rp11_h1.py",
+    "infra/rp11-h1/rp11_roles.py",
+    # Role slice 1 (2026-10-13): the shared cleanup engine and `deact … stop-post`.
+    # Only the controlled artifact imports them (asserted by
+    # `tests/test_rp11_cleanup.py`).
+    "application/rp11/__init__.py",
+    "application/rp11/attribution.py",
+    "application/rp11/authority.py",
+    "application/rp11/baseline.py",
+    "application/rp11/canonical.py",
+    "application/rp11/cleanup.py",
+    "application/rp11/evidence.py",
+    "application/rp11/journal.py",
+    "application/rp11/paths.py",
+    "application/rp11/pk.py",
+    "application/rp11/ports.py",
+    "application/rp11/records.py",
+    "application/rp11/sn.py",
+    "adapters/rp11/__init__.py",
+    "adapters/rp11/baseline.py",
+    "adapters/rp11/fsops.py",
+    "adapters/rp11/process.py",
+    "adapters/rp11/stop_post.py",
+    # Role slice 2 (2026-10-13): `backstop` (BS-1 … BS-4) over the same engine.
+    "application/rp11/backstop.py",
+    "adapters/rp11/backstop.py",
+    # Role slice 3 (2026-10-13): `hold` (ACT, hold-start, HL, IGR).
+    "application/rp11/hl.py",
+    "application/rp11/hold.py",
+    "adapters/rp11/hold.py",
+    "adapters/rp11/holdfs.py",
+})
+
+
 class MalformedStatusRecord(ValueError):
     """A `git status` payload that does not parse as complete records.
 
@@ -989,6 +1041,8 @@ def scope_violation(path: str) -> str | None:
     if path in PERMITTED_LIVE_BOT_DEFECT_FIXES:
         return None
     if path in PERMITTED_DISPOSABLE_SERVER_REMEDIATION:
+        return None
+    if path in PERMITTED_ROUTE_3_ADAPTER:
         return None
     if path.startswith("adapters/web/templates/"):
         if path in PERMITTED_TEMPLATES:

@@ -1,33 +1,53 @@
-# Active handover — WP-3 source-completion evidence accepted — 2026-10-11
+# Active handover — Route 3 role series accepted — 2026-10-14
 
-**WP-3 SOURCE-COMPLETION EVIDENCE ACCEPTED — CONTRACT-INTEGRATION ASSIGNMENT PREPARATION AUTHORIZED**
+**IMPLEMENTATION AND FULL DISPOSABLE-SERVER TESTING AUTHORIZED**
 
-Peter Duscha accepts the cumulative, R1- and R2-corrected source-completion
-record as the evidence basis for a later, separately reviewed contract-
-integration step. The record is accepted at 1,758 lines, 240,533 bytes and
-SHA-256 `4c2a1b76a72002de77ca885ba248f086c302b5e9aebebd117cfa90b8989a1049`.
+Peter Duscha supersedes the WP-3 research-only hard stop and the associated
+WP-4 through WP-7 documentation gates for development work. The WP-1 through
+WP-3 records remain historical evidence; they are not current prerequisites and
+need no further closure or reconciliation.
 
-Peter accepts the disclosed `R-M.1` basis for this readiness investigation:
-the Ubuntu kernel delta is not authenticated through current signed indexes,
-but its exact identity equals accepted R2 Appendix D. That limitation remains
-visible for A-12.3 and A-15.2 and is not archive-chain authentication.
+Peter Duscha accepted the complete inactive Route 3 role series on 2026-10-14
+after independent review of the final GRR descriptor-close remediation. The
+manager/Polkit adapter and all three dependency-ordered role slices are now
+complete for continued development:
 
-Preparation of one bounded contract-integration assignment is authorized. It
-must preserve the evidence classifications and prepare D-1 through D-6, D-9
-and D-10 for Peter's decisions. Its exact bytes require independent review and
-Peter's acceptance before execution.
+1. shared cleanup plus `deact … stop-post` — accepted;
+2. `backstop`, reusing the accepted cleanup implementation — accepted; and
+3. `hold`, including GRR inspection- and descriptor-close exception safety —
+   accepted.
 
-**Preserved effective boundary:** baseline v1.8, F-1 B2-F, both lifecycle acts
-in, B3-OUT, effective EX-1/EX-2 and no EX-3 remain unchanged. Concrete Route 3
-remains unestablished, BC-2 remains a later WP-9 question and WP-4 through WP-7
-remain separately gated and unauthorized. No Q3 question, Q6-6 or Q6-7 is
-closed; D-1 through D-14 remain undecided. The accepted WP-3 HARD STOP remains
-in force until reviewed integration and Peter's later gate decision. The R5
-and H-0G retained paths remain untouched.
+Peter has accepted the backstop Q6-7 behavior. A `tmpfiles.d` entry is the
+preferred future installer/activation design for the observed Polkit directory
+ordering, but its installation and real-reboot proof remain for a future
+installer/activation slice. A production activation also requires an explicit
+decision on the transient inspection-failure risk and independent security
+review of the completed series. This acceptance authorizes none of those
+activation steps.
 
-[Evidence acceptance and integration direction](project-review-2026-10-11-p5-r5-rp11-h1-oh-s3-lit-full-wp3-source-completion-evidence-acceptance-and-contract-integration-direction.md)
-· [R2 remediation acceptance](project-review-2026-10-11-p5-r5-rp11-h1-oh-s3-lit-full-wp3-source-completion-r2-remediation-acceptance.md)
-· [Independent Codex R2 re-review](project-review-2026-10-11-p5-r5-rp11-h1-oh-s3-lit-full-wp3-source-completion-r2-remediation.md)
-· [Corrected source-completion record](phase-5-0-p5-r5-rp11-h1-oh-s3-lit-full-wp3-source-completion-record.md)
-· [Archived pre-decision handover](Handover-information-through-2026-10-11-lit-full-wp3-source-completion-r2-remediation-acceptance.md)
-· [Handover archive index](handover-archive/README.md).
+[Accepted role-series handback](route-3-hold-role-implementation-handback.md) ·
+[Final remediation prompt](route-3-hold-role-grr-close-remediation-claude-prompt.md) ·
+[Completed backstop handback](route-3-backstop-role-implementation-handback.md) ·
+[Completed stop-post handback](route-3-stop-post-role-implementation-handback.md) ·
+[Accepted adapter handback](route-3-manager-polkit-implementation-handback.md).
+
+All levels of testing are authorized on `oracle-test`, including SSH and sync,
+dependency installation, builds, network tests, root/systemd operations,
+PostgreSQL work, destructive migration/recovery drills, failure injection,
+restart/rollback exercises, and end-to-end tests. The disposable host may be
+reset as needed.
+
+Still prohibited without a separate explicit instruction: production or
+staging mutation, use or disclosure of real secrets or player data, weakening
+authorization, and destructive operations outside the disposable environment.
+
+The role implementation sequence is closed. Select the next small
+implementation slice under the active delivery plan; do not turn the remaining
+activation safeguards into another documentation-only proof chain.
+
+[Active delivery plan](../project-management/active-delivery-plan.md) ·
+[Disposable test server](../operations/disposable-test-server.md) ·
+[Reset handback](implementation-first-reset-handback-2026-10-12.md) ·
+[Archived predecessor handover](Handover-information-through-2026-10-13-route-3-hold-active.md) ·
+[Historical review records](README.md) ·
+[Handover archive index](handover-archive/README.md).

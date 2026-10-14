@@ -9,18 +9,18 @@ Before planning, reviewing, or changing anything in this repository, read:
    and §20, then the sections your task touches. It is cited by section number
    from roughly 126 other documents and is deliberately not split into
    per-phase files.
-3. `docs/review/Handover information` — the **active assignment and its
-   restrictions**. A task-specific restriction overrides the general
-   environment and test-server instructions, and several are usually in force.
-   This is a concise current-state entry point; consumed and superseded material
-   is indexed under `docs/review/handover-archive/`.
+3. `docs/review/Handover information` — the **active assignment and its safety
+   boundary**. Baseline v1.9 defaults to implementation and full testing on the
+   disposable server. This is a concise current-state entry point; consumed and
+   superseded material is historical.
 4. `docs/operations/disposable-test-server.md` — the dedicated disposable Linux
    test environment (`oracle-test` / `138.2.182.39`) where agents have full
-   administrative (root) access for isolated test runs and system drills. Check
-   its restriction banner before running anything against it.
+   administrative (root) access for every level of isolated testing.
 
-These documents apply to the entire repository. If they conflict or a requested
-change would cross a review gate, stop and ask a maintainer.
+These documents apply to the entire repository. If they conflict, follow the
+newest current-state authority and ask a maintainer only when the conflict would
+change product scope, production safety, authorization/privacy, data authority
+or an irreversible architecture choice.
 
 Current delivery state is summarized in `docs/project-management/status.md`.
 Historical status snapshots are indexed under

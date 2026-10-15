@@ -27,6 +27,7 @@ from adapters.rp11 import backstop as backstop_root  # noqa: E402
 from adapters.rp11 import stop_post as stop_post_root  # noqa: E402
 from adapters.rp11.backstop import build_backstop, run_backstop  # noqa: E402
 from adapters.rp11.fsops import (  # noqa: E402
+    UNREACHABLE,
     LocalActivationFs,
     LocalBackstopGuard,
     LocalRecordStore,
@@ -47,12 +48,12 @@ from application.rp11.backstop import (  # noqa: E402
     is_backstop_attempt,
 )
 from application.rp11.canonical import canonical_bytes, parse_canonical  # noqa: E402
-from application.rp11.cleanup import Terminal  # noqa: E402
+from application.rp11.cleanup import GrrOutcome, Terminal  # noqa: E402
 from application.rp11.journal import GENESIS, JournalKind, attempt_run, serialize_line  # noqa: E402
 from application.rp11.paths import ActivationPaths, Layout  # noqa: E402
 from application.rp11.pk import PkOutcome  # noqa: E402
 from application.rp11.ports import GuardMode  # noqa: E402
-from application.rp11.records import RULE_CLASSES, validate_record  # noqa: E402
+from application.rp11.records import RULE_CLASSES, RecordSchemaError, validate_record  # noqa: E402
 from application.unit_control import (  # noqa: E402
     CAPTURE_UNIT,
     ControlError,
@@ -283,7 +284,7 @@ def never(*_a, **_k):
 def bare(layout: Layout, units, **ports) -> BackstopProcedure:
     defaults = dict(
         records=Explode("records"), fs=Explode("fs"), journals=Explode("journals"), guard=Explode("guard"),
-        limits=never, cleanup=never,
+        limits=never, cleanup=never, grant_check=never,
     )
     defaults.update(ports)
     return BackstopProcedure(ActivationPaths(layout, ACT_ID), units=units, **defaults)
@@ -442,16 +443,30 @@ def test_a_valid_latest_st1_verified_record_disarms_once_and_exits_0(layout, fx)
     assert units.reads == [HOLDER]  # no CL: the capture unit is never read
 
 
-def _hard_stop(layout, fx) -> dict:
+def _unconfirmed_hard_stop(layout, fx) -> dict:
+    """The rule is gone and nothing else is left, but Polkit's effect was never confirmed."""
     fx.activate()
     out = stop_post(layout, fx, pk=PkOutcome.UNCONFIRMED)
     assert out.terminal is Terminal.HARD_STOP
     return record_doc(layout, 1)
 
 
+def _safe_hard_stop(layout, fx, *, activate: bool = True) -> dict:
+    """A genuine hard-stop: a foreign replacement of the rule is kept (never removed), no
+    A1-intact object remains and Polkit positively reports ``not-authorized``."""
+    if activate:
+        fx.activate()
+    _replace_with_same_bytes(fx.paths.rule)
+    out = stop_post(layout, fx, pk=PkOutcome.NOT_AUTHORIZED)
+    assert out.terminal is Terminal.HARD_STOP
+    return record_doc(layout, 1)
+
+
 def test_a_qualifying_hard_stop_disarms_at_bs3(layout, fx):
-    doc = _hard_stop(layout, fx)
-    assert doc["active_rule"]["class"] == "removed-earlier" and doc["residual"] == []
+    doc = _safe_hard_stop(layout, fx)
+    assert doc["active_rule"]["class"] == "present-foreign-unremoved"
+    assert [r["class"] for r in doc["residual"]] == ["present-foreign-unremoved"]
+    assert doc["grant_check"]["after_cleanup"] == doc["pk"]["outcome"] == "not-authorized"
     units = Units()
     out = fire(layout, fx.a2_sha256, units)
     assert out.terminal is BsTerminal.DISARMED and units.disarms == [ACT_ID]
@@ -470,19 +485,79 @@ def test_a_hard_stop_with_an_a1_intact_object_left_runs_cl_again(layout, fx):
     assert record_doc(layout, 2)["trigger"] == "backstop"
 
 
+# the unconfirmed-Polkit hard-stop is never BS-3 (re-review finding 1) --------------
+
+
+def test_a_removed_rule_with_unconfirmed_polkit_takes_bs4_and_never_disarms(layout, fx):
+    doc = _unconfirmed_hard_stop(layout, fx)
+    assert doc["active_rule"]["class"] == "removed-earlier" and doc["residual"] == []
+    assert doc["grant_check"]["after_cleanup"] == doc["pk"]["outcome"] == "unconfirmed"
+    assert hard_stop_permits_disarm(doc) is False
+    units = Units()
+    out = fire(layout, fx.a2_sha256, units)  # Polkit now answers not-authorized
+    assert out.terminal is BsTerminal.CLEANUP and out.cleanup.k == 2 and units.disarms == []
+    assert record_doc(layout, 2)["trigger"] == "backstop"
+    # the later cleanup established not-authorized: the normal BS-2 disarm works again
+    last = Units()
+    done = fire(layout, fx.a2_sha256, last)
+    assert done.terminal is BsTerminal.DISARMED and last.disarms == [ACT_ID]
+    assert done.lines == [f"rp11-bs disarmed {ACT_ID} branch=bs-2 k=2 disarm=stopped"]
+
+
+@pytest.mark.parametrize("pk", [PkOutcome.UNCONFIRMED, PkOutcome.AUTHORIZED])
+def test_persistently_unconfirmed_polkit_never_calls_di4_and_stays_bounded(layout, pk):
+    fx = make_fx(layout, backstop_max=3)
+    fx.activate()
+    assert stop_post(layout, fx, pk=PkOutcome.UNCONFIRMED).terminal is Terminal.HARD_STOP
+    seen = Units()
+    codes = [fire(layout, fx.a2_sha256, seen, pk=FakePk(seen.events, outcome=pk)).exit_code for _ in range(6)]
+    assert seen.disarms == []
+    # the stop-post attempt is not counted: B = 3 backstop attempts, then withheld terminals
+    assert codes == [1, 1, 1, 12, 12, 12]
+    assert len(attempt_dirs(layout)) == 4
+    assert {t["disarm"] for t in terminal_lines(layout)} == {"withheld"}
+
+
+@pytest.mark.parametrize("after", ["authorized", "unconfirmed", "absent", "Not-Authorized", None, 0, True])
+@pytest.mark.parametrize("pk_value", ["not-authorized", "unconfirmed"])
+def test_bs3_requires_positive_not_authorized_in_both_fields_for_every_rule_class(hard_doc, after, pk_value):
+    for rule in sorted(RULE_CLASSES - {"removed-unconfirmed", "grant-unremovable", "present-uninspected-unremoved"}):
+        doc = json.loads(json.dumps(hard_doc))
+        doc["active_rule"]["class"] = rule
+        doc["grant_check"]["after_cleanup"] = after
+        doc["pk"]["outcome"] = pk_value
+        assert hard_stop_permits_disarm(doc) is False, (rule, after, pk_value)
+
+
+@pytest.mark.parametrize("drop", ["grant_check", "pk", "after_cleanup", "outcome"])
+def test_bs3_a_missing_authorization_fact_is_not_proof(hard_doc, drop):
+    doc = json.loads(json.dumps(hard_doc))
+    if drop == "grant_check":
+        del doc["grant_check"]
+    elif drop == "pk":
+        del doc["pk"]
+    elif drop == "after_cleanup":
+        del doc["grant_check"]["after_cleanup"]
+    else:
+        del doc["pk"]["outcome"]
+    assert hard_stop_permits_disarm(doc) is False
+
+
 # pure BS-3 predicate ------------------------------------------------------------
 
 
 @pytest.fixture
 def hard_doc(layout, fx) -> dict:
-    return _hard_stop(layout, fx)
+    return _safe_hard_stop(layout, fx)
 
 
 @pytest.mark.parametrize("rule", sorted(RULE_CLASSES | {"absent", "something-else"}))
 def test_bs3_rule_class_predicate(hard_doc, rule):
     doc = json.loads(json.dumps(hard_doc))
     doc["active_rule"]["class"] = rule
-    expected = rule in RULE_CLASSES and rule not in {"removed-unconfirmed", "grant-unremovable"}
+    expected = rule in RULE_CLASSES and rule not in {
+        "removed-unconfirmed", "grant-unremovable", "present-uninspected-unremoved"
+    }
     assert hard_stop_permits_disarm(doc) is expected
 
 
@@ -535,6 +610,35 @@ def _st1_then(layout, fx, name: str, data: bytes, mode: int = 0o444):
     fx.activate()
     assert stop_post(layout, fx).terminal is Terminal.ST1_VERIFIED  # an older success, deact-1
     put_record(layout, name, data, mode)
+
+
+def as_attempt(doc: dict, k: int) -> dict:
+    """The same record as attempt ``k``: the attempt number and its own journal path."""
+    journals = [dict(j) for j in doc["journals"]]
+    journals[-1]["path"] = journals[-1]["path"].replace(
+        f"-deact-{doc['attempt']}-evidence", f"-deact-{k}-evidence"
+    )
+    return {**doc, "attempt": k, "journals": journals}
+
+
+@pytest.mark.parametrize("field", ["pk-unconfirmed", "after-cleanup-unconfirmed"])
+def test_a_canonical_contradictory_greatest_record_never_lets_an_older_one_decide(layout, fx, field):
+    """deact-1 is a verified success; deact-2 is canonical but claims two Polkit results."""
+    fx.activate()
+    assert stop_post(layout, fx).terminal is Terminal.ST1_VERIFIED
+    doc = as_attempt(parse_canonical(_valid_bytes(layout)), 2)
+    assert doc["grant_check"]["after_cleanup"] == doc["pk"]["outcome"] == "not-authorized"
+    if field == "pk-unconfirmed":
+        doc["pk"]["outcome"] = "unconfirmed"
+    else:
+        doc["grant_check"]["after_cleanup"] = "unconfirmed"
+    with pytest.raises(RecordSchemaError):
+        validate_record(doc)
+    put_record(layout, f"{ACT_ID}.deact-2.json", canonical_bytes(doc))
+    units = Units()
+    out = fire(layout, fx.a2_sha256, units)
+    assert units.disarms == [] and out.terminal is not BsTerminal.DISARMED
+    assert out.terminal is BsTerminal.CLEANUP  # the contradictory record is BS-4; the older success is ignored
 
 
 def _valid_bytes(layout) -> bytes:
@@ -599,7 +703,7 @@ def test_a_replaced_record_with_valid_bytes_of_this_attempt_is_indistinguishable
     fx.activate()
     stop_post(layout, fx)
     doc = parse_canonical(_valid_bytes(layout))
-    put_record(layout, f"{ACT_ID}.deact-2.json", canonical_bytes({**doc, "attempt": 2}))
+    put_record(layout, f"{ACT_ID}.deact-2.json", canonical_bytes(as_attempt(doc, 2)))
     assert branch_for_record(
         LocalRecordStore(ActivationPaths(layout, ACT_ID).record_dir, layout.owner).read(f"{ACT_ID}.deact-2.json"),
         activation_id=ACT_ID, k=2,
@@ -610,15 +714,63 @@ def test_the_greatest_attempt_decides_even_when_an_older_one_succeeded(layout, f
     fx.activate()
     assert stop_post(layout, fx).terminal is Terminal.ST1_VERIFIED  # deact-1 st1-verified
     doc = parse_canonical(_valid_bytes(layout))
-    hard = {**doc, "attempt": 3, "outcome": "hard-stop", "failure": {"step": "CL-6", "class": "residual"},
+    hard = {**as_attempt(doc, 3), "outcome": "hard-stop", "failure": {"step": "CL-6", "class": "residual"},
             "st1": {**doc["st1"], "verified": False},
             "residual": [{**{k: 0 for k in ("uid", "gid", "mode", "size", "dev", "ino", "nlink")},
-                          "path": "/run/x", "class": "unremovable", "type": "file", "xattr_names": [], "sha256": "absent"}]}
+                          "path": "/run/x", "class": "unremovable", "type": "file", "xattr_names": [],
+                          "sha256": "unreadable"}]}
     validate_record(hard)
     put_record(layout, f"{ACT_ID}.deact-3.json", canonical_bytes(hard))
     units = Units()
     out = fire(layout, fx.a2_sha256, units)
     assert units.disarms == [] and out.terminal is BsTerminal.CLEANUP
+
+
+@pytest.mark.parametrize("error", [KeyError("x"), TypeError("x"), AttributeError("x"), IndexError("x"), AssertionError("x"),
+                                   RecursionError("x"), ValueError("x"), OSError("x")])
+def test_branch_for_record_is_defensively_fail_closed_if_the_validator_ever_leaks(layout, fx, monkeypatch, error):
+    """Defence in depth: whatever escapes the validator, a record is BS-4 and never an exception."""
+    fx.activate()
+    assert stop_post(layout, fx).terminal is Terminal.ST1_VERIFIED
+    good = _valid_bytes(layout)
+    assert branch_for_record(good, activation_id=ACT_ID, k=1) is Branch.BS2
+
+    def leaking(_doc):
+        raise error
+
+    monkeypatch.setattr("application.rp11.backstop.validate_record", leaking)
+    assert branch_for_record(good, activation_id=ACT_ID, k=1) is Branch.BS4
+
+
+NESTED_BREAKS = {
+    "authority-absent": lambda d: d.__setitem__("authority", "absent"),
+    "pk-absent": lambda d: d.__setitem__("pk", "absent"),
+    "grant-identity-absent": lambda d: d.__setitem__("grant_identity", "absent"),
+    "active-rule-incomplete": lambda d: d.__setitem__("active_rule", {"class": "removed-verified"}),
+    "pass-config-incomplete": lambda d: d.__setitem__("pass_config", {"class": "removed"}),
+    "children-not-a-list": lambda d: d["children"].__setitem__("entries", {}),
+    "check-missing": lambda d: d["st1"]["checks"].pop("baseline-equal"),
+    "journal-entry-short": lambda d: d["journals"][-1].pop("length"),
+    "directories-of-strings": lambda d: d.__setitem__("directories", ["tree-p"]),
+    "params-of-a-list": lambda d: d.__setitem__("params", []),
+}
+
+
+@pytest.mark.parametrize("case", sorted(NESTED_BREAKS))
+def test_a_nested_malformed_latest_record_never_lets_the_older_success_decide(layout, fx, case):
+    """The greatest attempt decides: a canonical latest record that is malformed *inside*
+    is BS-4 (CL again), never BS-2 and never the older verified record's BS-2."""
+    fx.activate()
+    assert stop_post(layout, fx).terminal is Terminal.ST1_VERIFIED  # deact-1, valid, st1-verified
+    doc = as_attempt(parse_canonical(_valid_bytes(layout)), 2)
+    NESTED_BREAKS[case](doc)
+    with pytest.raises(RecordSchemaError):
+        validate_record(doc)
+    put_record(layout, f"{ACT_ID}.deact-2.json", canonical_bytes(doc))
+    units = Units()
+    out = fire(layout, fx.a2_sha256, units)
+    assert units.disarms == [] and out.terminal is BsTerminal.CLEANUP  # CL ran (its record name is taken)
+    assert out.cleanup.k == 2 and out.cleanup.terminal is Terminal.RECORD_UNPUBLISHED
 
 
 @pytest.mark.parametrize("junk", [
@@ -678,8 +830,11 @@ DISARM_RESULTS = [
 @pytest.mark.parametrize("site", ["bs-2", "bs-3"])
 @pytest.mark.parametrize("result,klass,confirmed", DISARM_RESULTS)
 def test_bs2_and_bs3_disarm_fail_closed_without_retry_cl_or_record(layout, fx, site, result, klass, confirmed):
-    fx.activate()
-    stop_post(layout, fx, pk=PkOutcome.NOT_AUTHORIZED if site == "bs-2" else PkOutcome.UNCONFIRMED)
+    if site == "bs-2":
+        fx.activate()
+        stop_post(layout, fx, pk=PkOutcome.NOT_AUTHORIZED)
+    else:
+        _safe_hard_stop(layout, fx)
     before = attempt_dirs(layout), records(layout)
     units = Units(disarm=result)
     out = fire(layout, fx.a2_sha256, units)
@@ -698,6 +853,7 @@ def test_bs2_and_bs3_disarm_fail_closed_without_retry_cl_or_record(layout, fx, s
 def test_the_terminal_disarm_is_one_call_one_line_and_never_success(layout, result, klass, _confirmed):
     fx = make_fx(layout, backstop_max=2)
     fx.activate()
+    os.unlink(fx.paths.rule)  # the rule path is observed absent: the bound may disarm
     make_attempt(layout, 1)
     make_attempt(layout, 2)
     units = Units(disarm=result)
@@ -710,7 +866,7 @@ def test_the_terminal_disarm_is_one_call_one_line_and_never_success(layout, resu
     ]
     assert out.lines == [f"rp11-bs bound-reached {ACT_ID} reason=backstop-max disarm={klass}"]
     assert records(layout) == [] and attempt_dirs(layout) == [f"{ACT_ID}-deact-1-evidence", f"{ACT_ID}-deact-2-evidence"]
-    assert os.path.exists(fx.paths.rule)  # nothing entered CL, not even CL-G
+    assert not os.path.lexists(fx.paths.rule)  # unchanged: nothing entered CL, not even CL-G
 
 
 @pytest.mark.parametrize("site", ["bs-2", "bs-3", "bs-4"])
@@ -734,9 +890,13 @@ def test_all_three_sites_through_the_real_adapter(layout, site, stop, signals, k
     fx = make_fx(layout, backstop_max=1)
     fx.activate()
     if site == "bs-4":
+        os.unlink(fx.paths.rule)  # absent rule path: the bound may disarm
         make_attempt(layout, 1)
     else:
-        stop_post(layout, fx, pk=PkOutcome.NOT_AUTHORIZED if site == "bs-2" else PkOutcome.UNCONFIRMED)
+        if site == "bs-2":
+            stop_post(layout, fx, pk=PkOutcome.NOT_AUTHORIZED)
+        else:
+            _safe_hard_stop(layout, fx, activate=False)
     before = attempt_dirs(layout), records(layout)
     bus = BusUnits(stop=stop, signals=signals)
     paths = ActivationPaths(layout, ACT_ID)
@@ -749,6 +909,7 @@ def test_all_three_sites_through_the_real_adapter(layout, site, stop, signals, k
         guard=LocalBackstopGuard(layout.store, ACT_ID, layout.owner),
         limits=lambda: (1, 1 << 20),
         cleanup=never,
+        grant_check=lambda: PkOutcome.NOT_AUTHORIZED,
     ).run()
     (call,) = bus.calls("StopUnit")
     assert call.body == (TIMER, "fail")
@@ -884,6 +1045,7 @@ def _guard_with(monkeypatch, io):
 def test_a_terminal_line_that_is_not_durable_exits_13_with_no_record_or_cl(layout, monkeypatch, io):
     fx = make_fx(layout, backstop_max=1)
     fx.activate()
+    os.unlink(fx.paths.rule)
     make_attempt(layout, 1)
     _guard_with(monkeypatch, io())
     units = Units()
@@ -907,6 +1069,7 @@ def test_a_terminal_journal_at_its_cap_is_not_extended(layout, monkeypatch):
 def test_an_untrustworthy_terminal_journal_is_unavailable_never_written(layout, damage):
     fx = make_fx(layout, backstop_max=1)
     fx.activate()
+    os.unlink(fx.paths.rule)
     make_attempt(layout, 1)
     bdir = Path(layout.store, "backstop")
     bdir.mkdir(mode=0o755)
@@ -995,9 +1158,11 @@ def test_backstop_cl_hard_stop_and_grant_priority(layout, monkeypatch):
 
 @pytest.mark.parametrize("call,_attribution,grr", GRR_FAULTS)
 def test_backstop_cl_g_survives_a_persistent_grant_inspection_failure(layout, fx, monkeypatch, call, _attribution, grr):
-    """RT4.CLG: a failed inspection of the grant is a closed CL-G outcome; the firing
-    completes CL and records its attempt, and the existing BS-2 … BS-4 rules decide
-    the next firings (a kept damaged/foreign rule does not block BS-3)."""
+    """RT4.CLG: a failed inspection of the grant is a closed CL-G outcome
+    (``kept-uninspected``): the firing completes CL and records its attempt, the
+    grant stays and still has its recovery owner. The next firings do not take BS-3
+    (no DI-4) while the failure lasts, and the first one after it clears removes
+    the grant, verifies non-authorization, and the following one disarms at BS-2."""
     fx.activate()
     info = os.stat(fx.paths.rule)
     fault = InspectionFault(monkeypatch, fx.paths.rule, call)
@@ -1006,22 +1171,270 @@ def test_backstop_cl_g_survives_a_persistent_grant_inspection_failure(layout, fx
     assert fault.hits >= 1
     assert out.terminal is BsTerminal.CLEANUP and out.exit_code == 1 and units.disarms == []
     assert out.cleanup.terminal is Terminal.HARD_STOP
-    kept = {"kept-damaged": "present-damaged-unremoved", "kept-foreign": "present-foreign-unremoved"}[grr.value]
+    assert grr is GrrOutcome.KEPT_UNINSPECTED
     assert out.lines[0] == f"rp11-bs cleanup {ACT_ID} k=1 trigger=backstop lock=held terminal=hard-stop"
     doc = record_doc(layout, 1)
     assert doc["trigger"] == "backstop" and doc["outcome"] == "hard-stop" and not doc["st1"]["verified"]
-    assert doc["grant_identity"]["cl_g"] == grr.value and doc["active_rule"]["class"] == kept
+    assert doc["grant_identity"]["cl_g"] == "kept-uninspected"
+    assert doc["active_rule"]["class"] == "present-uninspected-unremoved"
+    assert any(r["path"] == fx.paths.rule and r["class"] == "present-uninspected-unremoved" for r in doc["residual"])
+    assert hard_stop_permits_disarm(doc) is False
     lines = Path(layout.var_tmp, f"{ACT_ID}-deact-1-evidence/journal").read_bytes().splitlines()
     assert [json.loads(x)["op"] for x in lines[:2]] == ["run-start", "cl-g"] and json.loads(lines[-1])["op"] == "run-end"
     fault.active = False
     assert os.lstat(fx.paths.rule).st_ino == info.st_ino  # kept, untouched
     fault.active = True
-    # the next firing (failure persisting) decides on that record: BS-3, one disarm, no second CL
+    # the failure persists: the next firing is not BS-3, calls no DI-4 and runs CL again
     nxt = Units()
     again = fire(layout, fx.a2_sha256, nxt)
-    assert again.terminal is BsTerminal.DISARMED and nxt.disarms == [ACT_ID]
-    assert again.lines == [f"rp11-bs disarmed {ACT_ID} branch=bs-3 k=1 disarm=stopped"]
-    assert attempt_dirs(layout) == [f"{ACT_ID}-deact-1-evidence"]
+    assert again.terminal is BsTerminal.CLEANUP and nxt.disarms == [] and again.cleanup.k == 2
+    assert record_doc(layout, 2)["active_rule"]["class"] == "present-uninspected-unremoved"
+    assert os.lstat(fx.paths.rule).st_ino == info.st_ino
+    # the failure clears: the next automatic firing re-inspects, removes and verifies
+    fault.active = False
+    healed = Units()
+    third = fire(layout, fx.a2_sha256, healed)
+    assert third.terminal is BsTerminal.CLEANUP and third.cleanup.terminal is Terminal.ST1_VERIFIED
+    assert healed.disarms == [] and not os.path.lexists(fx.paths.rule)
+    # grant.id went with the first attempt's CL-5b: the journal identity (G-R1) removes it now
+    assert record_doc(layout, 3)["active_rule"]["class"] == "removed-verified"
+    # ... and only now does the normal verified path disarm the timer (BS-2)
+    last = Units()
+    done = fire(layout, fx.a2_sha256, last)
+    assert done.terminal is BsTerminal.DISARMED and last.disarms == [ACT_ID]
+    assert done.lines == [f"rp11-bs disarmed {ACT_ID} branch=bs-2 k=3 disarm=stopped"]
+    assert attempt_dirs(layout) == [f"{ACT_ID}-deact-{k}-evidence" for k in (1, 2, 3)]
+
+
+@pytest.mark.parametrize("call", ["read", "fstat"])
+def test_persistent_uncertainty_through_backstop_max_never_disarms_the_owner(layout, monkeypatch, call):
+    """The bound ends *attempts*, not the recovery owner of a grant that may still
+    authorize: no DI-4, a terminal line per firing with ``disarm=withheld``, a
+    non-zero exit, and no attempt directory beyond B."""
+    fx = make_fx(layout, backstop_max=2)
+    fx.activate()
+    info = os.stat(fx.paths.rule)
+    fault = InspectionFault(monkeypatch, fx.paths.rule, call)
+    seen = Units()
+    for k in (1, 2):
+        out = fire(layout, fx.a2_sha256, seen)
+        assert out.terminal is BsTerminal.CLEANUP and out.cleanup.k == k
+    for n in (1, 2, 3):
+        out = fire(layout, fx.a2_sha256, seen)
+        assert out.terminal is BsTerminal.BOUND_REACHED and out.exit_code == 12
+        assert out.lines == [f"rp11-bs bound-reached {ACT_ID} reason=backstop-max disarm=withheld"]
+        assert len(terminal_lines(layout)) == n
+    assert seen.disarms == [] and CAPTURE_UNIT in seen.reads
+    assert terminal_lines(layout)[-1] == {
+        "schema": "rp11-backstop-terminal/1", "op": "backstop-terminal", "activation_id": ACT_ID,
+        "reason": "backstop-max", "disarm": "withheld",
+    }
+    assert attempt_dirs(layout) == [f"{ACT_ID}-deact-{k}-evidence" for k in (1, 2)]
+    fault.active = False
+    assert os.lstat(fx.paths.rule).st_ino == info.st_ino and Path(fx.paths.rule).read_bytes() == fx.rule_bytes
+
+
+def test_the_attempt_limit_never_disarms_a_present_rule(layout, fx):
+    fx.activate()
+    for k in range(1, 100):
+        make_attempt(layout, k, trigger="stop-post")
+    units = Units()
+    out = fire(layout, fx.a2_sha256, units)
+    assert out.terminal is BsTerminal.BOUND_REACHED and out.exit_code == 12 and units.disarms == []
+    assert out.lines == [f"rp11-bs bound-reached {ACT_ID} reason=attempt-limit disarm=withheld"]
+    assert CAPTURE_UNIT not in units.reads and len(attempt_dirs(layout)) == 99 and os.path.exists(fx.paths.rule)
+
+
+class _FsWithRule:
+    """Only ``list_prefixed`` and ``observe``: what the bound reads."""
+
+    def __init__(self, rule):
+        self.rule = rule
+
+    def list_prefixed(self, directory, prefix):
+        return tuple(f"{ACT_ID}-deact-{k}-evidence" for k in range(1, 100))
+
+    def observe(self, path, *, list_dir=False):
+        return self.rule
+
+
+@pytest.mark.parametrize("rule,disarmed", [(None, True), (UNREACHABLE, False)])
+def test_the_bound_disarms_only_for_a_rule_path_observed_absent(layout, rule, disarmed):
+    class Journals:
+        def read_journal(self, *a, **k):
+            return None
+
+    class Guard:
+        def acquire(self):
+            return GuardMode.HELD
+
+        def release(self):
+            pass
+
+        def append_terminal(self, fields):
+            self.fields = fields
+
+    class NoRecords:
+        def deact_attempts(self, _activation_id):
+            return ()
+
+    units, guard = Units(), Guard()
+    result = bare(
+        layout, units, records=NoRecords(), fs=_FsWithRule(rule), journals=Journals(), guard=guard,
+        limits=lambda: (20, 1 << 20), grant_check=lambda: PkOutcome.NOT_AUTHORIZED,
+    ).run()
+    assert result.terminal is BsTerminal.BOUND_REACHED
+    assert units.disarms == ([ACT_ID] if disarmed else [])
+    assert guard.fields["disarm"] == ("stopped" if disarmed else "withheld")
+
+
+# the bound proves non-authorization; pathname absence is not proof (re-review finding 2) ----
+
+
+def _bound_fixture(layout, reason: str):
+    """Rule path absent, and the bound reached for ``reason``; returns (fx, units)."""
+    if reason == "backstop-max":
+        fx = make_fx(layout, backstop_max=2)
+        fx.activate()
+        make_attempt(layout, 1)
+        make_attempt(layout, 2)
+    else:
+        fx = make_fx(layout, backstop_max=99)
+        fx.activate()
+        for k in range(1, 100):
+            make_attempt(layout, k, trigger="stop-post")
+    os.unlink(fx.paths.rule)
+    return fx
+
+
+@pytest.mark.parametrize("reason", ["backstop-max", "attempt-limit"])
+@pytest.mark.parametrize("pk", [PkOutcome.UNCONFIRMED, PkOutcome.AUTHORIZED])
+def test_the_bound_with_an_absent_rule_withholds_unless_polkit_says_not_authorized(layout, reason, pk):
+    fx = _bound_fixture(layout, reason)
+    before = attempt_dirs(layout), records(layout)
+    units = Units()
+    for n in (1, 2, 3):  # persistent: every firing is withheld, none creates anything
+        out = fire(layout, fx.a2_sha256, units, pk=FakePk(units.events, outcome=pk))
+        assert out.terminal is BsTerminal.BOUND_REACHED and out.exit_code == 12
+        assert out.lines == [f"rp11-bs bound-reached {ACT_ID} reason={reason} disarm=withheld"]
+        assert len(terminal_lines(layout)) == n
+    assert units.disarms == [] and (attempt_dirs(layout), records(layout)) == before
+    assert terminal_lines(layout)[-1]["disarm"] == "withheld"
+
+
+@pytest.mark.parametrize("reason", ["backstop-max", "attempt-limit"])
+def test_the_bound_with_an_absent_rule_and_not_authorized_disarms_exactly_once(layout, reason):
+    fx = _bound_fixture(layout, reason)
+    units = Units()
+    pk = FakePk(units.events)
+    out = fire(layout, fx.a2_sha256, units, pk=pk)
+    assert out.terminal is BsTerminal.BOUND_REACHED and units.disarms == [ACT_ID] and pk.calls == 1
+    assert out.lines == [f"rp11-bs bound-reached {ACT_ID} reason={reason} disarm=stopped"]
+    assert terminal_lines(layout)[-1]["disarm"] == "stopped"
+
+
+class _BoundFs(_FsWithRule):
+    pass
+
+
+@pytest.mark.parametrize(
+    "check",
+    [lambda: PkOutcome.UNCONFIRMED, lambda: PkOutcome.AUTHORIZED, lambda: "not-authorized", lambda: None,
+     lambda: (_ for _ in ()).throw(RuntimeError("unavailable")),
+     lambda: (_ for _ in ()).throw(OSError("polkit gone"))],
+    ids=["unconfirmed", "authorized", "malformed-string", "none", "raises", "oserror"],
+)
+def test_the_terminal_check_must_return_the_not_authorized_member(layout, check):
+    class Journals:
+        def read_journal(self, *a, **k):
+            return None
+
+    class Guard:
+        def acquire(self):
+            return GuardMode.HELD
+
+        def release(self):
+            pass
+
+        def append_terminal(self, fields):
+            self.fields = fields
+
+    class NoRecords:
+        def deact_attempts(self, _activation_id):
+            return ()
+
+    units, guard = Units(), Guard()
+    result = bare(
+        layout, units, records=NoRecords(), fs=_BoundFs(None), journals=Journals(), guard=guard,
+        limits=lambda: (20, 1 << 20), grant_check=check,
+    ).run()
+    assert result.terminal is BsTerminal.BOUND_REACHED and units.disarms == []
+    assert guard.fields["disarm"] == "withheld"
+
+
+@pytest.mark.parametrize("what", ["no-authority", "wrong-a2", "pk-raises"])
+def test_the_adapter_check_is_unconfirmed_without_a_valid_authority_or_series(layout, monkeypatch, what):
+    fx = _bound_fixture(layout, "attempt-limit")  # the default bound is not read from a bad authority
+    a2 = fx.a2_sha256
+    units = Units()
+    kw = {}
+    if what == "no-authority":
+        for p in Path(layout.store).rglob("a2/*.json"):
+            p.unlink()
+    elif what == "wrong-a2":
+        a2 = "0" * 64
+    else:
+        class Raises:
+            def run(self, *a, **k):
+                raise RuntimeError("series failed")
+
+        kw["pk"] = Raises()
+    out = fire(layout, a2, units, **kw)
+    assert out.terminal is BsTerminal.BOUND_REACHED and units.disarms == []
+    assert terminal_lines(layout)[-1]["disarm"] == "withheld"
+
+
+def _replace_with_same_bytes(path: str) -> None:
+    fresh = path + ".new"
+    Path(fresh).write_bytes(Path(path).read_bytes())
+    os.chmod(fresh, 0o644)
+    os.rename(fresh, path)
+
+
+def test_a_foreign_replacement_that_is_not_authorized_keeps_the_accepted_bs3(layout, fx):
+    """A positively foreign rule is never removed. With Polkit *not authorized* the
+    timer is disarmed as before (retrying could remove nothing)."""
+    fx.activate()
+    _replace_with_same_bytes(fx.paths.rule)
+    ino = os.stat(fx.paths.rule).st_ino
+    assert stop_post(layout, fx, pk=PkOutcome.NOT_AUTHORIZED).terminal is Terminal.HARD_STOP
+    doc = record_doc(layout, 1)
+    assert doc["active_rule"]["class"] == "present-foreign-unremoved" and hard_stop_permits_disarm(doc) is True
+    units = Units()
+    out = fire(layout, fx.a2_sha256, units)
+    assert out.terminal is BsTerminal.DISARMED and units.disarms == [ACT_ID]
+    assert out.lines == [f"rp11-bs disarmed {ACT_ID} branch=bs-3 k=1 disarm=stopped"]
+    assert os.stat(fx.paths.rule).st_ino == ino  # never removed to make the timer stop
+
+
+@pytest.mark.parametrize("change", ["foreign", "damaged"])
+@pytest.mark.parametrize("pk", [PkOutcome.AUTHORIZED, PkOutcome.UNCONFIRMED])
+def test_a_kept_rule_that_may_still_authorize_keeps_its_recovery_owner(layout, fx, change, pk):
+    fx.activate()
+    if change == "foreign":
+        _replace_with_same_bytes(fx.paths.rule)
+    else:
+        os.chmod(fx.paths.rule, 0o664)
+    ino = os.stat(fx.paths.rule).st_ino
+    assert stop_post(layout, fx, pk=pk).terminal is Terminal.HARD_STOP
+    doc = record_doc(layout, 1)
+    assert doc["active_rule"]["class"] == f"present-{change}-unremoved"
+    # a seek-not-authorized series that still sees the grant is ``unconfirmed``, never ``authorized``
+    assert doc["grant_check"]["after_cleanup"] == "unconfirmed" and hard_stop_permits_disarm(doc) is False
+    units = Units()
+    out = fire(layout, fx.a2_sha256, units, pk=FakePk(units.events, outcome=pk))
+    assert out.terminal is BsTerminal.CLEANUP and units.disarms == [] and out.cleanup.k == 2
+    assert os.stat(fx.paths.rule).st_ino == ino and os.path.exists(fx.paths.rule)
 
 
 @pytest.mark.parametrize("role", CloseFault.ROLES)

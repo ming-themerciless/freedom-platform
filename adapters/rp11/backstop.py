@@ -19,6 +19,8 @@ from collections.abc import Callable
 
 from adapters.systemd.bus import BusConnection
 from application.rp11.authority import AuthorityError, Params, load_authority
+from application.rp11.pk import PkMode, PkOutcome
+from application.unit_control import UnitVerb
 from application.rp11.backstop import BackstopOutcome, BackstopProcedure
 from application.rp11.cleanup import Trigger
 from application.rp11.paths import ActivationPaths, Layout
@@ -50,6 +52,17 @@ def build_backstop(
             params = Params()
         return params.backstop_max, params.journal_max_bytes
 
+    def grant_check() -> PkOutcome:
+        """The bound's bounded ``seek-not-authorized`` series, as CL-4 runs it (same
+        fixed parameters, subject and reaping). No valid authority, no operator or any
+        failure is ``unconfirmed``: never a decision."""
+        try:
+            authority = load_authority(fs, paths, a2_sha256=a2_sha256, activation_id=activation_id)
+            series = services.pk(authority.h1.params)
+            return series.run(authority.h1.operator, UnitVerb.START, PkMode.SEEK_NOT_AUTHORIZED).outcome
+        except Exception:  # noqa: BLE001 - fail closed: the owner is kept
+            return PkOutcome.UNCONFIRMED
+
     def cleanup(k: int, holder_state: str):
         return build_procedure(
             activation_id,
@@ -73,6 +86,7 @@ def build_backstop(
         guard=LocalBackstopGuard(layout.store, activation_id, layout.owner),
         limits=limits,
         cleanup=cleanup,
+        grant_check=grant_check,
     )
 
 

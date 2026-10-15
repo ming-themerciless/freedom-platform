@@ -1,5 +1,23 @@
 # Decision register
 
+## Decision — Route 3 Polkit prerequisite accepted — 2026-10-15
+
+Peter Duscha accepts the repository-managed Polkit `tmpfiles.d` prerequisite
+for continued development after its implementation, real-reboot proof,
+effective-configuration and removal-race remediations, and restore-path
+hardening. The package fragment and bounded install/verify/remove operator path
+are complete. The next development increment is the first real Package 5.0
+consumer on `oracle-test`.
+
+This decision does not authorize production or staging activation. Before
+production activation, the transient inspection-failure risk needs an explicit
+decision and the completed Route 3 series needs its final independent security
+review. Baseline v1.9 and the production safety boundary are unchanged.
+
+[Accepted prerequisite handback](../review/route-3-polkit-tmpfiles-installer-handback.md)
+· [Active delivery plan](active-delivery-plan.md) ·
+[Active handover](../review/Handover%20information).
+
 ## Decision — complete inactive Route 3 role series accepted — 2026-10-14
 
 Peter Duscha accepts the complete inactive Route 3 role series for continued
@@ -8,12 +26,12 @@ GRR inspection- and descriptor-close exception-safety remediations. Independent
 review found no remaining finding, and the final executable comparisons
 introduced no Route 3 regression against the established repository baseline.
 
-This decision closes the current role implementation and review sequence. It
-does not authorize production or staging activation. Before activation, the
-selected `tmpfiles.d` Polkit ordering must be installed and proved across a real
-reboot, the transient inspection-failure risk needs an explicit decision, and
-the completed series needs an independent security review. Baseline v1.9,
-product scope and the production safety boundary are unchanged.
+This decision closed the role implementation and review sequence. The selected
+`tmpfiles.d` ordering was subsequently installed, proved and accepted by the
+2026-10-15 decision above. Production or staging activation remains
+unauthorized; the transient inspection-failure decision and independent
+security review remain required. Baseline v1.9, product scope and the production
+safety boundary are unchanged.
 
 [Accepted handback](../review/route-3-hold-role-implementation-handback.md) ·
 [Active delivery plan](active-delivery-plan.md) ·

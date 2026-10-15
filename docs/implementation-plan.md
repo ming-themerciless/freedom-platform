@@ -2531,10 +2531,14 @@ after independent review. The implemented sequence is:
 3. `hold`, including GRR inspection- and descriptor-close exception safety —
    accepted.
 
-The adapter and roles remain inactive in production. Activation still requires
-the selected `tmpfiles.d` Polkit ordering to be installed and proved across a
-real reboot, an explicit decision on the transient inspection-failure risk, and
-an independent security review of the completed series.
+Peter Duscha accepted the repository-managed Polkit `tmpfiles.d` prerequisite
+on 2026-10-15 after its real-reboot proof and security remediations. The adapter
+and roles remain inactive in production. Activation still requires an explicit
+decision on the transient inspection-failure risk and an independent security
+review of the completed series.
+
+The immediate implementation action is the first real, non-production Package
+5.0 consumer, exercised on `oracle-test` through the accepted Route 3 boundary.
 
 All testing levels are authorized on `oracle-test`, including root/systemd,
 network, packages, PostgreSQL and destructive recovery drills. Production and

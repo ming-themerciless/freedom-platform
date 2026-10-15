@@ -13,6 +13,14 @@ Invariants this module keeps, each covered by a test:
 * Only an object that is A1-intact against a durable identity, and A1-intact
   again on a descriptor immediately before removal, is removed. A0, damaged,
   foreign, unverified and other-boot objects are kept and reported.
+* An activation rule whose inspection failed (a lookup, ``fstat``, content read or
+  attribute listing) is neither damaged nor foreign nor intact: it is
+  ``present-uninspected-unremoved`` (GRR ``kept-uninspected``), kept, and it can
+  still authorize the operator, so a record that states it never lets BS-3 disarm
+  the backstop timer.
+* An existing ``act`` record is never rewritten, and its digest is chained into a
+  deactivation record only after it parses canonically, validates and names this
+  activation (attempt 0); otherwise CL-7 is ``record-unpublished``.
 * K without an identity line (the holder ended before its ACT journal existed)
   is S0 only if it is exactly the empty root ``0700`` K that AM-0 creates; it is
   kept, reported and does not block ``st1-verified``. Every other K is A0.
@@ -41,7 +49,16 @@ from application.unit_control import (
 )
 
 from . import baseline as baseline_module
-from .attribution import FORBIDDEN_XATTRS, Attribution, Identity, ObjectKind, Observed, Owner, classify
+from .attribution import (
+    FORBIDDEN_XATTRS,
+    Attribution,
+    Identity,
+    ObjectKind,
+    Observed,
+    Owner,
+    classify,
+    classify_file,
+)
 from .authority import AUTHORITY_LIMIT, Authority, AuthorityError, Params, load_authority
 from .canonical import ABSENT, CanonicalError, canonical_bytes, parse_canonical
 from .evidence import INVALID_ACT, ActEvidence, PriorRemovals, act_evidence
@@ -81,6 +98,7 @@ DIR_OK = frozenset(
         "s0-kept",
     }
 )
+RULE_UNINSPECTED = "present-uninspected-unremoved"
 GRANT_ID_MAX_BYTES = 4_096
 K_S0 = "s0-kept"
 
@@ -95,6 +113,7 @@ class GrrOutcome(str, Enum):
     ABSENT = "absent"
     KEPT_DAMAGED = "kept-damaged"
     KEPT_FOREIGN = "kept-foreign"
+    KEPT_UNINSPECTED = "kept-uninspected"  # present; inspection did not establish what it is
     UNREMOVABLE = "unremovable"
     IDENTITY_UNAVAILABLE = "identity-unavailable"
 
@@ -546,6 +565,9 @@ class CleanupProcedure:
         if s.grr is GrrOutcome.KEPT_FOREIGN:
             s.rule_class = "present-foreign-unremoved"
             return
+        if s.grr is GrrOutcome.KEPT_UNINSPECTED:
+            s.rule_class = RULE_UNINSPECTED
+            return
         if s.grr is GrrOutcome.UNREMOVABLE:
             s.rule_class = "grant-unremovable"
             return
@@ -559,7 +581,7 @@ class CleanupProcedure:
             return
         attribution = self._attribute(journal_identity, observed)
         if attribution is not Attribution.A1_INTACT:
-            s.rule_class = _kept_class(attribution)
+            s.rule_class = _kept_class(attribution, rule=True)
             return
         removal = self._remove(self._paths.rule, journal_identity, directory=False)
         if removal.outcome is RemovalOutcome.REMOVED:
@@ -575,7 +597,7 @@ class CleanupProcedure:
             s.rule_class = "grant-unremovable"
             self._append("remove-failed", {"path": self._paths.rule, "errno": removal.errno}, entry="E-b")
         else:
-            s.rule_class = _kept_class(removal.attribution)
+            s.rule_class = _kept_class(removal.attribution, rule=True)
 
     def _absent_class(self, path: str, identity: Identity | None, *, rule: bool = False) -> str:
         s = self._s
@@ -897,15 +919,33 @@ class CleanupProcedure:
                 self._fail("CL-6", "residual")
 
     def _ensure_act_record(self) -> str:
-        """CL-7: if no ``act`` record exists, publish one with outcome ``failed``."""
+        """CL-7: if no ``act`` record exists, publish one with outcome ``failed``.
+
+        An existing record is immutable and is never replaced, but its digest is
+        linked only after it is read back through the guarded store, parsed
+        canonically and validated as this activation's ``act`` record (attempt 0,
+        the same A-2). Anything else raises ``ValueError``: CL-7 is then
+        ``record-unpublished`` and no deactivation record chains to those bytes."""
         name = self._paths.act_record_name()
         existing = self._p.records.read(name)
         if existing is not None:
+            self._require_act_record(existing)
             return hashlib.sha256(existing).hexdigest()
         record = self._base_record(kind="act", attempt=0, outcome="failed")
         record["failure"] = {"step": "CL-7", "class": "act-unconfirmed"}
         validate_record(record)
         return self._p.records.publish(name, canonical_bytes(record), self._s.sink).sha256
+
+    def _require_act_record(self, data: bytes) -> None:
+        doc = parse_canonical(data)  # CanonicalError is a ValueError
+        validate_record(doc)  # RecordSchemaError is a ValueError
+        if (
+            doc["kind"] != "act"
+            or doc["attempt"] != 0
+            or doc["activation_id"] != self._inv.activation_id
+            or doc["authority"]["a2_sha256"] != self._inv.a2_sha256
+        ):
+            raise ValueError("the existing act record belongs to another activation or attempt")
 
     def _deact_record(self, verified: bool, act_sha256: str) -> dict:
         s = self._s
@@ -1083,6 +1123,8 @@ class CleanupProcedure:
     # ------------------------------------------------------------------
 
     def _attribute(self, identity: Identity | None, observed: Observed) -> Attribution:
+        if identity is not None and identity.kind is ObjectKind.FILE:
+            return classify_file(identity, observed, self._owner)
         return classify(identity, observed, self._owner)
 
     def _remove(self, path: str, identity: Identity | None, *, directory: bool) -> Removal:
@@ -1130,6 +1172,8 @@ def grr_outcome(removal: Removal) -> tuple[GrrOutcome, int]:
         return GrrOutcome.ABSENT, 0
     if removal.outcome is RemovalOutcome.UNREMOVABLE:
         return GrrOutcome.UNREMOVABLE, removal.errno or errno_module.EIO
+    if removal.attribution is Attribution.UNINSPECTED:
+        return GrrOutcome.KEPT_UNINSPECTED, 0
     if removal.attribution is Attribution.A1_DAMAGED:
         return GrrOutcome.KEPT_DAMAGED, 0
     return GrrOutcome.KEPT_FOREIGN, 0
@@ -1153,8 +1197,13 @@ def _k_s0_shape(observed: Observed | None, locked: Identity | None, owner: Owner
     )
 
 
-def _kept_class(attribution: Attribution | None) -> str:
-    if attribution is Attribution.A1_DAMAGED:
+def _kept_class(attribution: Attribution | None, *, rule: bool = False) -> str:
+    """The ``present-*-unremoved`` class of a kept object. Only the activation rule
+    keeps ``UNINSPECTED`` as its own class (it may still authorize the operator);
+    any other object keeps its accepted A1-damaged class."""
+    if attribution is Attribution.UNINSPECTED and rule:
+        return RULE_UNINSPECTED
+    if attribution is Attribution.A1_DAMAGED or attribution is Attribution.UNINSPECTED:
         return "present-damaged-unremoved"
     return "present-foreign-unremoved"
 

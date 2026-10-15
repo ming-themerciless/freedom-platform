@@ -227,7 +227,9 @@ ACT_RUN_END_OUTCOMES = frozenset(
 )
 # GRR outcomes the holder's IGR can reach (it never lacks the in-memory identity
 # it would need for ``identity-unavailable``).
-IGR_OUTCOMES = frozenset({"removed", "absent", "kept-damaged", "kept-foreign", "unremovable"})
+IGR_OUTCOMES = frozenset(
+    {"removed", "absent", "kept-damaged", "kept-foreign", "kept-uninspected", "unremovable"}
+)
 MAX_IMAGES = 16
 
 # The in-memory grant identity GRR re-verifies against (RT2.IGR.2 … .3).

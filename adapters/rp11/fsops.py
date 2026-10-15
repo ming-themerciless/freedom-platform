@@ -25,12 +25,14 @@ from datetime import UTC, datetime
 
 from application.rp11.attribution import (
     MAX_VERIFIED_FILE_BYTES,
+    UNLISTABLE,
     Attribution,
     Identity,
     ObjectKind,
     Observed,
     Owner,
     classify,
+    classify_file,
 )
 from application.rp11.canonical import canonical_bytes
 from application.rp11.journal import GENESIS, JournalKind, serialize_line
@@ -141,9 +143,6 @@ def _read_capped(fd: int, size: int) -> bytes:
     return b"".join(chunks)
 
 
-UNLISTABLE = "unlistable"  # the extended-attribute names could not be listed
-
-
 def _xattrs(fd: int) -> tuple[str, ...]:
     try:
         return tuple(os.listxattr(fd))
@@ -207,11 +206,24 @@ def observe_at(parent_fd: int, name: str, *, list_dir: bool) -> Observed | None:
 
 def _reverified(identity: Identity, observed: Observed, owner: Owner, *, directory: bool) -> Attribution:
     """G-R1 / GRR-3 on a descriptor's observation. An object whose attribute
-    names could not be listed was not completely observed: never A1-intact."""
+    names could not be listed was not completely observed: never A1-intact. For a
+    file, a fact that could not be established is ``UNINSPECTED`` (kept, not
+    inferred to be damaged or foreign); a directory keeps the A1-damaged result."""
+    if not directory:
+        attribution = classify_file(identity, observed, owner)
+        if attribution is Attribution.A1_INTACT and UNLISTABLE in observed.xattr_names:
+            return Attribution.UNINSPECTED
+        return attribution
     attribution = classify(identity, observed, owner, require_empty=directory)
     if attribution is Attribution.A1_INTACT and UNLISTABLE in observed.xattr_names:
         return Attribution.A1_DAMAGED
     return attribution
+
+
+def _unestablished(directory: bool) -> Attribution:
+    """What a lookup or ``fstat`` that failed outright establishes about the target:
+    for a file nothing (``UNINSPECTED``); a directory keeps the A0 result."""
+    return Attribution.A0 if directory else Attribution.UNINSPECTED
 
 
 class LocalActivationFs:
@@ -243,10 +255,12 @@ class LocalActivationFs:
         directory: bool,
         before_unlink: Callable[[Observed], None],
     ) -> Removal:
-        """G-R1 / GRR-2 … GRR-4. Never raises for the target's inspection: a failed
-        ``fstat`` is ``MISMATCH`` A0; a failed content read, attribute listing or
-        directory listing leaves the fact unestablished, so the object is kept
-        (A1-damaged when type and ``(dev, ino)`` still match, else A0). A failed
+        """G-R1 / GRR-2 … GRR-4. Never raises for the target's inspection. For a
+        file, a failed lookup, ``fstat``, content read or attribute listing leaves
+        the fact unestablished: ``MISMATCH`` ``UNINSPECTED`` (kept, never inferred
+        damaged or foreign) unless the facts that were seen already establish
+        damage or another object. A directory keeps its accepted results (a failed
+        ``fstat`` is A0; a failed attribute or directory listing is A1-damaged). A failed
         descriptor close never overrides the selected result. Only
         ``before_unlink`` may raise, and then nothing is unlinked."""
         parent, name = split(path)
@@ -255,7 +269,7 @@ class LocalActivationFs:
         except FileNotFoundError:
             return Removal(RemovalOutcome.ABSENT)
         except OSError:
-            return Removal(RemovalOutcome.MISMATCH, Attribution.A0, UNREACHABLE)
+            return Removal(RemovalOutcome.MISMATCH, _unestablished(directory), UNREACHABLE)
         try:
             # G-R1: re-verify through a descriptor immediately before removal.
             flags = _DIR_FLAGS if directory else _FILE_FLAGS
@@ -267,11 +281,13 @@ class LocalActivationFs:
                 observed = observe_at(pfd, name, list_dir=directory)
                 if observed is None:
                     return Removal(RemovalOutcome.ABSENT)
-                return Removal(RemovalOutcome.MISMATCH, Attribution.A0, observed)
+                if directory:
+                    return Removal(RemovalOutcome.MISMATCH, Attribution.A0, observed)
+                return Removal(RemovalOutcome.MISMATCH, classify_file(identity, observed, self._owner), observed)
             try:
                 observed = describe_fd(fd, list_dir=directory)
             except OSError:
-                return Removal(RemovalOutcome.MISMATCH, Attribution.A0, UNREACHABLE)
+                return Removal(RemovalOutcome.MISMATCH, _unestablished(directory), UNREACHABLE)
             finally:
                 close_quietly(fd)
             attribution = _reverified(identity, observed, self._owner, directory=directory)

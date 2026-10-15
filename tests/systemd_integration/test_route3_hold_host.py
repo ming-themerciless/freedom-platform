@@ -22,6 +22,10 @@ late-directory test removes it and restarts Polkit so the holder's own tree R
 is created after polkitd started, which must fail closed at AV-1. The holder
 never restarts or reloads Polkit (its ``MainPID`` is compared).
 
+When the repository ``tmpfiles.d`` fragment is installed (``tools.polkit_tmpfiles``)
+``/run/polkit-1`` exists before the run; the teardown then re-creates exactly those
+two directories from the installed fragment rather than asserting they are absent.
+
 Everything is removed afterwards and the teardown asserts it.
 """
 
@@ -35,6 +39,7 @@ import pwd
 import secrets
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -290,9 +295,23 @@ class Activation:
             shutil.rmtree(temp, ignore_errors=True)
 
 
+TMPFILES_FRAGMENT = Path("/usr/lib/tmpfiles.d/freedom-blades-rp11-polkit-rules.conf")
+
+
+def restore_polkit_directories() -> None:
+    """Teardown only: the installed fragment's two directories, as boot would make them."""
+    done = run("systemd-tmpfiles", "--create", str(TMPFILES_FRAGMENT))
+    assert done.returncode == 0, done.stderr
+    for sub in ("", "/rules.d"):
+        info = os.lstat(f"/run/polkit-1{sub}")
+        assert (info.st_uid, info.st_gid, info.st_mode & 0o7777) == (0, 0, 0o755), sub
+
+
 @pytest.fixture
 def activations():
     assert not STORE.exists(), "record store left from an earlier run"
+    preinstalled = os.path.lexists("/run/polkit-1")  # created by the boot-time fragment, not by a test
+    assert not preinstalled or TMPFILES_FRAGMENT.is_file(), "an unexplained /run/polkit-1"
     made: list[Activation] = []
 
     def make() -> Activation:
@@ -308,13 +327,16 @@ def activations():
     run("systemctl", "daemon-reload", check=True)
     run("systemctl", "reset-failed", "rp11-capture-pass-a.service")
     shutil.rmtree(STORE, ignore_errors=True)
-    restart_polkit()
+    if preinstalled:
+        restore_polkit_directories()
+    if os.environ.get("FREEDOM_TMPFILES_BOOT_PROOF") != "1":  # the boot proof keeps the boot's own polkitd
+        restart_polkit()
     assert wait_until(lambda: rp11_processes() == [], 10), rp11_processes()
     for act in made:
         assert run("systemctl", "list-units", f"{act.id}*", "--all", "--no-legend").stdout.strip() == ""
         assert not list(Path("/var/tmp").glob(f"{act.id}-*")) and not os.path.lexists(act.capture_root)
         assert not os.path.lexists(act.paths.tree_p) and not os.path.lexists(act.paths.lock_dir)
-    assert not os.path.lexists("/run/polkit-1")
+    assert os.path.lexists("/run/polkit-1") == preinstalled
     assert show("rp11-capture-pass-a.service", "LoadState")["LoadState"] == "not-found"
     assert run("systemctl", "is-active", "polkit.service").stdout.strip() == "active"
 
@@ -644,3 +666,67 @@ def test_the_di6_subject_inherits_no_descriptor_above_65535_under_pid1():
         assert got["uid"] == [str(OPERATOR.pw_uid)] * 4 and got["cwd"] == "/" and got["sid_is_pid"]
         assert got["state"] == "reaped", (case, got)
     assert run("systemctl", "is-active", unit).stdout.strip() != "active"
+
+
+# ---------------------------------------------------------------------------
+# boot-ordering proof: the tmpfiles.d fragment, not the harness, made the directories
+# ---------------------------------------------------------------------------
+
+boot_proof = pytest.mark.skipif(
+    os.environ.get("FREEDOM_TMPFILES_BOOT_PROOF") != "1",
+    reason="run once on a freshly rebooted host with the fragment installed (FREEDOM_TMPFILES_BOOT_PROOF=1)",
+)
+
+
+BOOT_POLKIT_PID = os.environ.get("FREEDOM_BOOT_POLKIT_PID", "0")  # polkitd's MainPID recorded right after boot
+
+
+def _polkit_dirs() -> dict[str, tuple[int, int, int, int]]:
+    out = {}
+    for path in ("/run/polkit-1", "/run/polkit-1/rules.d"):
+        info = os.lstat(path)  # raises if the fragment's directory is missing
+        assert stat.S_ISDIR(info.st_mode)
+        out[path] = (info.st_ino, info.st_uid, info.st_gid, info.st_mode & 0o7777)  # no ctime: rules.d entries change it
+    return out
+
+
+@boot_proof
+def test_after_boot_a_hold_success_path_needs_no_harness_directory_and_no_polkit_restart(activations):
+    assert polkit_pid() == BOOT_POLKIT_PID != "0", "run on a freshly rebooted host; export FREEDOM_BOOT_POLKIT_PID"
+    dirs_before = _polkit_dirs()  # exist already: nothing in this test has run yet
+    assert all(v[1:] == (0, 0, 0o755) for v in dirs_before.values())
+    act = activations()
+    act.prepare(restart=False)  # no rmtree, no mkdir of /run/polkit-1, no restart
+    polkit_before = polkit_pid()
+    act.start_holder()
+    act.wait_op("hold-start")
+    assert act.record("act")["outcome"] == "activated" and act.record("act")["pk"]["outcome"] == "authorized"
+    assert os.path.exists(act.paths.rule)
+    started = operator_start()  # only a rule polkitd read from the boot-created rules.d can authorize this
+    assert started.returncode == 0, started.stderr
+    hold, cl = act.wait_stopped()
+    assert hold == f"rp11-hold hold-ended {act.id} step=HL detail=pass-ended act_pass=yes igr=removed", act.log()
+    assert cl.startswith(f"rp11-cl st1-verified {act.id} k=1"), cl
+    assert not os.path.lexists(act.paths.rule) and not os.path.lexists(act.paths.tree_p)
+    assert operator_start().returncode != 0  # no grant survives
+    assert act.pk(PkMode.FIRST_DECISIVE).outcome is PkOutcome.NOT_AUTHORIZED
+    assert polkit_pid() == polkit_before  # the role never restarted or reloaded Polkit
+    assert _polkit_dirs() == dirs_before  # neither created, replaced, nor removed
+
+
+@boot_proof
+def test_after_boot_a_fail_closed_path_is_recovered_by_its_owner(activations):
+    assert polkit_pid() == BOOT_POLKIT_PID != "0"
+    dirs_before = _polkit_dirs()
+    act = activations()
+    act.prepare(restart=False)
+    polkit_before = polkit_pid()
+    act.start_holder()
+    act.wait_op("hold-start")
+    run("systemctl", "kill", "--kill-whom=main", "--signal=SIGKILL", act.unit, check=True)
+    hold, cl = act.wait_stopped()
+    assert hold == "" and "igr" not in act.ops()
+    assert cl.startswith(f"rp11-cl st1-verified {act.id} k=1 rule=removed-earlier"), cl
+    assert act.record("deact-1")["release"]["first_rung"] == "cl-g"
+    assert not os.path.lexists(act.paths.rule) and operator_start().returncode != 0
+    assert polkit_pid() == polkit_before and _polkit_dirs() == dirs_before

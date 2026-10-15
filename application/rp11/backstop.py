@@ -12,13 +12,22 @@ Each firing of ``<id>-backstop.service`` runs, in order:
   is a valid ``st1-verified`` record, or a valid ``hard-stop`` record that
   ``hard_stop_permits_disarm``, call DI-4 once for this activation's own timer.
   A malformed, unreadable or mismatched latest record never lets an older one
-  decide: the firing continues to BS-4.
+  decide: the firing continues to BS-4. No firing disarms the last automatic
+  recovery owner of a *possibly live* grant: BS-3 requires a positive
+  non-authorization (for every rule class) and no uninspected or A1-intact rule,
+  and the BS-4 bound (below) disarms only once the rule path is observed absent
+  *and* a bounded Polkit series positively reports ``not-authorized``.
 * **BS-4** — under the per-activation backstop lock, decide the prospective
   attempt ``k`` by CL-0's own rule (1 + the ``<id>-deact-`` names) and count the
   backstop attempts among the exact attempt names. Below the bound, run the
   shared ``CleanupProcedure`` once with trigger ``backstop`` and ``k`` pinned.
   At the bound (``backstop_max`` backstop attempts, or ``k`` > 99) do not enter
-  CL: one DI-4 call, one terminal journal line, exit non-zero.
+  CL: one terminal journal line and exit non-zero. DI-4 is called once only if the
+  rule path is observed absent and Polkit then says ``not-authorized``; a rule that is
+  present, whose path cannot be observed, or whose absence Polkit does not confirm
+  may still authorize the operator, so the timer is kept as the owner
+  (``disarm=withheld``) and fires again at its own rate, bounded in resources by
+  the terminal journal's size cap and creating no attempt directory.
 
 DI-4 is issued at most once per firing. Any DI-4 result other than ``ok`` or the
 pre-mutation ``refused(not-loaded)`` is never retried, never followed by CL or a
@@ -60,16 +69,29 @@ from .canonical import CanonicalError, parse_canonical
 from .cleanup import CleanupOutcome, Terminal
 from .journal import JournalKind, JournalSchemaError, attempt_run, check_fields
 from .paths import MAX_ATTEMPTS, ActivationPaths
+from .pk import PkOutcome
 from .ports import ActivationFs, BackstopGuard, GuardMode, JournalSource, RecordStore
-from .records import DIR_CLASSES, PASS_CLASSES, RULE_CLASSES, RecordSchemaError, validate_record
+from .records import (
+    DIR_CLASSES,
+    PASS_CLASSES,
+    RESIDUAL_CLASSES,
+    RULE_CLASSES,
+    RecordSchemaError,
+    validate_record,
+)
 
 HOLDER_OWNS = frozenset({"activating", "active", "deactivating", "reloading"})
 HOLDER_GONE = frozenset({"inactive", "failed"})
 
-# Classes of an object that was A1-intact but stayed: it could still be removed.
-A1_INTACT_KEPT = frozenset({"unremovable", "grant-unremovable", "present-nonempty-unremoved"})
-RULE_BLOCKS_DISARM = frozenset({"removed-unconfirmed", "grant-unremovable"})
-RESIDUAL_CLASSES = RULE_CLASSES | PASS_CLASSES | DIR_CLASSES | {"s0"}
+# Classes of an object that was A1-intact but stayed (it could still be removed) or
+# that was not inspected completely (it may be the intact, authorizing grant).
+UNINSPECTED = "present-uninspected-unremoved"
+A1_INTACT_KEPT = frozenset(
+    {"unremovable", "grant-unremovable", "present-nonempty-unremoved", UNINSPECTED}
+)
+RULE_BLOCKS_DISARM = frozenset({"removed-unconfirmed", "grant-unremovable", UNINSPECTED})
+GRANT_UNINSPECTED = "kept-uninspected"
+NOT_AUTHORIZED = PkOutcome.NOT_AUTHORIZED.value
 
 TERMINAL_SCHEMA = "rp11-backstop-terminal/1"
 NON_BACKSTOP_TRIGGERS = frozenset({"stop-post", "attest"})
@@ -110,6 +132,9 @@ class BoundReason(str, Enum):
     BACKSTOP_MAX = "backstop-max"  # B backstop attempts exist
 
 
+DISARM_WITHHELD = "withheld"  # the timer stays: a rule that may authorize is still present
+
+
 def disarm_class(result) -> str:
     """The typed DI-4 outcome as a token: never a claim beyond what was confirmed."""
     if isinstance(result, ControlOk):
@@ -128,20 +153,32 @@ def disarm_class(result) -> str:
 
 def hard_stop_permits_disarm(doc: dict) -> bool:
     """BS-3: the record's own classes prove no A1-intact activation object remains,
-    and the rule is neither ``removed-unconfirmed`` nor ``grant-unremovable``.
+    the rule is not ``removed-unconfirmed``, ``grant-unremovable`` or uninspected,
+    and — for *every* rule class — Polkit positively reported ``not-authorized``
+    after the cleanup (``grant_check.after_cleanup`` and ``pk.outcome`` both).
 
     A class the record does not state (``absent`` or outside its enumeration) is
-    not proof, so it blocks the disarm."""
+    not proof, so it blocks the disarm. A rule's absence or successful removal is
+    not proof either: ``authorized``, ``unconfirmed``, absent or any other result
+    leaves a possibly live grant and its recovery owner. A kept damaged or foreign
+    rule does not block by itself, but needs the same positive result."""
     try:
         rule = doc["active_rule"]["class"]
         pass_class = doc["pass_config"]["class"]
         grant_id_class = doc["grant_identity"]["grant_id_class"]
+        grr_class = doc["grant_identity"]["cl_g"]
+        after_cleanup = doc["grant_check"]["after_cleanup"]
+        pk_outcome = doc["pk"]["outcome"]
         directory_classes = [entry["class"] for entry in doc["directories"]]
         residual_classes = [entry["class"] for entry in doc["residual"]]
     except (KeyError, TypeError):
         return False
     if rule not in RULE_CLASSES or rule in RULE_BLOCKS_DISARM:
         return False
+    if grr_class == GRANT_UNINSPECTED:
+        return False
+    if after_cleanup != NOT_AUTHORIZED or pk_outcome != NOT_AUTHORIZED:
+        return False  # a rule's absence or removal is never proof: Polkit must say so
     if pass_class not in PASS_CLASSES:
         return False
     if grant_id_class not in PASS_CLASSES:
@@ -162,14 +199,16 @@ def branch_for_record(data: bytes | None, *, activation_id: str, k: int) -> Bran
     try:
         doc = parse_canonical(data)
         validate_record(doc)
+        if doc["kind"] != "deact" or doc["activation_id"] != activation_id or doc["attempt"] != k:
+            return Branch.BS4
+        if doc["outcome"] == "st1-verified":
+            return Branch.BS2
+        if doc["outcome"] == "hard-stop" and hard_stop_permits_disarm(doc):
+            return Branch.BS3
     except (CanonicalError, RecordSchemaError):
         return Branch.BS4
-    if doc["kind"] != "deact" or doc["activation_id"] != activation_id or doc["attempt"] != k:
+    except Exception:  # noqa: BLE001 - defence in depth: a record that escapes the validator is BS-4
         return Branch.BS4
-    if doc["outcome"] == "st1-verified":
-        return Branch.BS2
-    if doc["outcome"] == "hard-stop" and hard_stop_permits_disarm(doc):
-        return Branch.BS3
     return Branch.BS4
 
 
@@ -248,6 +287,7 @@ class BackstopProcedure:
         guard: BackstopGuard,
         limits: Callable[[], tuple[int, int]],
         cleanup: Callable[[int, str], CleanupOutcome],
+        grant_check: Callable[[], PkOutcome],
     ) -> None:
         self._paths = paths
         self._id = paths.activation_id
@@ -258,6 +298,7 @@ class BackstopProcedure:
         self._guard = guard
         self._limits = limits
         self._cleanup = cleanup
+        self._grant_check = grant_check
         self._disarms = 0
 
     def run(self) -> BackstopOutcome:
@@ -352,7 +393,14 @@ class BackstopProcedure:
         return result
 
     def _terminal(self, reason: BoundReason, mode: GuardMode) -> BackstopOutcome:
-        outcome = disarm_class(self._disarm())
+        # The bound stops *attempts*, not the recovery owner of a live grant: the timer
+        # is disarmed only when the rule path is observed absent *and* a bounded Polkit
+        # series then positively reports ``not-authorized``. Absence of the path alone
+        # proves nothing (Polkit may still have the rule's effect loaded).
+        if self._fs.observe(self._paths.rule) is None and self._not_authorized():
+            outcome = disarm_class(self._disarm())
+        else:
+            outcome = DISARM_WITHHELD
         fields = {
             "schema": TERMINAL_SCHEMA,
             "op": "backstop-terminal",
@@ -370,6 +418,14 @@ class BackstopProcedure:
         return self._done(BsTerminal.BOUND_REACHED, detail)
 
     # helpers ------------------------------------------------------------------
+
+    def _not_authorized(self) -> bool:
+        """One bounded ``seek-not-authorized`` series; anything but a positive
+        ``not-authorized`` (an error, a raise, a malformed result) is not one."""
+        try:
+            return self._grant_check() is PkOutcome.NOT_AUTHORIZED
+        except Exception:  # noqa: BLE001 - an unreadable authorization state is never "not authorized"
+            return False
 
     def _disarm(self):
         """DI-4 for this activation's own derived timer, at most once per firing."""

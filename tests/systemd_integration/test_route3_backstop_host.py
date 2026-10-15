@@ -389,30 +389,69 @@ def test_bs2_disarms_only_its_own_timer_after_a_verified_stop_post(activations):
     other.fx = None
 
 
-def test_bs3_disarms_after_a_hard_stop_that_left_nothing_a1_intact(activation):
-    """A pre-existing rules directory (kept) holding a foreign replacement of the
-    rule (A0, kept): nothing A1-intact remains, so BS-3 disarms. Had ACT created
-    the rules directory it would be A1-intact and nonempty, and BS-4 would retry."""
+INERT_RULE = b"// a foreign root-made file at the rule's name: it authorizes nobody\n"
+
+
+def _replace_rule(activation, data: bytes) -> None:
+    """Another inode at the rule's path: positively foreign, never removable by RP-11."""
+    fresh = Path(activation.paths.rule + ".new")
+    fresh.write_bytes(data)
+    os.chmod(fresh, 0o644)
+    os.rename(fresh, activation.paths.rule)
+
+
+def _preexisting_rules_dir(activation) -> None:
     if not os.path.lexists("/run/polkit-1"):
         os.makedirs(ActivationPaths(LAYOUT, activation.id).rules_dir, mode=0o755)
         activation.made_polkit_dir = True
+
+
+def test_bs3_disarms_after_a_hard_stop_that_left_nothing_a1_intact(activation):
+    """A pre-existing rules directory (kept) holding a foreign replacement of the
+    rule (A0, kept) that Polkit does *not* honour: nothing A1-intact remains and
+    non-authorization is established, so BS-3 disarms. Had ACT created the rules
+    directory it would be A1-intact and nonempty, and BS-4 would retry."""
+    _preexisting_rules_dir(activation)
     activation.prepare(pass_config=False)
     p = activation.paths
-    fresh = Path(p.rule + ".new")  # replace the rule by another inode: foreign (A0), not removable
-    fresh.write_bytes(activation.fx.rule_bytes)
-    os.chmod(fresh, 0o644)
-    os.rename(fresh, p.rule)
+    _replace_rule(activation, INERT_RULE)
     shown = activation.start_holder()
     assert "status=1 }" in shown["ExecStopPost"]
     doc = activation.record(1)
     assert doc["outcome"] == "hard-stop" and doc["active_rule"]["class"] == "present-foreign-unremoved"
+    assert doc["grant_check"]["after_cleanup"] == "not-authorized"
     assert {d["role"]: d["class"] for d in doc["directories"]}["rules-dir"] == "pre-existing-kept"
     activation.arm()
     fired = activation.fire()
     assert fired["status"] == "0"
     assert f"rp11-bs disarmed {activation.id} branch=bs-3 k=1 disarm=stopped" in fired["journal"]
+    assert wait_until(lambda: activation.timer_state() in {"inactive", ""}, 10)  # the timer agrees
     assert os.path.exists(p.rule)  # BS never removes a foreign object
     assert activation.attempts() == [f"{activation.id}-deact-1-evidence"]
+
+
+def test_a_live_foreign_replacement_is_not_disarmed_and_never_removed(activation):
+    """The same foreign file, but with the rule's authorizing bytes: Polkit still
+    honours it. That is a possibly live grant: BS-3 does not apply, the timer stays
+    the recovery owner, CL runs again, and the file is never removed to stop it."""
+    _preexisting_rules_dir(activation)
+    activation.prepare(pass_config=False)
+    p = activation.paths
+    _replace_rule(activation, activation.fx.rule_bytes)
+    ino = os.stat(p.rule).st_ino
+    shown = activation.start_holder()
+    assert "status=1 }" in shown["ExecStopPost"]
+    doc = activation.record(1)
+    assert doc["outcome"] == "hard-stop" and doc["active_rule"]["class"] == "present-foreign-unremoved"
+    assert doc["grant_check"]["after_cleanup"] != "not-authorized"
+    activation.arm()
+    fired = activation.fire()
+    assert fired["status"] == "1", fired["journal"]
+    assert f"rp11-bs cleanup {activation.id} k=2 trigger=backstop" in fired["journal"]
+    assert "rp11-bs disarmed" not in fired["journal"]
+    assert activation.timer_state() == "active"  # the recovery owner remains
+    assert os.stat(p.rule).st_ino == ino  # kept, not removed to make the timer stop
+    assert activation.attempts() == [f"{activation.id}-deact-{k}-evidence" for k in (1, 2)]
 
 
 # ---------------------------------------------------------------------------
@@ -439,16 +478,177 @@ def test_the_real_timer_fires_until_backstop_max_then_disarms_itself(activation)
     assert not os.path.lexists(activation.paths.rule)  # the first firing's CL-G removed the grant
 
 
-def test_the_attempt_limit_is_terminal_on_the_host(activation):
+def test_the_attempt_limit_never_disarms_a_present_rule_on_the_host(activation):
+    """k > 99 ends attempts, not the recovery owner: the rule is still on disk, so the
+    timer stays armed (``disarm=withheld``) and the firing is non-zero."""
     activation.prepare()
     for k in range(1, 100):
         Path("/var/tmp", f"{activation.id}-deact-{k}-evidence").mkdir()
     activation.arm()
     fired = activation.fire()
     assert fired["status"] == "12"
-    assert f"rp11-bs bound-reached {activation.id} reason=attempt-limit disarm=stopped" in fired["journal"]
+    assert f"rp11-bs bound-reached {activation.id} reason=attempt-limit disarm=withheld" in fired["journal"]
     assert os.path.exists(activation.paths.rule)  # no CL, not even CL-G
-    assert not list((STORE / "activation").iterdir())
+    assert activation.timer_state() == "active"  # the reported result and the timer agree
+    assert activation.terminal_lines() == [
+        {"schema": "rp11-backstop-terminal/1", "op": "backstop-terminal", "activation_id": activation.id,
+         "reason": "attempt-limit", "disarm": "withheld"}
+    ]
+    assert len(activation.attempts()) == 99 and not list((STORE / "activation").iterdir())
+
+
+def test_the_attempt_limit_disarms_once_the_rule_path_is_absent_on_the_host(activation):
+    activation.prepare()
+    for k in range(1, 100):
+        Path("/var/tmp", f"{activation.id}-deact-{k}-evidence").mkdir()
+    Path(activation.paths.rule).unlink()
+    activation.arm()
+    fired = activation.fire()
+    assert fired["status"] == "12"
+    assert f"rp11-bs bound-reached {activation.id} reason=attempt-limit disarm=stopped" in fired["journal"]
+    assert wait_until(lambda: activation.timer_state() in {"inactive", ""}, 10)
+    assert not os.path.lexists(activation.paths.rule)
+    assert activation.pk(PkMode.SEEK_NOT_AUTHORIZED).outcome is PkOutcome.NOT_AUTHORIZED  # the proof used
+
+
+@pytest.mark.parametrize("reason", ["attempt-limit", "backstop-max"])
+def test_the_bound_withholds_when_the_rule_path_is_absent_but_polkit_still_authorizes(activation, reason):
+    """Pathname absence is not proof: another rule file still authorizes the operator, so
+    the terminal firing withholds DI-4, keeps the real timer and the exit non-zero, and
+    creates neither an attempt directory nor a record, however often it fires."""
+    activation.prepare(backstop_max=1 if reason == "backstop-max" else 20)
+    if reason == "attempt-limit":
+        for k in range(1, 100):
+            Path("/var/tmp", f"{activation.id}-deact-{k}-evidence").mkdir()
+    else:
+        Path("/var/tmp", f"{activation.id}-deact-1-evidence").mkdir()  # no journal: counts against B
+    Path(activation.paths.rule).unlink()
+    _foreign_grant(activation)
+    before = activation.attempts()
+    activation.arm()
+    for n in (1, 2):
+        fired = activation.fire()
+        assert fired["status"] == "12", fired["journal"]
+        assert f"rp11-bs bound-reached {activation.id} reason={reason} disarm=withheld" in fired["journal"]
+        assert "disarm=stopped" not in fired["journal"]
+        assert activation.timer_state() == "active"  # the timer, the rule path and Polkit agree ...
+        assert not os.path.lexists(activation.paths.rule)
+        assert activation.pk(PkMode.FIRST_DECISIVE).outcome is PkOutcome.AUTHORIZED
+        assert len(activation.terminal_lines()) == n  # ... and the diagnostic is bounded, one line per firing
+        assert activation.attempts() == before and not list((STORE / "activation").iterdir())
+    assert {line["disarm"] for line in activation.terminal_lines()} == {"withheld"}
+    # Polkit stops authorizing: the same bound now disarms exactly once
+    FOREIGN_RULE.unlink()
+    restart_polkit()
+    assert wait_until(lambda: activation.pk(PkMode.SEEK_NOT_AUTHORIZED).outcome is PkOutcome.NOT_AUTHORIZED, 30)
+    fired = activation.fire()
+    assert fired["status"] == "12"
+    assert f"rp11-bs bound-reached {activation.id} reason={reason} disarm=stopped" in fired["journal"]
+    assert wait_until(lambda: activation.timer_state() in {"inactive", ""}, 10)
+
+
+def test_a_hard_stop_while_polkit_still_authorizes_is_never_disarmed_and_recovers(activation):
+    """The rule is removed but another file keeps Polkit authorizing: stop-post records an
+    ``unconfirmed`` hard-stop. BS-3 must not disarm it; once Polkit says not-authorized the
+    next cleanup verifies and only then does BS-2 disarm the real timer."""
+    activation.prepare(pass_config=False)
+    _foreign_grant(activation)
+    shown = activation.start_holder()
+    assert "status=1 }" in shown["ExecStopPost"]
+    doc = activation.record(1)
+    assert doc["outcome"] == "hard-stop"
+    assert doc["grant_check"]["after_cleanup"] == doc["pk"]["outcome"] == "unconfirmed"
+    activation.arm()
+    fired = activation.fire()
+    assert fired["status"] == "1", fired["journal"]
+    assert f"rp11-bs cleanup {activation.id} k=2 trigger=backstop" in fired["journal"]
+    assert "rp11-bs disarmed" not in fired["journal"] and activation.timer_state() == "active"
+    FOREIGN_RULE.unlink()
+    restart_polkit()
+    assert wait_until(lambda: activation.pk(PkMode.SEEK_NOT_AUTHORIZED).outcome is PkOutcome.NOT_AUTHORIZED, 30)
+    fired = activation.fire()
+    assert fired["status"] == "0", fired["journal"]
+    k = len(activation.attempts())
+    assert activation.record(k)["outcome"] == "st1-verified" and activation.timer_state() == "active"
+    fired = activation.fire()
+    assert f"rp11-bs disarmed {activation.id} branch=bs-2 k={k} disarm=stopped" in fired["journal"]
+    assert wait_until(lambda: activation.timer_state() in {"inactive", ""}, 10)
+
+
+def _unreachable_rules_dir(activation):
+    """The rule's parent becomes a symlink: RP-11 resolves paths without following links,
+    so it can neither inspect nor remove the grant, yet Polkit's own path still reaches it."""
+    directory = activation.paths.rules_dir
+    real = directory + ".real"
+    os.rename(directory, real)
+    os.symlink(real, directory)
+
+    def restore() -> None:
+        if os.path.islink(directory):
+            os.unlink(directory)
+        if os.path.isdir(real):
+            os.rename(real, directory)
+
+    return real, restore
+
+
+def test_an_uninspectable_grant_keeps_its_owner_and_recovers_when_the_fault_clears(activation):
+    activation.prepare()
+    real, restore = _unreachable_rules_dir(activation)
+    ino = os.stat(real + "/" + os.path.basename(activation.paths.rule)).st_ino
+    try:
+        activation.arm()
+        for k in (1, 2):
+            fired = activation.fire()
+            assert fired["status"] == "1", fired["journal"]
+            assert f"rp11-bs cleanup {activation.id} k={k} trigger=backstop lock=held terminal=hard-stop" in fired["journal"]
+            assert "rp11-bs disarmed" not in fired["journal"]
+            doc = activation.record(k)
+            assert doc["outcome"] == "hard-stop" and doc["active_rule"]["class"] == "present-uninspected-unremoved"
+            assert doc["grant_identity"]["cl_g"] in {"kept-uninspected", "identity-unavailable"}
+            assert activation.timer_state() == "active"
+            assert os.stat(real + "/" + os.path.basename(activation.paths.rule)).st_ino == ino
+    finally:
+        restore()
+    # the fault clears (polkitd is restarted so that it watches the restored directory) ...
+    restart_polkit()
+    # ... the next automatic firing re-inspects, removes and verifies
+    fired = activation.fire()
+    assert fired["status"] == "0", fired["journal"]
+    assert f"rp11-bs cleanup {activation.id} k=3 trigger=backstop lock=held terminal=st1-verified" in fired["journal"]
+    assert not os.path.lexists(activation.paths.rule)
+    assert activation.record(3)["pk"]["outcome"] == "not-authorized"
+    assert activation.timer_state() == "active"  # not yet: only a verified record disarms
+    # ... and only then does the normal verified path disarm the timer
+    fired = activation.fire()
+    assert f"rp11-bs disarmed {activation.id} branch=bs-2 k=3 disarm=stopped" in fired["journal"]
+    assert wait_until(lambda: activation.timer_state() in {"inactive", ""}, 10)
+
+
+def test_persistent_uncertainty_through_the_bound_never_disarms_the_real_timer(activation):
+    activation.prepare(backstop_max=2)
+    real, restore = _unreachable_rules_dir(activation)
+    rule_in_place = real + "/" + os.path.basename(activation.paths.rule)
+    ino = os.stat(rule_in_place).st_ino
+    try:
+        activation.arm(interval=3, runtime_max=60, timeout_stop=10)
+        assert wait_until(lambda: len(activation.terminal_lines()) >= 2, 120), activation.terminal_lines()
+        assert activation.timer_state() == "active"  # the bound did not disarm the owner
+        run("systemctl", "stop", activation.timer)  # the test ends the loop itself
+        assert activation.attempts() == [f"{activation.id}-deact-{k}-evidence" for k in (1, 2)]  # bounded growth
+        for k in (1, 2):
+            assert activation.record(k)["active_rule"]["class"] == "present-uninspected-unremoved"
+        lines = activation.terminal_lines()
+        assert lines and all(line == {"schema": "rp11-backstop-terminal/1", "op": "backstop-terminal",
+                                      "activation_id": activation.id, "reason": "backstop-max",
+                                      "disarm": "withheld"} for line in lines)
+        journal = run("journalctl", "--no-pager", "-o", "cat", "-u", activation.service).stdout
+        assert "rp11-bs disarmed" not in journal and "disarm=stopped" not in journal
+        assert journal.count(f"rp11-bs bound-reached {activation.id} reason=backstop-max disarm=withheld") >= 2
+        assert os.stat(rule_in_place).st_ino == ino  # the grant was never touched
+    finally:
+        run("systemctl", "stop", activation.timer)
+        restore()
 
 
 # ---------------------------------------------------------------------------

@@ -6,11 +6,117 @@ Date: 2026-10-13 · Authority: baseline v1.9, active handover, [prompt](route-3-
 inactive Route 3 role series for continued development, including the final GRR
 descriptor-close remediation described below. It does not authorize production
 or staging activation; the three pre-activation requirements in the current
-result remain open.
+result remain open. **The independent security review then raised three findings;
+the recommendation below is superseded by the
+[current security remediation](#current-security-remediation--2026-10-14).**
+
+## Current security remediation 2 — 2026-10-14
+
+Supersedes the recommendation, BS-3 description and risk 5 of the section below. [Prompt](route-3-role-series-security-remediation-review2-claude-prompt.md). Inactive: no production/staging state, real secret or player data touched. Not committed. Independent re-review is complete and recommends acceptance for continued development; the `tmpfiles.d` installation/reboot gate stays open and no activation readiness is claimed.
+
+**Independent re-review result.** The three blocking re-review findings below
+are closed in the implementation and executable tests. The universal BS-3
+gate, terminal Polkit check and cleanup-record consistency relation were also
+confirmed in a focused 1,095-test run and four relevant real-PID-1 cases. Two
+additional observations are non-blocking hardening for the eventual production
+security review: activated ACT records could bind their positive Polkit claim
+more tightly to call/subject evidence, and direct non-canonical Python mappings
+can make the validator raise `TypeError` before its canonical-value check. The
+canonical byte reader excludes the latter input, `branch_for_record()` remains
+fail-closed, and neither observation reopens the inactive role series or calls
+for another remediation cycle.
+
+| # | Re-review finding | Disposition |
+|---|---|---|
+| 1 | blocking: BS-3 disarmed a removed/absent rule with an unconfirmed Polkit result | **Fixed**: universal predicate |
+| 2 | blocking: the retry-bound disarmed on pathname absence alone | **Fixed**: bounded Polkit check |
+| 3 | blocking: `after_cleanup` and `pk.outcome` could contradict and still pass validation | **Fixed**: cross-field relations |
+
+**BS-3 predicate** (`hard_stop_permits_disarm`): for every rule class, `grant_check.after_cleanup == "not-authorized"` **and** `pk.outcome == "not-authorized"`; plus the unchanged conditions (rule not `removed-unconfirmed`/`grant-unremovable`/`present-uninspected-unremoved`, `cl_g != kept-uninspected`, every stated class enumerated, none A1-intact-kept). `authorized`, `unconfirmed`, absent, missing or malformed ⇒ BS-4 (another bounded recovery attempt, timer kept, no DI-4). A kept inert damaged/foreign rule with positive `not-authorized` still takes BS-3 and is never removed.
+
+**Bounded terminal check.** `BackstopProcedure` takes a `grant_check` port; `adapters/rp11/backstop.py` implements it as one `seek-not-authorized` PK series (same `PkSeries`, fixed H-1 parameters, subject and reaping as CL-4) using the A-2/H-1 operator. At `backstop_max` or k > 99: DI-4 is called once only if `fs.observe(rule) is None` **and** the series returns the `NOT_AUTHORIZED` member. Any other result, an exception, or no valid authority ⇒ `disarm=withheld`, timer active, exit 12 (13 if the line is unwritable). DI-4 result classes keep their typed handling. No attempt directory or record is created; the terminal journal stays capped.
+
+**Record relations** (`records._cross_pk`, cleanup records): `after_cleanup == pk.outcome` (absent only together); `st1.checks["pk-not-authorized"] == (outcome == not-authorized)`; outcome ∈ {`not-authorized`, `unconfirmed`, absent} (a seek-not-authorized series never reports `authorized`); `pk.mode == seek-not-authorized`; subjects (`children` entries + overflow) ≤ `calls`; `abandoned` ≤ subjects and equals the entries' count when no overflow; `not-authorized` needs reason `decided`, ≥1 call and ≥1 subject; `unconfirmed` reason ∈ {`only-errors`, `still-authorized`, `interrupted`}, `still-authorized` needs a call and a subject; no outcome ⇒ mode/reason absent, zero calls, signals, elapsed, no children. `validate_record` still raises only `RecordSchemaError`; `branch_for_record` ⇒ BS-4, never an older record.
+
+**Principal files:** `application/rp11/{backstop,records}.py`, `adapters/rp11/backstop.py`; tests `test_rp11_{backstop,records,cleanup,hold}.py` (the cleanup/hold PK fakes now behave like a real seek-not-authorized series, with a child entry), `tests/systemd_integration/test_route3_backstop_host.py`.
+
+**Regression tests.** Backstop: `test_a_removed_rule_with_unconfirmed_polkit_takes_bs4_and_never_disarms`, `test_persistently_unconfirmed_polkit_never_calls_di4_and_stays_bounded[2]`, `test_bs3_requires_positive_not_authorized_in_both_fields_for_every_rule_class[14]`, `test_bs3_a_missing_authorization_fact_is_not_proof[4]`, `test_the_bound_with_an_absent_rule_withholds_unless_polkit_says_not_authorized[4]`, `…_and_not_authorized_disarms_exactly_once[2]`, `test_the_terminal_check_must_return_the_not_authorized_member[6]`, `test_the_adapter_check_is_unconfirmed_without_a_valid_authority_or_series[3]`, `test_a_canonical_contradictory_greatest_record_never_lets_an_older_one_decide[2]`; the existing BS-2/BS-3/terminal DI-4 matrices (11 results × sites, real adapter) retained; the old unsafe `_hard_stop` BS-3 tests now assert BS-4 or use a genuine safe hard-stop. Records: `test_every_unequal_pair_of_after_cleanup_and_pk_outcome_is_rejected[64]`, `test_the_reviews_contradiction_is_rejected_and_selects_bs4`, `test_impossible_polkit_claims_are_schema_errors_and_never_select_bs2_or_bs3[20]` (mode, calls/outcome, reason, subjects, abandonment, ST-1 check), `test_a_claim_of_nothing_checked_cannot_select_bs2_or_bs3`, `test_a_verified_record_with_a_hollow_not_authorized_is_rejected`, `test_the_valid_generated_records_still_select_the_intended_branches`. Host (PID 1): `test_the_bound_withholds_when_the_rule_path_is_absent_but_polkit_still_authorizes[2]` (a second rule file keeps Polkit authorizing: timer active, rule path absent, Polkit authorized, one bounded line per firing, no attempt/record; then the grant is removed and the same bound disarms once), `test_a_hard_stop_while_polkit_still_authorizes_is_never_disarmed_and_recovers`, and the `…_disarms_once_the_rule_path_is_absent_on_the_host` test now also asserts Polkit `not-authorized`.
+
+**Mutation tests** (local over backstop + records tests, each reverted; sha256 of both files identical afterwards, 589 passed): old BS-3 predicate (Polkit gate only for kept files) ⇒ 20 fail; absence-only terminal decision ⇒ 17 fail; `_cross_pk` removed ⇒ 58 fail.
+
+**Final-tree commands and results** (`oracle-test`, documented secret-excluding `rsync`, serial, `/opt/freedom-blades/runtime/venv-web/bin/python -B -m pytest -q -rfEs -p no:cacheprovider`; bot/web with PostgreSQL 16 `PATH` and `TEST_DATABASE_URL=postgresql+psycopg:///freedom_test`, launched via a signal-resetting wrapper):
+* Focused (artifact store, unit control, hold, cleanup, backstop, records, PK/SN, H-1 artifact, launch gate/source/cc1/toolchain): **2441 passed, 18 skipped** (2 root-only 2²⁰+7; 16 toolchain cases, `RP11_LAUNCH_BUILD_ROOT` unset).
+* Root `tests/systemd_integration` (`FREEDOM_SYSTEMD_INTEGRATION=oracle-test`, pinned Jeepney wheel, root default `PATH`): **108 passed** (9 min 36 s; was 105).
+* Bot: **6 failed, 5836 passed, 20 skipped, 39 errors**, identical to baseline (`test_r5_runner.py` 5 F + 39 E, `test_sheet_bootstrap_boundary.py` 1 F).
+* Web: **2 failed, 2890 passed, 80 skipped** (80 is the correct skip count). Both failures are the baseline ones: `test_every_evidence_harness_source_in_the_tree_is_declared` and `test_the_discovery_enumerates_untracked_files_rather_than_directories` (needs an untracked directory; unrelated).
+* Foundry Node: 171 passed, 0 failed. `python3 .claude/hooks/test_guards.py`: 40 cases pass. `git diff --check` and `compileall` clean; no formatter, linter or type checker is configured. No OOM.
+
+**Real-host outcomes and cleanup.** Under PID 1 the timer state, rule path, Polkit result and diagnostic agree: Polkit still authorizing ⇒ `disarm=withheld`, timer `active`; Polkit `not-authorized` and rule absent ⇒ `disarm=stopped`, timer inactive. After the root run: no `rp11` unit or process, no rotate/caddy stragglers, nothing named `rp11` under `/run`, no `/run/polkit-1`, store, `/var/tmp/rp11-*`; `/usr/local/libexec` empty `root:root 0755`; `/etc/polkit-1/rules.d` empty; `polkit.service` active. Remote logs, scripts and pytest temps removed. (The documented `rsync --delete` also removed pre-existing `.codex/` and `.aws/` from the disposable host.)
+
+**Remaining production risks.** (1) `tmpfiles.d` Polkit ordering uninstalled and not reboot-proved. (2) PID/start-time subject identity (A-13.4) unchanged. (3) After the bound a present grant is not removed automatically (CL is not entered); recovery needs the fault cleared plus `attest`/CP/boot, and the terminal journal caps at 64 KiB (firings then exit 13, still without disarming). (4) A rule with no usable identity is classed foreign; BS-3 disarms it only on positive `not-authorized`. (5) Other objects with a failed inspection stay `present-damaged-unremoved`. (6) Kernel-level read faults cannot be injected on the host. (7) The stricter schema fails closed (`record-unpublished`) for any producer shape not listed in tests. (8) The terminal check adds up to one PK series (`pk_op_ms`) to a bound firing.
+
+**Recommendation: accept the inactive role series for continued development.**
+Independent re-review is complete and found no remaining blocker to continued
+development. Production activation remains separately blocked by the
+`tmpfiles.d` installation/reboot proof, the retained PID/start-time subject
+risk decision and the production security review.
+
+## Current security remediation — 2026-10-14
+
+**Superseded by the [security remediation 2](#current-security-remediation-2--2026-10-14) above, which closes three blocking re-review findings against this section (its BS-3/bound statements and risk 5 no longer hold).** Supersedes the acceptance recommendation of every section below. [Prompt](route-3-role-series-security-remediation-claude-prompt.md). Inactive: no production or staging state, real secret or player data was touched. Not committed. This section's requested re-review is completed and recorded above; the `tmpfiles.d` installation/reboot gate stays open.
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | blocking: inspection uncertainty lost its recovery owner (GRR collapsed it into `kept-damaged`/`kept-foreign`; BS-3 then disarmed) | **Fixed**: new class, BS-3 and the bound changed |
+| 2 | blocking: `validate_record()` checked only top-level keys, so a hollow `st1-verified` record selected BS-2 | **Fixed**: total validator |
+| 3 | important: CL-7 chained any existing ACT bytes | **Fixed**: parsed, validated, matched |
+
+**Finding 1.**
+* *Class.* `Attribution.UNINSPECTED` → `Removal` → GRR `kept-uninspected` → rule class `present-uninspected-unremoved` (in the record schema, `IGR_OUTCOMES`, residuals). `classify_file()` (attribution.py) names a file `UNINSPECTED` when a lookup, `fstat`, content read or xattr listing failed, **unless** the facts that were seen already establish damage (mode, owner, size, link count, forbidden xattr or a differing digest ⇒ `A1-damaged`) or another inode/type (⇒ `A0`). Used by `fsops.remove()` (files) and CL-3's identity-based path. Never `A1_INTACT`, never unlinked. Only the activation rule gets the new class; `pass-a.json`, `grant.id` and directories keep their accepted damaged/foreign mapping (they do not authorize).
+* *BS-3* (`hard_stop_permits_disarm`): the uninspected rule class and `cl_g == kept-uninspected` block the disarm. **Also changed** (necessary for the safety property): a *kept* damaged/foreign rule file blocks it unless Polkit was positively `not-authorized` after cleanup. A foreign file with the grant's own bytes still authorizes; the old host test disarmed on exactly that. *(Superseded: a removed/absent rule with an unconfirmed Polkit result no longer disarms; see remediation 2.)*
+* *Bound* (BS-4, `backstop_max` or k > 99): CL is still not entered. DI-4 is now called only if `fs.observe(rule)` is `None`; if the rule is present or cannot be looked up, the timer stays (`disarm=withheld` in the terminal line and journal line, exit 12, or 13 if the line is unwritable). The firing repeats at the timer's own interval and creates no attempt directory; growth is bounded by the 64 KiB terminal-journal cap.
+* *Retry.* Below the bound a transient failure re-enters CL each firing, re-inspects, removes via `grant.id` or the journal identity, verifies non-authorization (`st1-verified`), and the next firing disarms through BS-2.
+
+**Finding 2.** `application/rp11/records.py`: `validate_record()` returns normally or raises `RecordSchemaError`, nothing else. A table of small checkers (`_obj`, `_list`, `_one_of`, `_or_absent`, …) gives every nested object/list exact keys, exact types (no subclasses or bool-as-int), bounds (uint, mode ≤ 0o7777, list limits, lease and `Params` ranges), enumerations, digest/path/UTC/boot/activation forms. Cross-field functions: kind/outcome/trigger/attempt, failure and `st1` agreement, `act_record_sha256` (absent for ACT, a digest for deact), own-journal path matches attempt, `holder.unit`, `a2_path`; for `activated` the grant-seen/stop-control/lock/capture facts and no cleanup facts; for CL records every class stated, helper role = trigger, all eight ST-1 checks; for `st1-verified` every class clean, Polkit not authorized in `grant_check` and `pk`, no residual but `s0`, authority facts present, capture unit inactive. `branch_for_record()` keeps `CanonicalError`/`RecordSchemaError` ⇒ BS-4 and now also any other exception ⇒ BS-4; nothing falls back to an older record. Old fixtures were corrected to the exact shape (hold PK fake used a truncated child, a residual used `sha256: absent`, copied records kept the attempt-1 journal path).
+
+**Finding 3.** `CleanupProcedure._ensure_act_record()`: an existing object is never rewritten; its bytes must parse canonically, pass `validate_record`, be `kind act`, attempt 0, this activation and this A-2, else `ValueError` ⇒ `record-unpublished` (exit 3), no deact record. An unreadable/wrong-mode object already failed at publish (`EEXIST`). Absent ⇒ one failed ACT record as before.
+
+**Principal files:** `application/rp11/{attribution,records,cleanup,backstop,journal}.py`, `adapters/rp11/fsops.py`; tests `tests/test_rp11_records.py` (new, 221), `test_rp11_{cleanup,backstop,hold}.py`, `tests/systemd_integration/test_route3_backstop_host.py`.
+
+**Regression tests (named).**
+* Class: `test_a_failed_target_inspection_is_a_typed_non_removal[4]`, `test_an_uninspected_grant_is_neither_damaged_nor_foreign_nor_removable[4]`, `test_a_symlinked_parent_leaves_the_grant_uninspected_not_foreign`, `test_classify_file_names_only_what_the_observation_establishes[14]`, `test_without_grant_id_an_uninspected_rule_is_kept_and_recovered_later`, `test_stop_post_cl_g_survives_a_persistent_grant_inspection_failure[4]`, hold `test_igr_survives_a_failed_grant_inspection_and_keeps_its_order[8]`.
+* Backstop: `test_backstop_cl_g_survives_a_persistent_grant_inspection_failure[4]` (kept, no BS-3, no DI-4, recovery, then BS-2), `test_persistent_uncertainty_through_backstop_max_never_disarms_the_owner[2]`, `test_the_attempt_limit_never_disarms_a_present_rule`, `test_the_bound_disarms_only_for_a_rule_path_observed_absent`, `test_a_foreign_replacement_that_is_not_authorized_keeps_the_accepted_bs3`, `test_a_kept_rule_that_may_still_authorize_keeps_its_recovery_owner[4]`, BS-3 predicate tests. Host (PID 1): `test_an_uninspectable_grant_keeps_its_owner_and_recovers_when_the_fault_clears` (rules directory replaced by a symlink: hard-stop records, timer `active`, rule inode unchanged, restored ⇒ `st1-verified` ⇒ BS-2 ⇒ timer inactive), `test_persistent_uncertainty_through_the_bound_never_disarms_the_real_timer`, `test_a_live_foreign_replacement_is_not_disarmed_and_never_removed`, `test_bs3_disarms_after_a_hard_stop_that_left_nothing_a1_intact` (now an inert foreign file), `test_the_attempt_limit_never_disarms_a_present_rule_on_the_host`, `…_disarms_once_the_rule_path_is_absent_on_the_host`.
+* Records (`tests/test_rp11_records.py`): the review's minimal `st1-verified` record ⇒ BS-4; every generated ACT (activated, failed), verified and hard-stop record: every nested key deleted, an extra key added, every node replaced by each wrong type (all `RecordSchemaError` only and BS-4); 114 bound/form cases, 45 cross-field cases, subclass/bool cases, maximum valid values, odd xattr names; valid verified ⇒ BS-2, valid eligible hard-stop ⇒ BS-3. Backstop: `test_a_nested_malformed_latest_record_never_lets_the_older_success_decide[10]`, `test_branch_for_record_is_defensively_fail_closed_if_the_validator_ever_leaks[8]`.
+* ACT: `test_an_existing_valid_act_record_is_preserved_and_its_digest_linked`, `test_an_invalid_existing_act_record_is_never_rewritten_and_never_chained[14]` (incl. the old `{"kept":true}` fixture, a deact record renamed, other activation, other A-2, nonzero attempt), `…act_record_the_store_will_not_read_back…[2]`, `test_an_absent_act_record_is_published_once_as_a_valid_failed_record`, hold `test_cleanup_preserves_the_holders_activated_act_record_and_links_its_digest`, `test_an_act_record_collision_is_not_act_pass` (now `record-unpublished`).
+
+**Mutation tests** (local, each reverted; `cmp` confirmed byte-identical restore; run over backstop, cleanup, records, hold): uninspected not blocking BS-3 ⇒ 7 fail; no Polkit gate for a kept rule ⇒ 4; bound always disarms ⇒ 4; GRR collapses uninspected ⇒ 27; CL-3 identity path collapses ⇒ 6; validator top-level only ⇒ 185; nested structure skipped ⇒ 99; cross-field skipped ⇒ 83; ST-1 relations skipped ⇒ 15; `branch_for_record` catch removed ⇒ 8 (after adding that test); ACT hash unvalidated ⇒ 15; ACT not matched to this activation ⇒ 3. With the six accepted-commit source files restored, all four test modules fail to collect (new names absent).
+
+**Final-tree commands and results** (`oracle-test`, documented secret-excluding `rsync`, serial, `/opt/freedom-blades/runtime/venv-web/bin/python -B -m pytest -q -rfEs -p no:cacheprovider`; bot/web with explicit PostgreSQL 16 `PATH` and `TEST_DATABASE_URL=postgresql+psycopg:///freedom_test`, launched via a signal-resetting wrapper, `SigIgn 0x1001004` with no rotate failures):
+* Focused (artifact store, unit control, hold, cleanup, backstop, records, PK/SN, H-1 artifact, launch gate/source; earlier tree, before two small edits): 2301 passed, 2 skipped (root-only 2²⁰+7). The final tree's rp11 modules also pass locally (1804 passed, 18 toolchain/root skips) and inside the bot run.
+* Root `tests/systemd_integration` (`FREEDOM_SYSTEMD_INTEGRATION=oracle-test`, pinned wheel, default root `PATH`): **105 passed** (9 min 3 s; was 101).
+* Bot `tests/test_*.py`: **6 failed, 5710 passed, 20 skipped, 39 errors**. Failures/errors identical to baseline (`test_r5_runner.py` 5 F + 39 E, `test_sheet_bootstrap_boundary.py` 1 F); skips 20.
+* Web `tests/web`: **2 failed, 2890 passed, 80 skipped** (80 is the correct skip count). One failure is the baseline `test_every_evidence_harness_source_in_the_tree_is_declared`. **One differs from baseline: `test_the_discovery_enumerates_untracked_files_rather_than_directories`.** It asserts the working tree contains an untracked *directory*; this tree has only untracked files. Not caused by the code: with a scratch untracked directory present on the host it passes (removed again).
+* Foundry: 171 passed, 0 failed. `python3 .claude/hooks/test_guards.py`: 40 cases pass. `git diff --check` and `compileall` clean; no formatter, linter or type checker is configured. No OOM seen.
+
+**Real-host result and cleanup.** In the PID-1 tests the reported result, the timer state and the rule's path state agree: `withheld` ⇒ timer `active` and the rule inode unchanged; `stopped` ⇒ timer inactive and the rule absent. After the root run (separate commands): no `rp11` unit, holder, backstop, rotate or `caddy` process; nothing named `rp11` under `/run`; no `/run/polkit-1`, `/var/lib/freedom-blades-rp11`, `/etc/freedom-blades-rp11` or `/var/tmp/rp11-*`; `/usr/local/libexec` empty `root:root 0755`; `/etc/polkit-1/rules.d` empty; `polkit.service` active. This work's logs, scripts and pytest temps were removed.
+
+**Remaining production risks.**
+1. `tmpfiles.d` Polkit ordering is uninstalled and not reboot-proved.
+2. PID/start-time subject identity (A-13.4) is unchanged.
+3. After the bound the timer is retained and re-checks the rule path every firing, but nothing removes a present grant automatically (CL is not entered): recovery then needs the fault cleared plus `attest`/CP/boot. The terminal journal caps at 64 KiB, after which firings exit 13, still without disarming.
+4. A rule with no usable identity (no `grant.id`, no valid ACT journal) is still classed foreign; BS-3 now disarms it only if Polkit is positively not authorized.
+5. *(Withdrawn by remediation 2: this exposure is closed.)*
+6. Other objects (`pass-a.json`, `grant.id`, directories) with a failed inspection stay `present-damaged-unremoved` and do not block BS-3.
+7. Kernel-level read faults cannot be injected on the host; PID-1 coverage uses a symlinked rules directory, other families are unit-level.
+8. The stricter ACT/deact schema fails closed (`record-unpublished`) for any producer shape not listed in tests.
+
+**Historical recommendation:** accept the inactive role series for continued
+development pending re-review. That re-review and its corrections are completed
+in the current section above. Production activation remains separately gated.
 
 ## Current result — GRR descriptor-close safety — 2026-10-14
 
-This section is the current result for the complete tree. It supersedes the acceptance claim, suite figures and recommendation of the "GRR exception safety" section and every section below it. [Prompt](route-3-hold-role-grr-close-remediation-claude-prompt.md).
+This section is superseded by the current security remediation above. It supersedes the acceptance claim, suite figures and recommendation of the "GRR exception safety" section and every section below it. [Prompt](route-3-hold-role-grr-close-remediation-claude-prompt.md).
 
 **Finding (blocking):** unguarded `os.close()` calls in `adapters/rp11/fsops.py` could raise out of an otherwise handled GRR operation and override its typed result: the target descriptor in `observe_at()` and `remove()`, the parent descriptor in `observe()`, `remove()` and `read_root_file()`, and the target descriptor in `read_root_file()`. Inline IGR then stopped at `running`, with no `igr`, `run-end` or explicit K release. **Disposition: fixed at the adapter boundary.** `_igr()` and `_cl_g()` are unchanged.
 

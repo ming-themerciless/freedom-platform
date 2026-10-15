@@ -862,6 +862,10 @@ PERMITTED_ROUTE_3_ADAPTER = frozenset({
     "infra/rp11-h1/requirements.txt",
     "infra/rp11-h1/rp11_h1.py",
     "infra/rp11-h1/rp11_roles.py",
+    # Route 3 Polkit `tmpfiles.d` prerequisite (2026-10-14): the fragment and its
+    # operator install/verify/remove entry point (`tests/test_polkit_tmpfiles.py`).
+    "infra/tmpfiles.d/freedom-blades-rp11-polkit-rules.conf",
+    "tools/polkit_tmpfiles.py",
     # Role slice 1 (2026-10-13): the shared cleanup engine and `deact … stop-post`.
     # Only the controlled artifact imports them (asserted by
     # `tests/test_rp11_cleanup.py`).

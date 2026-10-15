@@ -1,10 +1,15 @@
 # RAID register
 
+**Current-state note, 2026-10-15.** Peter Duscha accepted the repository-managed
+Polkit `tmpfiles.d` prerequisite after its real-reboot proof and security
+remediations. No implementation finding remains open. Production activation is
+still gated on an explicit decision on the transient inspection-failure risk
+and independent security review. The next development increment is the first
+real Package 5.0 consumer on `oracle-test`.
+
 **Current-state note, 2026-10-14.** Peter Duscha accepted the complete inactive
-Route 3 role series after independent review. No implementation finding remains
-open. Production activation is still gated on installing and proving the
-selected `tmpfiles.d` Polkit ordering across a real reboot, an explicit decision
-on the transient inspection-failure risk, and independent security review.
+Route 3 role series after independent review. The then-open `tmpfiles.d`
+prerequisite was completed and accepted by the current-state note above.
 
 **Current-state note, 2026-10-12.** Baseline v1.9 supersedes every historical
 Package 5.0 `not ready`, `implementation unauthorized`, proof-gap and

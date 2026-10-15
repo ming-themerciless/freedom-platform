@@ -1,6 +1,6 @@
 # Active delivery plan — implementation-first reset
 
-Status: approved and active; complete Route 3 role series accepted 2026-10-14
+Status: approved and active; Route 3 series and Polkit prerequisite accepted 2026-10-15
 Owner and acceptance authority: Peter Duscha
 Baseline: v1.9
 
@@ -33,6 +33,25 @@ series on 2026-10-14 after independent review: shared cleanup and `stop-post`,
 `backstop`, and `hold`, including the GRR inspection- and descriptor-close
 exception-safety remediations. The historical WP-1 through WP-3 material
 supplies the detailed operation contract but is not a documentation gate.
+
+The later Route 3 security remediation is independently re-reviewed and has no
+remaining blocker to continued development. Its BS-3, retry-bound and durable
+cleanup-evidence corrections are complete. Two validator observations remain
+non-blocking hardening for the production security review and must not become a
+fourth prompt/review/remediation chain.
+
+The Polkit `tmpfiles.d` prerequisite, its safe install/verify/remove boundary
+and a real reboot proof on `oracle-test` are implemented (see
+[handback](../review/route-3-polkit-tmpfiles-installer-handback.md)) and were
+accepted by Peter Duscha on 2026-10-15 after the effective-configuration,
+removal-race and restore-path remediations. This acceptance does not authorize
+production or staging activation and does not reopen the completed role
+implementation.
+
+The next development increment is the first real Package 5.0 consumer. Keep it
+inactive outside `oracle-test`, reuse the accepted Route 3 boundary rather than
+extending it speculatively, and prove its application behavior with focused and
+host-level tests before moving to another consumer.
 
 Implementation defaults may be refined by tests. Initially:
 
@@ -84,9 +103,11 @@ Implementation defaults may be refined by tests. Initially:
 ## Finish line
 
 The series ended with all three role vectors performing their real behavior on
-`oracle-test`, no production activation, and Peter's 2026-10-14 acceptance
-based on the running system. Before activation, install and prove the selected
-`tmpfiles.d` Polkit ordering across a real reboot, decide the transient
-inspection-failure risk, and complete an independent security review.
+`oracle-test`, no production activation, Peter's 2026-10-14 acceptance based on
+the running system, and completed independent re-review of the subsequent
+security remediation. The selected `tmpfiles.d` ordering is installed, proved
+across a real reboot and accepted for continued development. Before production
+activation, decide the transient inspection-failure risk and complete the final
+production security review.
 Additional source-proof work is not an allowed substitute for implementation
 and executable tests.

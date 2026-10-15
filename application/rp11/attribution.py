@@ -10,6 +10,10 @@ only after an immediate descriptor re-verification gives ``A1_INTACT`` again.
 * ``A1_DAMAGED`` — same type and ``(dev, ino)`` but some other fact differs.
 * ``A0`` — anything else at the path: another inode, another type, a symlink,
   or no valid identity at all. Kept and escalated.
+* ``UNINSPECTED`` — the object is present but the inspection did not establish
+  what it is: a failed ``fstat``, content read or attribute listing leaves
+  neither "intact" nor "damaged" nor "foreign" proven. It is never removed and
+  never inferred to be damaged or foreign; a later attempt inspects again.
 * ``ABSENT`` — nothing at the path.
 """
 
@@ -25,11 +29,15 @@ FORBIDDEN_XATTRS = frozenset(
 # Volume cap for every file re-verified before removal (H-GR1.2, GRR-3).
 MAX_VERIFIED_FILE_BYTES = 65_536
 
+UNLISTABLE = "unlistable"  # the extended-attribute names could not be listed
+UNREACHABLE_UID = 0xFFFFFFFF  # the owner of an object that could not be looked up at all
+
 
 class Attribution(str, Enum):
     A1_INTACT = "a1-intact"
     A1_DAMAGED = "a1-damaged"
     A0 = "a0"
+    UNINSPECTED = "uninspected"
     ABSENT = "absent"
 
 
@@ -132,3 +140,52 @@ def classify(
     elif require_empty:
         intact = intact and observed.empty is True
     return Attribution.A1_INTACT if intact else Attribution.A1_DAMAGED
+
+
+def _unreachable(observed: Observed) -> bool:
+    """The placeholder for an object that is present but could not be looked up."""
+    return (observed.dev, observed.ino) == (0, 0) and observed.uid == UNREACHABLE_UID
+
+
+def observation_incomplete(observed: Observed) -> bool:
+    """True when a fact that classification needs was not established: the object
+    could not be looked up or described, its attribute names could not be listed,
+    or a file within the volume cap has no content digest."""
+    if _unreachable(observed):
+        return True
+    if UNLISTABLE in observed.xattr_names:
+        return True
+    return (
+        observed.kind is ObjectKind.FILE
+        and observed.size <= MAX_VERIFIED_FILE_BYTES
+        and observed.sha256 is None
+    )
+
+
+def _established_difference(identity: Identity, observed: Observed, owner: Owner) -> bool:
+    """A recorded fact of a file that the observation positively contradicts."""
+    return (
+        (observed.uid, observed.gid) != (owner.uid, owner.gid)
+        or observed.mode != identity.mode
+        or observed.nlink != 1
+        or observed.size != identity.size
+        or bool(set(observed.xattr_names) & FORBIDDEN_XATTRS)
+        or (observed.sha256 is not None and observed.sha256 != identity.sha256)
+    )
+
+
+def classify_file(identity: Identity | None, observed: Observed | None, owner: Owner) -> Attribution:
+    """``classify`` for a file, without inferring from a failed inspection.
+
+    An observation that lacks a needed fact is ``UNINSPECTED`` unless the facts it
+    does have already establish that the object is damaged or another object."""
+    base = classify(identity, observed, owner)
+    if observed is None or identity is None or not observation_incomplete(observed):
+        return base
+    if _unreachable(observed):
+        return Attribution.UNINSPECTED
+    if base is Attribution.A0:
+        return base  # another inode or type was seen: established, not inferred
+    if _established_difference(identity, observed, owner):
+        return Attribution.A1_DAMAGED
+    return Attribution.UNINSPECTED

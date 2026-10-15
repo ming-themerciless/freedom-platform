@@ -1,6 +1,6 @@
 # Project status
 
-## Current status — Route 3 role series accepted — 2026-10-14
+## Current status — Route 3 prerequisite accepted — 2026-10-15
 
 **Baseline v1.9 is active. Implementation and unrestricted testing on the
 disposable `oracle-test` server are authorized.**
@@ -16,11 +16,30 @@ review found no remaining finding, and the final focused, root/systemd, bot,
 web and Foundry comparisons introduced no Route 3 regression against the
 established repository baseline.
 
-Peter accepted the backstop Q6-7 behavior. The preferred future Polkit
-installer mechanism is a `tmpfiles.d` entry, with installation and real-reboot
-proof deferred until an installer/activation slice. Before any production
-activation, the transient inspection-failure risk also needs an explicit
-decision and the completed series needs an independent security review.
+The subsequent security remediation and its re-review corrections are
+complete. Independent re-review confirmed the universal positive
+non-authorization gate for BS-3, the bounded terminal Polkit check and the
+cleanup-record consistency relations, and recommends acceptance for continued
+development. Two additional validator observations are non-blocking hardening
+for the production security review; they do not reopen the inactive series or
+require another remediation cycle.
+
+Peter Duscha accepted the Polkit `tmpfiles.d` prerequisite on 2026-10-15. The
+accepted slice includes a
+repository fragment, a safe install/verify/remove operator path and a real
+reboot on `oracle-test` showing `/run/polkit-1/rules.d` exists before polkit
+starts, with a real Route 3 hold success and recovery path run without any
+Polkit restart. Effective-configuration overrides, pathname-replacement races,
+restore interruption and restore durability are covered by the completed
+remediations and executable tests
+([handback](../review/route-3-polkit-tmpfiles-installer-handback.md)). The
+disposable host is back to its prior state.
+
+The next development increment is the first real Package 5.0 consumer on
+`oracle-test`. Production and staging activation remain out of scope. Before
+any production activation, the transient inspection-failure risk needs an
+explicit decision and the completed series needs its final production security
+review.
 
 Production and staging remain unchanged. Real credentials and player data must
 not be copied to the disposable environment.

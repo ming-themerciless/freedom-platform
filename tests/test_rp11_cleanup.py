@@ -43,6 +43,7 @@ from application.rp11.attribution import (  # noqa: E402
     Observed,
     Owner,
     classify,
+    classify_file,
 )
 from application.rp11.authority import (  # noqa: E402
     A2Pins,
@@ -63,6 +64,7 @@ from application.rp11.journal import (  # noqa: E402
 )
 from application.rp11.paths import ActivationPaths, Layout  # noqa: E402
 from application.rp11.pk import PkOutcome, PkResult  # noqa: E402
+from application.rp11.sn import ChildHandle, HandleState  # noqa: E402
 from application.rp11.ports import EvidenceWriteError, RemovalOutcome  # noqa: E402
 from application.rp11.records import validate_record  # noqa: E402
 from application.unit_control import ControlError, ControlOk, UnitProperty  # noqa: E402
@@ -159,7 +161,12 @@ class FakeUnits:
 
 
 class FakePk:
-    def __init__(self, events: Events, outcome=PkOutcome.NOT_AUTHORIZED, reason="decided"):
+    """A ``seek-not-authorized`` series as PkSeries returns it: a decided
+    ``not-authorized`` after a settled subject, otherwise ``unconfirmed``. A series
+    never reports ``authorized`` in this mode; a still-authorized grant (outcome
+    ``AUTHORIZED`` here) is its ``unconfirmed``/``still-authorized`` result."""
+
+    def __init__(self, events: Events, outcome=PkOutcome.NOT_AUTHORIZED, reason=None):
         self.events = events
         self.outcome = outcome
         self.reason = reason
@@ -168,7 +175,19 @@ class FakePk:
     def run(self, operator, verb, mode):
         self.events.mark("pk")
         self.calls += 1
-        return PkResult(mode, verb, self.outcome, self.reason, calls=1)
+        outcome, reason = self.outcome, self.reason
+        if outcome is PkOutcome.AUTHORIZED:
+            outcome, reason = PkOutcome.UNCONFIRMED, reason or "still-authorized"
+        elif outcome is PkOutcome.NOT_AUTHORIZED:
+            reason = reason or "decided"
+        else:
+            reason = reason or "only-errors"
+        child = ChildHandle(
+            pid=4242, pgid=4242, start_ticks=100, created_ms=0, deadline_ms=1_000, s0_ran=True,
+            grace_deadline_ms=1, state=HandleState.REAPED,
+            sends=[{"signal": "SIGKILL", "result": "sent", "offset_ms": 0, "late": False}],
+        ).entry()
+        return PkResult(mode, verb, outcome, reason, calls=1, children=[child])
 
 
 class FakeBaseline:
@@ -1312,16 +1331,106 @@ def test_a_failed_record_flush_is_record_unpublished(fx, layout):
     assert not Path(layout.store, f"activation/{ACT_ID}.deact-1.json").exists()
 
 
-def test_an_existing_act_record_is_never_rewritten(fx, layout):
+def _act_path(layout) -> Path:
+    return Path(layout.store, f"activation/{ACT_ID}.act.json")
+
+
+def test_an_existing_valid_act_record_is_preserved_and_its_digest_linked(fx, layout):
+    """CL-7: the immutable ACT record this activation already has is linked as it is."""
     fx.activate()
-    act = Path(layout.store, f"activation/{ACT_ID}.act.json")
-    Path(layout.store, "activation").mkdir(exist_ok=True)
-    act.write_bytes(b'{"kept":true}\n')
-    os.chmod(act, 0o444)
+    assert run_cl(layout, fx)[0].terminal is Terminal.ST1_VERIFIED  # publishes the one failed ACT record
+    kept = _act_path(layout).read_bytes()
     out, _ = run_cl(layout, fx)
-    assert act.read_bytes() == b'{"kept":true}\n'
-    assert record(layout, 1)["act_record_sha256"] == hashlib.sha256(b'{"kept":true}\n').hexdigest()
+    assert out.terminal is Terminal.ST1_VERIFIED and out.k == 2
+    assert _act_path(layout).read_bytes() == kept
+    assert record(layout, 2)["act_record_sha256"] == hashlib.sha256(kept).hexdigest()
+    assert record(layout, 1)["act_record_sha256"] == record(layout, 2)["act_record_sha256"]
+
+
+def _other_activation(act: bytes, deact: bytes) -> bytes:
+    return act.replace(ACT_ID.encode(), b"rp11-act-20261013T101500Z-ffffffff")
+
+
+def _other_a2(act: bytes, deact: bytes) -> bytes:
+    doc = parse_canonical(act)
+    other = "f" * 64
+    doc["authority"] = {"a2_path": doc["authority"]["a2_path"].replace(doc["authority"]["a2_sha256"], other),
+                        "a2_sha256": other}
+    return canonical_bytes(doc)
+
+
+def _with(**changes):
+    def build(act: bytes, deact: bytes) -> bytes:
+        return canonical_bytes({**parse_canonical(act), **changes})
+
+    return build
+
+
+BAD_ACT_RECORDS = {
+    "the-old-kept-fixture": lambda act, deact: b'{"kept":true}\n',
+    "empty-object": lambda act, deact: b"{}\n",
+    "non-canonical": lambda act, deact: json.dumps(parse_canonical(act), indent=1).encode() + b"\n",
+    "truncated": lambda act, deact: act[: len(act) // 2],
+    "no-final-lf": lambda act, deact: act[:-1],
+    "not-json": lambda act, deact: b"rp11\n",
+    "schema-invalid": _with(trigger="nowhere"),
+    "missing-nested-field": lambda act, deact: canonical_bytes(
+        {**parse_canonical(act), "pk": {k: v for k, v in parse_canonical(act)["pk"].items() if k != "calls"}}
+    ),
+    "wrong-kind-a-deactivation-record": lambda act, deact: deact,
+    "wrong-activation": _other_activation,
+    "other-a2": _other_a2,
+    "nonzero-attempt": _with(attempt=1),
+    "outcome-of-the-other-kind": _with(outcome="hard-stop"),
+    "activated-without-its-facts": _with(outcome="activated", failure="absent", trigger="act"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(BAD_ACT_RECORDS))
+def test_an_invalid_existing_act_record_is_never_rewritten_and_never_chained(fx, layout, case):
+    """CL-7 fails closed as ``record-unpublished``: the colliding object stays as it
+    is and no deactivation record (least of all ``st1-verified``) names its digest."""
+    fx.activate()
+    assert run_cl(layout, fx)[0].terminal is Terminal.ST1_VERIFIED
+    act_bytes, deact_bytes = _act_path(layout).read_bytes(), Path(layout.store, f"activation/{ACT_ID}.deact-1.json").read_bytes()
+    bad = BAD_ACT_RECORDS[case](act_bytes, deact_bytes)
+    assert bad != act_bytes
+    _act_path(layout).unlink()
+    _act_path(layout).write_bytes(bad)
+    os.chmod(_act_path(layout), 0o444)
+    names = sorted(os.listdir(Path(layout.store, "activation")))
+    out, _ = run_cl(layout, fx)
+    assert out.terminal is Terminal.RECORD_UNPUBLISHED and out.terminal.exit_code == 3 and out.failure == "record-unpublished"
+    assert _act_path(layout).read_bytes() == bad
+    assert sorted(os.listdir(Path(layout.store, "activation"))) == names  # no deact-2, no rewrite
+    assert not Path(layout.store, f"activation/{ACT_ID}.deact-2.json").exists()
+    assert ops(layout, 2)[-1] == "run-end"
+    assert attempt_journal(layout, 2)[-1]["outcome"] == "record-unpublished"
+
+
+@pytest.mark.parametrize("mode", [0o644, 0o666])
+def test_an_act_record_the_store_will_not_read_back_is_never_rewritten(fx, layout, mode):
+    fx.activate()
+    assert run_cl(layout, fx)[0].terminal is Terminal.ST1_VERIFIED
+    kept = _act_path(layout).read_bytes()
+    os.chmod(_act_path(layout), mode)
+    names = sorted(os.listdir(Path(layout.store, "activation")))
+    out, _ = run_cl(layout, fx)
+    assert out.terminal is Terminal.RECORD_UNPUBLISHED
+    assert _act_path(layout).read_bytes() == kept and sorted(os.listdir(Path(layout.store, "activation"))) == names
+
+
+def test_an_absent_act_record_is_published_once_as_a_valid_failed_record(fx, layout):
+    fx.activate()
+    assert not _act_path(layout).exists()
+    out, _ = run_cl(layout, fx)
     assert out.terminal is Terminal.ST1_VERIFIED
+    act = parse_canonical(_act_path(layout).read_bytes())
+    validate_record(act)
+    assert (act["kind"], act["attempt"], act["outcome"]) == ("act", 0, "failed")
+    assert act["failure"] == {"step": "CL-7", "class": "act-unconfirmed"} and act["act_record_sha256"] == "absent"
+    assert stat.S_IMODE(_act_path(layout).stat().st_mode) == 0o444
+    assert record(layout, 1)["act_record_sha256"] == hashlib.sha256(_act_path(layout).read_bytes()).hexdigest()
 
 
 def test_records_are_root_only_0444_and_validate(fx, layout):
@@ -1438,18 +1547,20 @@ def test_no_artifact_module_starts_a_dynamic_program_or_a_shell():
 # concrete adapter (H-GR1.2, H-GRR.4 … H-GRR.5, H-CL.G.1 … H-CL.G.2)
 # ---------------------------------------------------------------------------
 
-# fault → (Removal attribution, GRR class). Read, hash or attribute-listing
-# failures leave type and (dev, ino) established: A1-damaged. A failed fstat, or
-# a failed fallback observation after the final open, establishes nothing: A0.
+# fault → (Removal attribution, GRR class). A failed content read, attribute listing,
+# ``fstat`` or fallback observation establishes neither damage nor another object:
+# the grant may still be the intact, authorizing rule, so it is ``UNINSPECTED``
+# (kept, never removed, and a recovery owner must remain).
 GRR_FAULTS = [
-    ("read", Attribution.A1_DAMAGED, GrrOutcome.KEPT_DAMAGED),
-    ("listxattr", Attribution.A1_DAMAGED, GrrOutcome.KEPT_DAMAGED),
-    ("fstat", Attribution.A0, GrrOutcome.KEPT_FOREIGN),
-    ("fallback", Attribution.A0, GrrOutcome.KEPT_FOREIGN),
+    ("read", Attribution.UNINSPECTED, GrrOutcome.KEPT_UNINSPECTED),
+    ("listxattr", Attribution.UNINSPECTED, GrrOutcome.KEPT_UNINSPECTED),
+    ("fstat", Attribution.UNINSPECTED, GrrOutcome.KEPT_UNINSPECTED),
+    ("fallback", Attribution.UNINSPECTED, GrrOutcome.KEPT_UNINSPECTED),
 ]
 RULE_CLASS_FOR = {
     GrrOutcome.KEPT_DAMAGED: "present-damaged-unremoved",
     GrrOutcome.KEPT_FOREIGN: "present-foreign-unremoved",
+    GrrOutcome.KEPT_UNINSPECTED: "present-uninspected-unremoved",
 }
 
 
@@ -1598,6 +1709,88 @@ def test_the_accepted_removal_outcomes_are_unchanged(tmp_path, monkeypatch, case
             os.chmod(parent, 0o755)
     assert (removal.outcome, removal.attribution) == (outcome, attribution)
     assert grr_outcome(removal) == grr and os.path.lexists(path) == present
+
+
+@pytest.mark.parametrize("call", ["read", "listxattr", "fstat", "fallback"])
+def test_an_uninspected_grant_is_neither_damaged_nor_foreign_nor_removable(tmp_path, monkeypatch, call):
+    path, identity = _rule_target(tmp_path)
+    InspectionFault(monkeypatch, path, call)
+    seen: list = []
+    removal = LocalActivationFs(_owner()).remove(path, identity, directory=False, before_unlink=seen.append)
+    assert removal.attribution is Attribution.UNINSPECTED
+    assert removal.attribution not in (Attribution.A1_DAMAGED, Attribution.A0, Attribution.A1_INTACT)
+    assert grr_outcome(removal) == (GrrOutcome.KEPT_UNINSPECTED, 0) and seen == [] and _unchanged(path, identity)
+
+
+def test_a_symlinked_parent_leaves_the_grant_uninspected_not_foreign(tmp_path):
+    """The no-follow resolution cannot reach the object: nothing is established."""
+    path, identity = _rule_target(tmp_path)
+    parent = os.path.dirname(path)
+    os.rename(parent, parent + ".real")
+    os.symlink(parent + ".real", parent)
+    seen: list = []
+    removal = LocalActivationFs(_owner()).remove(path, identity, directory=False, before_unlink=seen.append)
+    assert (removal.outcome, removal.attribution) == (RemovalOutcome.MISMATCH, Attribution.UNINSPECTED)
+    assert seen == [] and LocalActivationFs(_owner()).observe(path) == UNREACHABLE
+    assert os.path.exists(parent + ".real/50-x.rules")
+
+
+def _cf_observed(identity: Identity, **changes) -> Observed:
+    base = dict(kind=ObjectKind.FILE, dev=identity.dev, ino=identity.ino, uid=os.getuid(), gid=os.getgid(),
+                mode=identity.mode, nlink=1, size=identity.size, sha256=identity.sha256, xattr_names=())
+    return Observed(**{**base, **changes})
+
+
+CF_IDENT = Identity("/x", ObjectKind.FILE, 7, 9, 0o644, "a" * 64, 12)
+
+
+@pytest.mark.parametrize(
+    "changes,expected",
+    [
+        ({}, Attribution.A1_INTACT),
+        ({"sha256": None}, Attribution.UNINSPECTED),
+        ({"xattr_names": ("unlistable",)}, Attribution.UNINSPECTED),
+        ({"sha256": None, "xattr_names": ("unlistable",)}, Attribution.UNINSPECTED),
+        # a failed read does not hide a fact that was established
+        ({"sha256": None, "mode": 0o664}, Attribution.A1_DAMAGED),
+        ({"sha256": None, "size": 13}, Attribution.A1_DAMAGED),
+        ({"sha256": None, "nlink": 2}, Attribution.A1_DAMAGED),
+        ({"sha256": None, "uid": os.getuid() + 1}, Attribution.A1_DAMAGED),
+        ({"sha256": None, "xattr_names": ("security.capability",)}, Attribution.A1_DAMAGED),
+        ({"sha256": "b" * 64}, Attribution.A1_DAMAGED),
+        ({"xattr_names": ("system.posix_acl_access",)}, Attribution.A1_DAMAGED),
+        # another object is positively another object, readable or not
+        ({"ino": 10}, Attribution.A0),
+        ({"ino": 10, "sha256": None}, Attribution.A0),
+        ({"kind": ObjectKind.DIR, "sha256": None}, Attribution.A0),
+    ],
+)
+def test_classify_file_names_only_what_the_observation_establishes(changes, expected):
+    assert classify_file(CF_IDENT, _cf_observed(CF_IDENT, **changes), Owner(os.getuid(), os.getgid())) is expected
+
+
+def test_classify_file_never_attributes_without_an_identity_or_an_observation():
+    assert classify_file(None, _cf_observed(CF_IDENT, sha256=None), Owner(os.getuid(), os.getgid())) is Attribution.A0
+    assert classify_file(CF_IDENT, None, Owner(os.getuid(), os.getgid())) is Attribution.ABSENT
+    assert classify_file(CF_IDENT, UNREACHABLE, Owner(os.getuid(), os.getgid())) is Attribution.UNINSPECTED
+
+
+def test_without_grant_id_an_uninspected_rule_is_kept_and_recovered_later(fx, layout, monkeypatch):
+    """CL-3 (G-R1): the journal identity is not enough to remove an object whose
+    inspection failed; the class is the uninspected one and a later attempt removes it."""
+    fx.activate(grant_id=False)
+    p = paths(layout)
+    info = os.stat(p.rule)
+    fault = InspectionFault(monkeypatch, p.rule, "read")
+    out, _ = run_cl(layout, fx)
+    assert fault.hits >= 1 and out.terminal is Terminal.HARD_STOP
+    assert out.rule_class == "present-uninspected-unremoved"
+    fault.active = False
+    assert os.lstat(p.rule).st_ino == info.st_ino
+    assert not [line for line in attempt_journal(layout, 1) if line.get("path") == p.rule and line["op"].startswith("remove")]
+    assert record(layout, 1)["grant_identity"]["cl_g"] == "identity-unavailable"
+    again, _ = run_cl(layout, fx)
+    assert again.terminal is Terminal.ST1_VERIFIED and not os.path.lexists(p.rule)
 
 
 def test_a_failing_write_ahead_propagates_and_nothing_is_unlinked(tmp_path):

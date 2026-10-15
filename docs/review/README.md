@@ -18,5 +18,8 @@ Peter Duscha explicitly requests them.
 
 The complete inactive Route 3 role series was accepted on 2026-10-14. Its
 current implementation record is the
-[`hold` handback](route-3-hold-role-implementation-handback.md); the remaining
-production-activation gates are summarized in the active handover.
+[`hold` handback](route-3-hold-role-implementation-handback.md). The Polkit
+`tmpfiles.d` prerequisite was accepted on 2026-10-15; its current implementation
+record is the
+[`tmpfiles` handback](route-3-polkit-tmpfiles-installer-handback.md). The
+remaining production-activation gates are summarized in the active handover.

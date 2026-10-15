@@ -55,7 +55,8 @@ from application.rp11.journal import ACT_RUN_END_OUTCOMES, JournalSchemaError  #
 from application.rp11 import authority as authority_module  # noqa: E402
 from application.rp11 import journal as journal_module  # noqa: E402
 from application.rp11.paths import ActivationPaths, Layout  # noqa: E402
-from application.rp11.pk import PkOutcome, PkResult  # noqa: E402
+from application.rp11.pk import PkMode, PkOutcome, PkResult  # noqa: E402
+from application.rp11.sn import ChildHandle, HandleState  # noqa: E402
 from application.rp11.ports import GuardMode  # noqa: E402
 from application.rp11.records import validate_record  # noqa: E402
 from application.unit_control import (  # noqa: E402
@@ -108,6 +109,10 @@ def _umask():
 
 @pytest.fixture
 def layout(tmp_path: Path) -> Layout:
+    return make_layout(tmp_path)
+
+
+def make_layout(tmp_path: Path) -> Layout:
     for d in ("run", "var_tmp", "tool", "etc", "share/a", "share/b"):
         (tmp_path / d).mkdir(mode=0o755, parents=True)
     (tmp_path / "boot_id").write_text(BOOT + "\n")
@@ -205,8 +210,16 @@ class HoldPk:
         outcome, reason = self.results[verb]
         if stop_requested is not None and stop_requested():
             outcome, reason = PkOutcome.UNCONFIRMED, "interrupted"
-        child = {"role": "pk-subject", "s0_ran": True, "grace_deadline_ms": 1, "outcome": "exited",
-                 "sends": [], "abandoned": False}
+        if mode is PkMode.SEEK_NOT_AUTHORIZED:  # a series in this mode never answers "authorized"
+            if outcome is PkOutcome.AUTHORIZED:
+                outcome, reason = PkOutcome.UNCONFIRMED, "still-authorized"
+            elif outcome is PkOutcome.UNCONFIRMED and reason == "decided":
+                reason = "only-errors"
+        child = ChildHandle(
+            pid=4242, pgid=4242, start_ticks=100, created_ms=0, deadline_ms=1_000, s0_ran=True,
+            grace_deadline_ms=1, state=HandleState.REAPED,
+            sends=[{"signal": "SIGKILL", "result": "sent", "offset_ms": 0, "late": False}],
+        ).entry()
         return PkResult(mode, verb, outcome, reason, calls=1, children=[child])
 
 
@@ -1560,6 +1573,21 @@ def test_av1_controls_fail_closed_and_cl_runs_rule_first(world, start, stop, end
     assert record["outcome"] == "failed"  # written by CL-7, never by the holder
 
 
+def test_cleanup_preserves_the_holders_activated_act_record_and_links_its_digest(world):
+    """CL-7 over a real ``activated`` ACT record: valid for this activation, kept
+    byte for byte, its digest the deactivation record's ``act_record_sha256``."""
+    outcome = ended_normally(world)
+    assert outcome.act_pass
+    path = Path(world.paths.record_dir) / f"{ACT_ID}.act.json"
+    kept = path.read_bytes()
+    validate_record(parse_canonical(kept))
+    assert world.act_record()["outcome"] == "activated"
+    cl = world.recover()
+    assert cl.terminal is Terminal.ST1_VERIFIED, cl.diagnostic(ACT_ID)
+    assert path.read_bytes() == kept
+    assert cl.record["act_record_sha256"] == hashlib.sha256(kept).hexdigest()
+
+
 def test_a_baseline_difference_fails_av1_before_any_polkit_call(world):
     changed = _baseline()
     changed["packages"] = [["systemd", "261", "amd64"]]
@@ -1619,7 +1647,11 @@ def test_an_act_record_collision_is_not_act_pass(world):
     assert "hold-start" not in world.ops()
     assert not world.rule_present()
     cl = world.recover()
-    assert cl.terminal in (Terminal.ST1_VERIFIED, Terminal.HARD_STOP)
+    # the squatting object is not this activation's act record: CL-7 neither rewrites
+    # it nor chains a deactivation record to it (it fails closed as record-unpublished)
+    assert cl.terminal is Terminal.RECORD_UNPUBLISHED
+    assert squat.read_text() == "{}\n"
+    assert not (Path(world.paths.record_dir) / f"{ACT_ID}.deact-1.json").exists()
 
 
 def test_a_record_publication_failure_is_not_act_pass(world):

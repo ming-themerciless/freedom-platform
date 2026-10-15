@@ -221,6 +221,7 @@ class Activation:
 @pytest.fixture
 def activation():
     assert not STORE.exists(), "record store left from an earlier run"
+    polkit_preexisted = os.path.lexists("/run/polkit-1")  # e.g. from the boot-time tmpfiles.d fragment
     act = Activation()
     yield act
     act.clean()
@@ -231,7 +232,9 @@ def activation():
     restart_polkit()
     assert wait_until(lambda: rp11_processes() == [], 10), rp11_processes()
     assert run("systemctl", "list-units", f"{act.id}*", "--all", "--no-legend").stdout.strip() == ""
-    assert not os.path.lexists("/run/polkit-1") or (act.fx is not None and act.fx.rules_dir_preexists)
+    assert not os.path.lexists("/run/polkit-1") or polkit_preexisted or (
+        act.fx is not None and act.fx.rules_dir_preexists
+    )
     assert not list(Path("/var/tmp").glob(f"{act.id}-*"))
     assert not os.path.lexists(act.paths.tree_p) and not os.path.lexists(act.paths.lock_dir)
     assert run("systemctl", "is-active", "polkit.service").stdout.strip() == "active"

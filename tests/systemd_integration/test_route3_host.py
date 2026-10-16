@@ -87,6 +87,7 @@ ARTIFACT_DIR = Path(ROLE_ARTIFACT).parent
 ARTIFACT_LIB = ARTIFACT_DIR / "lib"
 ROLES_DOUBLE = Path(__file__).resolve().parent / "rp11_roles_double.py"
 A2 = "5f" * 32  # synthetic A-2 identity
+ACT = "rp11-act-20261012T101500Z-0123abcd"
 RULE_FILE = Path("/etc/polkit-1/rules.d/49-rp11-integration-test.rules")
 NOBODY = 65534
 SLEEP = "/usr/bin/sleep"
@@ -1194,7 +1195,15 @@ def test_the_builder_refuses_an_install_parent_others_can_change(mutable_artifac
 
 
 def test_artifact_rejects_a_vector_the_adapter_would_never_build(production_roles):
-    for tail in (["hold"], ["deact", "x", A2, "stop-post"], ["backstop", "a", A2, "extra"]):
+    for tail in (
+        ["hold"],
+        ["deact", "x", A2, "stop-post"],
+        ["backstop", "a", A2, "extra"],
+        ["start", "x", A2, "900", "60"],
+        ["start", ACT, A2, "0", "60"],
+        ["stop", "x"],
+        ["stop", ACT, A2],
+    ):
         proc = subprocess.run(
             [ROLE_INTERPRETER, "-I", "-S", ROLE_ARTIFACT, *tail], capture_output=True, text=True
         )

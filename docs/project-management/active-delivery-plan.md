@@ -1,6 +1,6 @@
 # Active delivery plan — implementation-first reset
 
-Status: approved and active; Route 3 series and Polkit prerequisite accepted 2026-10-15
+Status: approved and active; static SA-2 `stop` accepted 2026-10-16
 Owner and acceptance authority: Peter Duscha
 Baseline: v1.9
 
@@ -48,10 +48,17 @@ removal-race and restore-path remediations. This acceptance does not authorize
 production or staging activation and does not reopen the completed role
 implementation.
 
-The next development increment is the first real Package 5.0 consumer. Keep it
-inactive outside `oracle-test`, reuse the accepted Route 3 boundary rather than
-extending it speculatively, and prove its application behavior with focused and
-host-level tests before moving to another consumer.
+Claude implemented the first real Package 5.0 consumer, static SA-1 `start`,
+through DI-2. After the environment-read, duration, denial-proof and malformed-
+success remediations, independent Codex re-review found no blocking issue and
+Peter accepted SA-1 for continued non-production development on 2026-10-15. See the
+[`start` handback](../review/route-3-start-role-implementation-handback.md) and
+its [assignment](../review/route-3-start-role-implementation-claude-prompt.md).
+Static SA-2 `stop` through the existing narrow stop-unit boundary was then
+implemented, remediated and independently re-reviewed. Peter accepted it for
+continued non-production development on 2026-10-16; see the
+[`stop` handback](../review/route-3-stop-role-implementation-handback.md). No
+further Package 5.0 slice is assigned by that acceptance.
 
 Implementation defaults may be refined by tests. Initially:
 
@@ -82,6 +89,12 @@ Implementation defaults may be refined by tests. Initially:
 5. Review each security-sensitive slice before production activation. Ordinary
    non-production implementation may continue while non-blocking review
    comments are addressed.
+6. Implement the first Package 5.0 consumer, static SA-1 `start`, through DI-2.
+   **Implemented by Claude, independently re-reviewed and accepted by Peter
+   2026-10-15.**
+7. Implement static SA-2 `stop` through the existing narrow stop-unit boundary.
+   **Implemented by Claude, independently re-reviewed and accepted by Peter
+   2026-10-16.** See the [handback](../review/route-3-stop-role-implementation-handback.md).
 
 ## Acceptance criteria
 
@@ -102,7 +115,7 @@ Implementation defaults may be refined by tests. Initially:
 
 ## Finish line
 
-The series ended with all three role vectors performing their real behavior on
+The series ended with all three PID-1 role vectors performing their real behavior on
 `oracle-test`, no production activation, Peter's 2026-10-14 acceptance based on
 the running system, and completed independent re-review of the subsequent
 security remediation. The selected `tmpfiles.d` ordering is installed, proved

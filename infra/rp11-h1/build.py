@@ -77,6 +77,8 @@ SOURCES = (
     "application/rp11/ports.py",
     "application/rp11/records.py",
     "application/rp11/sn.py",
+    "application/rp11/start.py",
+    "application/rp11/stop.py",
     "adapters/rp11/__init__.py",
     "adapters/rp11/backstop.py",
     "adapters/rp11/baseline.py",
@@ -85,6 +87,8 @@ SOURCES = (
     "adapters/rp11/holdfs.py",
     "adapters/rp11/process.py",
     "adapters/rp11/stop_post.py",
+    "adapters/rp11/start.py",
+    "adapters/rp11/stop.py",
 )
 
 _PIN = re.compile(r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.]+) \\ --hash=sha256:([0-9a-f]{64})")

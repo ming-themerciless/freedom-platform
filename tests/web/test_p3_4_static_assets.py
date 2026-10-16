@@ -844,7 +844,8 @@ PERMITTED_DISPOSABLE_SERVER_REMEDIATION = frozenset({
 
 #: The Route 3 manager/Polkit adapter slice (active delivery plan, 2026-10-12):
 #: an application-owned boundary and its system-bus adapter. It is inactive in
-#: production configuration and no runtime path imports it; that is asserted by
+#: bot, web and worker production configuration; only the controlled `start` and
+#: `stop` roles consume it. General runtime non-import is asserted by
 #: `tests/test_systemd_unit_control.py`. Strictly enumerated, not a prefix.
 PERMITTED_ROUTE_3_ADAPTER = frozenset({
     "application/unit_control.py",
@@ -856,7 +857,7 @@ PERMITTED_ROUTE_3_ADAPTER = frozenset({
     "adapters/systemd/polkit.py",
     "adapters/systemd/subject.py",
     # The controlled role artifact its commands run (remediation, 2026-10-12):
-    # entry point, unimplemented roles, its own dependency set and its builder.
+    # entry point, roles, its own dependency set and its builder.
     "infra/rp11-h1/build.py",
     "infra/rp11-h1/requirements.lock",
     "infra/rp11-h1/requirements.txt",
@@ -895,6 +896,12 @@ PERMITTED_ROUTE_3_ADAPTER = frozenset({
     "application/rp11/hold.py",
     "adapters/rp11/hold.py",
     "adapters/rp11/holdfs.py",
+    # First Package 5.0 consumer (2026-10-15): SA-1 `start` through DI-2.
+    "application/rp11/start.py",
+    "adapters/rp11/start.py",
+    # Second Package 5.0 consumer (2026-10-15): SA-2 `stop` through DI-S.
+    "application/rp11/stop.py",
+    "adapters/rp11/stop.py",
 })
 
 

@@ -3,9 +3,12 @@
     /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py hold <id> <a2>
     /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py deact <id> <a2> stop-post
     /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py backstop <id> <a2>
+    /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py start <id> <a2> <lease-s> <stop-timeout-s>
+    /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py stop
 
-These are the only three argument vectors (RT-2, RT-3, RT-4); the systemd adapter
-builds exactly these and nothing else. ``-I`` keeps the script directory and the
+These are the only five argument vectors (RT-2, RT-3, RT-4, SA-1 and SA-2); the
+systemd adapter builds the three PID-1 vectors, the SA-1 role consumes DI-2 to
+create the holder and the SA-2 role, which takes no operand, consumes DI-S. ``-I`` keeps the script directory and the
 environment out of ``sys.path``, and ``-S`` skips site initialization, so the
 artifact names its one import directory, ``lib/`` beside this file, itself. That
 directory holds the Route 3 adapter and its hash-verified D-Bus client
@@ -31,10 +34,11 @@ file is executed: descriptors 0–2 must be open (else 71); every descriptor ≥
 is closed, found by listing ``/proc/self/fd`` rather than up to any limit, and
 the closing is verified by a second listing (else 71); every resettable signal disposition is reset and the mask cleared;
 ``umask`` is ``022`` and the working directory ``/``. The inherited environment
-is untrusted: the only fact taken from it is systemd's ``INVOCATION_ID`` (as
-provenance, diagnostic only), read from the process's own initial environment,
+is untrusted: the only fact taken from it, by the unit-started roles, is systemd's
+``INVOCATION_ID`` (as provenance, diagnostic only), read from the process's own initial environment,
 which must hold it at most once and as 32 lowercase hex digits (else 64); the
-environment is then emptied. Nothing else here starts a process.
+environment is then emptied. The ``start`` and ``stop`` roles read no environment variable at
+all (H-FI.1). Nothing else here starts a process.
 
 Exit status: 64 malformed arguments or environment selection, 70 import
 failure, 71 a closed standard descriptor or a descriptor ≥ 3 not proved closed, 77 unsafe artifact ownership, mode or
@@ -42,6 +46,7 @@ type, otherwise the role's own status.
 """
 
 import os
+import re
 import signal
 import stat
 import sys
@@ -54,6 +59,7 @@ EX_NOPERM = 77
 _MAX_ENVIRON = 1 << 20
 _OWN_FDS = "/proc/self/fd"
 _HEX = frozenset("0123456789abcdef")
+_SECONDS = re.compile(r"[1-9][0-9]{0,5}")
 
 
 def invocation_id_from(environ: bytes):
@@ -132,20 +138,25 @@ def close_descriptors_from_3():
         return False
 
 
-def first_image_controls():
-    """RH-1 … RH-3. Returns the provenance dict, or an exit status to refuse with."""
+def first_image_controls(reads_environment=True):
+    """RH-1 … RH-3. Returns the provenance dict, or an exit status to refuse with.
+
+    ``reads_environment`` is ``False`` for the static ``start`` and ``stop`` roles
+    (H-FI.1, SA1.FI.1): they read no environment variable, so no value can select, refuse or
+    otherwise affect it. The environment is still emptied.
+    """
     for fd in (0, 1, 2):
         try:
             os.fstat(fd)
         except OSError:
             return EX_OSERR
-    environ = _initial_environment()
-    invocation_id = (
-        invocation_id_from(environ) if len(environ) <= _MAX_ENVIRON else None
-    )
-    if invocation_id is None:
-        print("rp11_h1: malformed or duplicate INVOCATION_ID", file=sys.stderr)
-        return EX_USAGE
+    invocation_id = "absent"
+    if reads_environment:
+        environ = _initial_environment()
+        invocation_id = invocation_id_from(environ) if len(environ) <= _MAX_ENVIRON else None
+        if invocation_id is None:
+            print("rp11_h1: malformed or duplicate INVOCATION_ID", file=sys.stderr)
+            return EX_USAGE
     os.environ.clear()
     if not close_descriptors_from_3():
         print("rp11_h1: inherited descriptors could not be closed", file=sys.stderr)
@@ -237,22 +248,36 @@ def _tree_problem(directory, owner):
     return None
 
 
-def parse_role_argv(argv: list[str]) -> tuple[str, str, str] | None:
-    """``(role, activation_id, artifact_sha256)`` for an accepted vector, else ``None``.
+def parse_role_argv(argv: list[str]) -> tuple[str, str, str, tuple[int, ...]] | None:
+    """The accepted role and its validated operands, or ``None``.
 
     Uses the application boundary's own validators, so the grammar here and in
     the adapter cannot drift apart.
     """
     from application.unit_control import ControlSpecError, validate_activation_id, validate_sha256
 
+    extra = ()
     if len(argv) == 3 and argv[0] in ("hold", "backstop"):
         role = argv[0]
     elif len(argv) == 4 and argv[0] == "deact" and argv[3] == "stop-post":
         role = "stop-post"
+    elif argv == ["stop"]:
+        return "stop", "", "", ()
+    elif len(argv) == 5 and argv[0] == "start" and all(_SECONDS.fullmatch(v) for v in argv[3:]):
+        role = "start"
+        extra = (int(argv[3]), int(argv[4]))
     else:
         return None
     try:
-        return role, validate_activation_id(argv[1]), validate_sha256(argv[2])
+        activation_id = validate_activation_id(argv[1])
+        artifact_sha256 = validate_sha256(argv[2])
+        if role == "start":
+            from application.rp11.start import validate_start_durations
+            from application.unit_control import HolderSpec
+
+            validate_start_durations(*extra)
+            HolderSpec(activation_id, artifact_sha256, *extra)
+        return role, activation_id, artifact_sha256, extra
     except ControlSpecError:
         return None
 
@@ -281,6 +306,8 @@ def main(argv: list[str], provenance=None) -> int:
         import adapters.rp11.stop_post  # noqa: F401
         import adapters.rp11.backstop  # noqa: F401
         import adapters.rp11.hold  # noqa: F401
+        import adapters.rp11.start  # noqa: F401
+        import adapters.rp11.stop  # noqa: F401
         import jeepney
         import rp11_roles
     except ImportError as exc:
@@ -290,7 +317,7 @@ def main(argv: list[str], provenance=None) -> int:
     if parsed is None:
         print("rp11_h1: not an accepted role vector", file=sys.stderr)
         return EX_USAGE
-    role, activation_id, artifact_sha256 = parsed
+    role, activation_id, artifact_sha256, extra = parsed
     version = ".".join(str(n) for n in sys.version_info[:3])
     print(
         f"rp11_h1: role={role} runtime=ok python={version} "
@@ -298,11 +325,13 @@ def main(argv: list[str], provenance=None) -> int:
         f"jeepney={jeepney.__version__}",
         file=sys.stderr,
     )
-    return rp11_roles.run(role, activation_id, artifact_sha256, **provenance)
+    return rp11_roles.run(role, activation_id, artifact_sha256, *extra, **provenance)
 
 
 if __name__ == "__main__":
-    _controls = first_image_controls()
+    # The role is chosen by argv alone, before anything is imported: ``start`` is
+    # the roles that must not read the environment are ``start`` and ``stop``.
+    _controls = first_image_controls(reads_environment=sys.argv[1:2] not in (["start"], ["stop"]))
     if isinstance(_controls, int):
         sys.exit(_controls)
     sys.exit(main(sys.argv[1:], _controls))

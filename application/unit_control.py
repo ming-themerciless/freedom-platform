@@ -13,8 +13,9 @@ reaches the manager is derived here from a validated activation id or is the one
 fixed capture unit, and no request can name an executable, a role or an argument:
 the adapter derives the three accepted role commands from validated identifiers.
 
-The adapter is inactive in production configuration; nothing imports it from a
-runtime path.
+The adapter remains inactive in bot, web and worker production configuration.
+The controlled artifact's static ``start`` role is its first explicit consumer;
+no general application runtime path imports it.
 """
 
 from __future__ import annotations

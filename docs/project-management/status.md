@@ -1,6 +1,6 @@
 # Project status
 
-## Current status — Route 3 prerequisite accepted — 2026-10-15
+## Current status — SA-2 `stop` accepted — 2026-10-16
 
 **Baseline v1.9 is active. Implementation and unrestricted testing on the
 disposable `oracle-test` server are authorized.**
@@ -35,11 +35,23 @@ remediations and executable tests
 ([handback](../review/route-3-polkit-tmpfiles-installer-handback.md)). The
 disposable host is back to its prior state.
 
-The next development increment is the first real Package 5.0 consumer on
-`oracle-test`. Production and staging activation remain out of scope. Before
-any production activation, the transient inspection-failure risk needs an
-explicit decision and the completed series needs its final production security
-review.
+Claude implemented the first real Package 5.0 consumer, static SA-1 `start`,
+through DI-2. Its environment-read, duration, denial-proof and malformed-success
+findings are remediated. Independent Codex re-review found no blocking issue;
+Peter accepted SA-1 for continued non-production development on 2026-10-15
+([handback](../review/route-3-start-role-implementation-handback.md)).
+
+Static SA-2 `stop` through the existing narrow stop-unit boundary was implemented
+and tested on `oracle-test`. Its refusal-diagnostic and typed-result findings
+were remediated, and its unit-scoped host-job assertions were proved while an
+unrelated systemd job remained queued. Independent Codex re-review found no
+blocking issue; Peter accepted SA-2 for continued non-production development on
+2026-10-16
+([handback](../review/route-3-stop-role-implementation-handback.md)). No further
+Package 5.0 slice is assigned by this acceptance.
+Production and staging activation remain out of scope. Before any production
+activation, the transient inspection-failure risk needs an explicit decision
+and the completed series needs its final production security review.
 
 Production and staging remain unchanged. Real credentials and player data must
 not be copied to the disposable environment.

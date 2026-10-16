@@ -460,12 +460,14 @@ def test_a_tree_problem_is_reported_by_main_as_77(artifact, monkeypatch):
 @pytest.mark.parametrize(
     "argv,expected",
     [
-        (["hold", ACT, A2], ("hold", ACT, A2)),
-        (["deact", ACT, A2, "stop-post"], ("stop-post", ACT, A2)),
-        (["backstop", ACT, A2], ("backstop", ACT, A2)),
+        (["hold", ACT, A2], ("hold", ACT, A2, ())),
+        (["deact", ACT, A2, "stop-post"], ("stop-post", ACT, A2, ())),
+        (["backstop", ACT, A2], ("backstop", ACT, A2, ())),
+        (["start", ACT, A2, "900", "60"], ("start", ACT, A2, (900, 60))),
+        (["stop"], ("stop", "", "", ())),
     ],
 )
-def test_entry_accepts_exactly_the_three_role_vectors(argv, expected):
+def test_entry_accepts_exactly_the_five_role_vectors(argv, expected):
     assert entry.parse_role_argv(argv) == expected
 
 
@@ -480,7 +482,25 @@ def test_entry_accepts_exactly_the_three_role_vectors(argv, expected):
         ["deact", ACT, A2, "attest"],
         ["backstop", ACT, A2, "stop-post"],
         ["consume", ACT, A2],
+        ["start", ACT, A2, "0", "60"],
+        ["start", ACT, A2, "0900", "60"],
+        ["start", ACT, A2, "900", "604801"],
+        ["start", ACT, A2, "900", "60", "extra"],
         ["stop-post", ACT, A2],
+        ["stop", ""],
+        ["stop", "stop"],
+        ["stop", ACT],
+        ["stop", ACT, A2],
+        ["stop", "--force"],
+        ["stop", "rp11-capture-pass-a.service"],
+        ["STOP"],
+        ["Stop"],
+        ["stop "],
+        [" stop"],
+        ["stop\n"],
+        ["stop\x00"],
+        ["--stop"],
+        ["stop-capture"],
         ["hold", ACT, A2.upper()],
         ["hold", "rp11-act-x", A2],
         ["hold", A2, ACT],
@@ -489,6 +509,24 @@ def test_entry_accepts_exactly_the_three_role_vectors(argv, expected):
 )
 def test_entry_rejects_every_other_vector(argv):
     assert entry.parse_role_argv(argv) is None
+
+
+@pytest.mark.parametrize("lease", ["61", "900", "86400"])
+@pytest.mark.parametrize("stop", ["60", "120", "600"])
+def test_entry_accepts_both_ends_of_each_holder_duration_range(lease, stop):
+    assert entry.parse_role_argv(["start", ACT, A2, lease, stop]) == ("start", ACT, A2, (int(lease), int(stop)))
+
+
+@pytest.mark.parametrize(
+    "lease,stop",
+    [(v, "60") for v in ("0", "1", "60", "86401", "604800", "999999")]
+    + [("900", v) for v in ("0", "1", "59", "601", "604800", "999999")]
+    + [("604800", "1"), ("1", "604800"), ("0061", "60"), ("900", "060"), ("\u0669\u0660\u0660", "60"),
+       ("900", "\u0666\u0660"), ("+900", "60"), ("900", "-60"), (" 900", "60"), ("900", "60\n"),
+       ("0x384", "60"), ("9e2", "60"), ("", "60")],
+)
+def test_entry_refuses_a_holder_duration_outside_the_contract(lease, stop):
+    assert entry.parse_role_argv(["start", ACT, A2, lease, stop]) is None
 
 
 def test_hold_runs_its_composition_root_with_the_provenance(monkeypatch):
@@ -517,6 +555,50 @@ def test_hold_runs_its_composition_root_with_the_provenance(monkeypatch):
 def test_an_unknown_role_still_refuses():
     roles = _load("rp11_roles_prod4", HERE / "rp11_roles.py")
     assert roles.run("consume", ACT, A2) == 69
+
+
+def test_start_runs_its_composition_root_with_only_validated_operands(monkeypatch):
+    import adapters.rp11.start as start
+
+    seen = {}
+
+    def fake(activation_id, a2, runtime, timeout):
+        seen.update(activation_id=activation_id, a2=a2, runtime=runtime, timeout=timeout)
+        return 22
+
+    monkeypatch.setattr(start, "run_start", fake)
+    roles = _load("rp11_roles_start", HERE / "rp11_roles.py")
+    assert roles.run("start", ACT, A2, 900, 60, invocation_id="ignored") == 22
+    assert seen == {"activation_id": ACT, "a2": A2, "runtime": 900, "timeout": 60}
+
+
+def test_the_entry_imports_the_start_root_up_front():
+    source = (HERE / "rp11_h1.py").read_text()
+    assert "import adapters.rp11.start  # noqa: F401" in source
+    assert {"application/rp11/start.py", "adapters/rp11/start.py"} <= set(build.SOURCES)
+
+
+def test_stop_runs_its_composition_root_with_no_operand(monkeypatch):
+    import adapters.rp11.stop as stop
+
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append((args, kwargs))
+        return 22
+
+    monkeypatch.setattr(stop, "run_stop", fake)
+    roles = _load("rp11_roles_stop", HERE / "rp11_roles.py")
+    assert roles.run("stop", "", "", invocation_id="ignored", parent_pid=1) == 22
+    assert calls == [((), {})]
+    assert roles.run("stop", "", "", 5) == 69  # an operand is never forwarded
+    assert len(calls) == 1
+
+
+def test_the_entry_imports_the_stop_root_up_front():
+    source = (HERE / "rp11_h1.py").read_text()
+    assert "import adapters.rp11.stop  # noqa: F401" in source
+    assert {"application/rp11/stop.py", "adapters/rp11/stop.py"} <= set(build.SOURCES)
 
 
 def test_backstop_runs_its_composition_root_with_the_provenance(monkeypatch):
@@ -650,6 +732,201 @@ def test_a_malformed_invocation_id_is_refused_before_any_role_runs(artifact, tmp
     proc, state = _probe(artifact, tmp_path, env={"INVOCATION_ID": "not-hex"})
     assert proc.returncode == 64 and state is None
     assert "malformed or duplicate INVOCATION_ID" in proc.stderr
+
+
+START_PROBE = PROBE.replace("def run(role, activation_id, artifact_sha256, **provenance):",
+                            "def run(role, activation_id, artifact_sha256, *operands, **provenance):").replace(
+    '"role": role,', '"role": role, "operands": list(operands),')
+
+
+def _start_probe(artifact, tmp_path, env, role_argv):
+    out = tmp_path / "probe.json"
+    (artifact / "lib/rp11_roles.py").write_text(START_PROBE % str(out))
+    proc = subprocess.run(
+        [sys.executable, "-I", "-S", str(artifact / "rp11_h1.py"), *role_argv],
+        capture_output=True, text=True, env=env, cwd=str(tmp_path),
+    )
+    return proc, (json.loads(out.read_text()) if out.exists() else None)
+
+
+START_ARGV = ["start", ACT, A2, "900", "60"]
+HOSTILE_INVOCATION_IDS = {
+    "malformed": {"INVOCATION_ID": "not-hex"},
+    "uppercase": {"INVOCATION_ID": "A" * 32},
+    "short": {"INVOCATION_ID": "a" * 31},
+    "empty": {"INVOCATION_ID": ""},
+    "oversized": {"INVOCATION_ID": "a" * 100_000, **{f"PAD{i}": "x" * 100_000 for i in range(11)}},
+    "well-formed": {"INVOCATION_ID": "c" * 32},
+    "none": {},
+}
+
+
+@pytest.mark.parametrize("name", sorted(HOSTILE_INVOCATION_IDS))
+def test_no_environment_value_can_change_a_valid_start(artifact, tmp_path, name):
+    """H-FI.1 / SA1.FI.1: ``start`` reads no environment variable."""
+    proc, state = _start_probe(artifact, tmp_path, HOSTILE_INVOCATION_IDS[name], START_ARGV)
+    assert proc.returncode == 0, proc.stderr
+    assert state["role"] == "start" and state["operands"] == [900, 60]
+    assert state["provenance"] == {"invocation_id": "absent", "parent_pid": os.getpid()}
+    assert state["environ"] == [] and state["fds"] == [] and state["umask"] == 0o022
+    assert state["cwd"] == "/" and state["mask"] == []
+    assert "INVOCATION_ID" not in proc.stderr
+
+
+@pytest.mark.parametrize("name", ["malformed", "uppercase", "short", "empty", "oversized"])
+@pytest.mark.parametrize("role_argv", [["deact", ACT, A2, "stop-post"], ["hold", ACT, A2], ["backstop", ACT, A2]])
+def test_the_same_values_still_refuse_every_role_that_consumes_the_provenance(
+    artifact, tmp_path, name, role_argv
+):
+    proc, state = _start_probe(artifact, tmp_path, HOSTILE_INVOCATION_IDS[name], role_argv)
+    assert proc.returncode == 64 and state is None
+    assert "malformed or duplicate INVOCATION_ID" in proc.stderr
+
+
+# Review finding 3: ``os.environ``/``os.environb`` cannot hold two entries for one key,
+# so a genuine duplicate needs a raw ``envp`` handed to ``execve(2)`` itself.
+RAW_EXEC = """
+import ctypes, sys
+libc = ctypes.CDLL(None, use_errno=True)
+path, *rest = [a.encode() for a in sys.argv[1:]]
+split = rest.index(b"--")
+argv, envp = rest[:split], rest[split + 1:]
+c_argv = (ctypes.c_char_p * (len(argv) + 1))(*argv, None)
+c_envp = (ctypes.c_char_p * (len(envp) + 1))(*envp, None)
+libc.execve(path, c_argv, c_envp)
+sys.exit(127)
+"""
+DUPLICATE_ENVP = ["INVOCATION_ID=" + "a" * 32, "PATH=/usr/bin", "INVOCATION_ID=" + "b" * 32]
+
+
+def _raw_exec(argv, envp, *, cwd):
+    return subprocess.run(
+        [sys.executable, "-I", "-c", RAW_EXEC, argv[0], *argv, "--", *envp],
+        capture_output=True, cwd=str(cwd),
+    )
+
+
+def test_the_raw_harness_really_delivers_two_invocation_id_entries(tmp_path):
+    proc = _raw_exec(["/bin/cat", "/proc/self/environ"], DUPLICATE_ENVP, cwd=tmp_path)
+    entries = proc.stdout.split(b"\0")
+    assert [e for e in entries if e.startswith(b"INVOCATION_ID=")] == [
+        b"INVOCATION_ID=" + b"a" * 32, b"INVOCATION_ID=" + b"b" * 32,
+    ]
+
+
+def _raw_start_probe(artifact, tmp_path, envp, role_argv):
+    out = tmp_path / "probe.json"
+    (artifact / "lib/rp11_roles.py").write_text(START_PROBE % str(out))
+    argv = [sys.executable, "-I", "-S", str(artifact / "rp11_h1.py"), *role_argv]
+    proc = _raw_exec(argv, envp, cwd=tmp_path)
+    return proc, (json.loads(out.read_text()) if out.exists() else None)
+
+
+def test_a_genuinely_duplicated_invocation_id_cannot_affect_a_valid_start(artifact, tmp_path):
+    control, control_state = _raw_start_probe(artifact, tmp_path, [], START_ARGV)
+    (tmp_path / "probe.json").unlink()
+    proc, state = _raw_start_probe(artifact, tmp_path, DUPLICATE_ENVP, START_ARGV)
+    assert control.returncode == 0 and proc.returncode == 0, proc.stderr
+    assert proc.returncode == control.returncode and state == control_state
+    assert proc.stderr.decode().replace(str(tmp_path), "") == control.stderr.decode().replace(str(tmp_path), "")
+    assert state["role"] == "start" and state["operands"] == [900, 60]
+    assert state["provenance"]["invocation_id"] == "absent"
+    assert state["environ"] == [] and state["fds"] == []
+    assert "INVOCATION_ID" not in proc.stderr.decode()
+
+
+@pytest.mark.parametrize("role_argv", [["deact", ACT, A2, "stop-post"], ["hold", ACT, A2], ["backstop", ACT, A2]])
+def test_a_genuinely_duplicated_invocation_id_refuses_every_provenance_role(artifact, tmp_path, role_argv):
+    proc, state = _raw_start_probe(artifact, tmp_path, DUPLICATE_ENVP, role_argv)
+    assert proc.returncode == 64 and state is None
+    assert b"malformed or duplicate INVOCATION_ID" in proc.stderr
+
+
+STOP_ARGV = ["stop"]
+
+
+@pytest.mark.parametrize("name", sorted(HOSTILE_INVOCATION_IDS))
+def test_no_environment_value_can_change_a_valid_stop(artifact, tmp_path, name):
+    """H-FI.1 / SA2.FI.1: ``stop`` reads no environment variable."""
+    proc, state = _start_probe(artifact, tmp_path, HOSTILE_INVOCATION_IDS[name], STOP_ARGV)
+    assert proc.returncode == 0, proc.stderr
+    assert state["role"] == "stop" and state["operands"] == []
+    assert state["provenance"] == {"invocation_id": "absent", "parent_pid": os.getpid()}
+    assert state["environ"] == [] and state["fds"] == [] and state["umask"] == 0o022
+    assert state["cwd"] == "/" and state["mask"] == []
+    assert "INVOCATION_ID" not in proc.stderr
+
+
+def test_a_genuinely_duplicated_invocation_id_cannot_affect_a_valid_stop(artifact, tmp_path):
+    control, control_state = _raw_start_probe(artifact, tmp_path, [], STOP_ARGV)
+    (tmp_path / "probe.json").unlink()
+    proc, state = _raw_start_probe(artifact, tmp_path, DUPLICATE_ENVP, STOP_ARGV)
+    assert control.returncode == 0 and proc.returncode == 0, proc.stderr
+    assert state == control_state
+    assert proc.stderr.decode().replace(str(tmp_path), "") == control.stderr.decode().replace(str(tmp_path), "")
+    assert state["role"] == "stop" and state["provenance"]["invocation_id"] == "absent"
+    assert state["environ"] == [] and state["fds"] == []
+    assert "INVOCATION_ID" not in proc.stderr.decode()
+
+
+@pytest.mark.parametrize("role_argv", [["stop", "x"], ["stop", ACT, A2], ["stop", "--now"], ["STOP"]])
+def test_an_extra_or_alternate_stop_token_is_refused_before_any_role_runs(artifact, tmp_path, role_argv):
+    for env in ({}, {"INVOCATION_ID": "not-hex"}):
+        proc, state = _start_probe(artifact, tmp_path, env, role_argv)
+        assert proc.returncode == 64 and state is None
+        assert "not an accepted role vector" in proc.stderr or "INVOCATION_ID" in proc.stderr
+
+
+def test_a_valid_stop_never_calls_the_environment_reading_helper():
+    def forbidden(*_):
+        raise AssertionError("stop must not read the environment")
+
+    pid = os.fork()
+    if pid == 0:  # pragma: no cover - a throwaway child
+        code = 99
+        try:
+            entry._initial_environment = forbidden
+            entry.invocation_id_from = forbidden
+            os.environ["INVOCATION_ID"] = "x" * 5
+            result = entry.first_image_controls(reads_environment=False)
+            code = 0 if result == {"invocation_id": "absent", "parent_pid": os.getppid()} else 1
+        except BaseException:
+            code = 2
+        finally:
+            os._exit(code)
+    _, status = os.waitpid(pid, 0)
+    assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+
+
+def test_a_valid_start_never_calls_the_environment_reading_helper(monkeypatch):
+    def forbidden():
+        raise AssertionError("start must not read the environment")
+
+    def child():
+        entry._initial_environment = forbidden
+        entry.invocation_id_from = lambda block: forbidden()
+        os.environ["INVOCATION_ID"] = "x" * 5
+        os.environb[b"INVOCATION_ID"] = b"dup"
+
+    pid = os.fork()
+    if pid == 0:  # pragma: no cover - a throwaway child
+        code = 99
+        try:
+            child()
+            result = entry.first_image_controls(reads_environment=False)
+            code = 0 if result == {"invocation_id": "absent", "parent_pid": os.getppid()} else 1
+        except BaseException:
+            code = 2
+        finally:
+            os._exit(code)
+    _, status = os.waitpid(pid, 0)
+    assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+
+
+def test_only_the_start_and_stop_vectors_select_the_environment_free_path():
+    source = (HERE / "rp11_h1.py").read_text()
+    assert 'first_image_controls(reads_environment=sys.argv[1:2] not in (["start"], ["stop"]))' in source
+    assert entry.first_image_controls.__defaults__ == (True,)
 
 
 def test_a_closed_standard_descriptor_is_refused(artifact, tmp_path):

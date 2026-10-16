@@ -2537,8 +2537,15 @@ and roles remain inactive in production. Activation still requires an explicit
 decision on the transient inspection-failure risk and an independent security
 review of the completed series.
 
-The immediate implementation action is the first real, non-production Package
-5.0 consumer, exercised on `oracle-test` through the accepted Route 3 boundary.
+Claude implemented the static SA-1 `start` role through DI-2. Its environment-
+read, duration, denial-proof and malformed-success findings are remediated;
+independent Codex re-review found no blocking issue, and Peter accepted SA-1 for
+continued non-production development on 2026-10-15. Claude then implemented
+static SA-2 `stop` through the existing narrow stop-unit boundary. After its
+refusal-diagnostic, typed-result and test-only host-job assertion remediations,
+independent Codex re-review found no blocking issue, and Peter accepted SA-2 for
+continued non-production development on 2026-10-16. No further Package 5.0
+slice is assigned by this acceptance.
 
 All testing levels are authorized on `oracle-test`, including root/systemd,
 network, packages, PostgreSQL and destructive recovery drills. Production and

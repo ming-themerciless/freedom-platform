@@ -1,11 +1,22 @@
 # RAID register
 
+**Current-state note, 2026-10-16.** Peter Duscha accepted static SA-2 `stop`
+through DI-S for continued non-production development after its three bounded
+remediations and independent Codex re-review. No SA-2 implementation finding
+remains open. No later Package 5.0 slice is assigned. Production activation
+remains gated on the transient inspection-failure decision and final independent
+security review.
+
 **Current-state note, 2026-10-15.** Peter Duscha accepted the repository-managed
 Polkit `tmpfiles.d` prerequisite after its real-reboot proof and security
 remediations. No implementation finding remains open. Production activation is
 still gated on an explicit decision on the transient inspection-failure risk
-and independent security review. The next development increment is the first
-real Package 5.0 consumer on `oracle-test`.
+and independent security review. Peter accepted the first real Package 5.0
+consumer, static SA-1 `start`, on 2026-10-15 after its remediations and
+independent Codex re-review. No SA-1 implementation finding remains open.
+Static SA-2 `stop` through the existing narrow stop-unit boundary was the next
+implementation slice and was subsequently accepted by the current-state note
+above.
 
 **Current-state note, 2026-10-14.** Peter Duscha accepted the complete inactive
 Route 3 role series after independent review. The then-open `tmpfiles.d`

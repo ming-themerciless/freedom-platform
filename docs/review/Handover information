@@ -1,4 +1,4 @@
-# Active handover — Route 3 prerequisite accepted — 2026-10-15
+# Active handover — SA-2 `stop` accepted — 2026-10-16
 
 **IMPLEMENTATION AND FULL DISPOSABLE-SERVER TESTING AUTHORIZED**
 
@@ -50,14 +50,24 @@ Still prohibited without a separate explicit instruction: production or
 staging mutation, use or disclosure of real secrets or player data, weakening
 authorization, and destructive operations outside the disposable environment.
 
-The role implementation sequence is closed. The repository-managed Polkit
-`tmpfiles.d` prerequisite and its real reboot proof on `oracle-test` are
-implemented and accepted
-([handback](route-3-polkit-tmpfiles-installer-handback.md)). The next development
-step is the first real, non-production Package 5.0 consumer, implemented and
-tested on `oracle-test`. Do not turn the remaining activation safeguards into a
-documentation-only proof chain. Production and staging activation remain
-outside the assignment.
+The role implementation sequence and repository-managed Polkit `tmpfiles.d`
+prerequisite are closed. Peter accepted the first real, non-production Package
+5.0 consumer, static SA-1 `start` through DI-2, on 2026-10-15 after independent
+Codex re-review found no blocking issue in the second remediation. Malformed
+`ControlOk` payloads now fail closed as `effect-not-confirmed` with exit 22;
+the focused and complete Route 3 disposable-host suites passed. The accepted
+implementation evidence remains in the
+[`start` handback](route-3-start-role-implementation-handback.md).
+
+Peter accepted static SA-2 `stop` through the existing narrow stop-unit boundary
+for continued non-production development on 2026-10-16. Independent Codex
+re-review found no blocking issue after the refusal-diagnostic, typed-result and
+test-only host-job assertion remediations. The exact-unit unrelated-job proof,
+the complete SA-2 host module and the focused application/artifact suites passed
+on `oracle-test`; see the [`stop` handback`](route-3-stop-role-implementation-handback.md).
+No further Package 5.0 slice is assigned by this acceptance. Production/staging
+activation remains unauthorized; do not turn the remaining activation safeguards
+into a documentation-only proof chain.
 
 [Active delivery plan](../project-management/active-delivery-plan.md) ·
 [Phase 5 packages](../implementation-plan.md#phase-5--existing-automation-migration) ·

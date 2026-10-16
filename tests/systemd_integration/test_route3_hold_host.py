@@ -232,6 +232,17 @@ class Activation:
         result = SystemdManagerAdapter(connect_system_bus).create_holder(spec)
         assert isinstance(result, ControlOk), result
 
+    def start_vector(self) -> list[str]:
+        return [
+            ROLE_INTERPRETER, "-I", "-S", ROLE_ARTIFACT, "start", self.id, self.fx.a2_sha256,
+            str(self.lease["lease_s"]), str(self.lease["stop_timeout_s"]),
+        ]
+
+    def start_holder_via_role(self) -> subprocess.CompletedProcess:
+        """SA-1 as the executor runs it: ``ubuntu`` through the ``sudo -n`` launch
+        preamble (EX-1) into the controlled artifact, which consumes DI-2."""
+        return run("runuser", "-u", "ubuntu", "--", "sudo", "-n", *self.start_vector())
+
     def pk(self, mode: PkMode, verb: UnitVerb = UnitVerb.START):
         services = StopPostServices(connect_system_bus, SystemClock())
         return services.pk(PARAMS).run(Operator.from_baseline(self.fx.baseline), verb, mode)
@@ -352,7 +363,9 @@ def test_hold_activates_the_operator_starts_the_pass_and_every_rung_cleans_up(ac
     act = activations()
     act.prepare()
     polkit_before = polkit_pid()
-    act.start_holder()
+    started_by_role = act.start_holder_via_role()
+    assert started_by_role.returncode == 0, started_by_role.stderr
+    assert started_by_role.stderr.rstrip().endswith("rp11-start started"), started_by_role.stderr
     act.wait_op("hold-start")
     doc = act.record("act")
     assert doc["outcome"] == "activated" and doc["trigger"] == "act" and doc["holder"]["invocation_id"] != "absent"

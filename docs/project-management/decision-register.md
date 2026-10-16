@@ -1,13 +1,48 @@
 # Decision register
 
+## Decision — static SA-2 `stop` accepted — 2026-10-16
+
+Peter Duscha accepts the static SA-2 `stop` role through DI-S for continued
+non-production development. Independent Codex re-review found no blocking issue
+after the refusal-diagnostic, typed-result and test-only host-job assertion
+remediations. The final candidate preserves the fixed target, one-call/no-retry
+discipline and fail-closed result mapping; its exact-unit unrelated-job proof,
+complete host module and focused application/artifact suites passed on
+`oracle-test`.
+
+This decision does not assign the next Package 5.0 slice or authorize production
+or staging activation. The transient inspection-failure decision and final
+independent production security review remain mandatory.
+
+[Accepted implementation handback](../review/route-3-stop-role-implementation-handback.md)
+· [Active delivery plan](active-delivery-plan.md) ·
+[Active handover](../review/Handover%20information).
+
+## Decision — static SA-1 `start` accepted — 2026-10-15
+
+Peter Duscha accepts the static SA-1 `start` role through DI-2 for continued
+non-production development. Independent Codex re-review found no blocking issue
+after the malformed-`ControlOk` remediation. The final candidate fails malformed
+success evidence closed as `effect-not-confirmed`, preserves the one-call/no-retry
+discipline, and passed the focused and complete Route 3 suites on `oracle-test`.
+
+Static SA-2 `stop` through the existing narrow stop-unit boundary is the next
+implementation slice. This decision does not assign an implementer and does not
+authorize production or staging activation. The transient inspection-failure
+decision and final independent production security review remain mandatory.
+
+[Accepted implementation handback](../review/route-3-start-role-implementation-handback.md)
+· [Active delivery plan](active-delivery-plan.md) ·
+[Active handover](../review/Handover%20information).
+
 ## Decision — Route 3 Polkit prerequisite accepted — 2026-10-15
 
 Peter Duscha accepts the repository-managed Polkit `tmpfiles.d` prerequisite
 for continued development after its implementation, real-reboot proof,
 effective-configuration and removal-race remediations, and restore-path
 hardening. The package fragment and bounded install/verify/remove operator path
-are complete. The next development increment is the first real Package 5.0
-consumer on `oracle-test`.
+are complete. The first real Package 5.0 consumer, static SA-1 `start`, was
+subsequently accepted by the 2026-10-15 decision above.
 
 This decision does not authorize production or staging activation. Before
 production activation, the transient inspection-failure risk needs an explicit

@@ -21,5 +21,16 @@ current implementation record is the
 [`hold` handback](route-3-hold-role-implementation-handback.md). The Polkit
 `tmpfiles.d` prerequisite was accepted on 2026-10-15; its current implementation
 record is the
-[`tmpfiles` handback](route-3-polkit-tmpfiles-installer-handback.md). The
-remaining production-activation gates are summarized in the active handover.
+[`tmpfiles` handback](route-3-polkit-tmpfiles-installer-handback.md). The first
+Package 5.0 consumer is assigned by the
+[`start` implementation prompt](route-3-start-role-implementation-claude-prompt.md);
+Claude's `start` implementation and its
+[handback](route-3-start-role-implementation-handback.md) were independently
+re-reviewed and accepted by Peter on 2026-10-15. Static SA-2 `stop`, assigned to Claude by the
+[`stop` implementation prompt](route-3-stop-role-implementation-claude-prompt.md),
+is implemented and accepted for continued non-production development
+([handback](route-3-stop-role-implementation-handback.md)). Its refusal-diagnostic,
+typed-result and test-only host-job assertion remediations are complete;
+independent Codex re-review found no blocking issue, and Peter accepted SA-2 for
+continued non-production development on 2026-10-16.
+The remaining production-activation gates are summarized in the active handover.

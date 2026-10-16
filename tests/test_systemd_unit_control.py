@@ -1700,7 +1700,7 @@ def test_only_the_jeepney_module_imports_the_client_library():
         assert uses == (path.name == "jeepney_bus.py"), path.name
 
 
-def test_adapter_is_inactive_nothing_in_a_runtime_path_imports_it():
+def test_only_the_controlled_role_not_a_general_runtime_path_consumes_the_adapter():
     pattern = re.compile(r"(adapters\.systemd|application\.unit_control)")
     offenders = []
     for base in (

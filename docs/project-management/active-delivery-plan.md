@@ -1,6 +1,6 @@
 # Active delivery plan — implementation-first reset
 
-Status: approved and active; static SA-2 `stop` accepted 2026-10-16
+Status: approved and active; RT-5 `attest` assigned after RT-1 acceptance 2026-10-17
 Owner and acceptance authority: Peter Duscha
 Baseline: v1.9
 
@@ -58,7 +58,19 @@ Static SA-2 `stop` through the existing narrow stop-unit boundary was then
 implemented, remediated and independently re-reviewed. Peter accepted it for
 continued non-production development on 2026-10-16; see the
 [`stop` handback](../review/route-3-stop-role-implementation-handback.md). No
-further Package 5.0 slice is assigned by that acceptance.
+further Package 5.0 slice was assigned by that acceptance. Peter subsequently
+approved the recommended continuation and assigned RT-1 `consume` as the next
+bounded slice, with implementation and full `oracle-test` testing under its
+[`Claude prompt`](../review/route-3-consume-role-implementation-claude-prompt.md).
+Claude's uncommitted candidate and
+[handback](../review/route-3-consume-role-implementation-handback.md) received
+independent Codex review. Its two blocking failure-path defects were corrected
+under one bounded
+[remediation](../review/route-3-consume-role-review-remediation-claude-prompt.md).
+Independent Codex re-review found no blocking issue, and Peter accepted RT-1
+for continued non-production development on 2026-10-17. Peter then assigned
+RT-5 `attest` as the next bounded slice. The non-root executor and its
+OC-1/OC-2/OC-3 checks remain later work.
 
 Implementation defaults may be refined by tests. Initially:
 
@@ -95,10 +107,20 @@ Implementation defaults may be refined by tests. Initially:
 7. Implement static SA-2 `stop` through the existing narrow stop-unit boundary.
    **Implemented by Claude, independently re-reviewed and accepted by Peter
    2026-10-16.** See the [handback](../review/route-3-stop-role-implementation-handback.md).
+8. Implement RT-1 `consume` as the capture unit's PID-1 `ExecStartPre=+` role,
+   including the one-shot claim, grant-priority removal, CQ-4 preconditions,
+   negative authorization proof and durable `consumed` commit. **Implemented,
+   remediated, independently re-reviewed and accepted by Peter for continued
+   non-production development on 2026-10-17**
+   ([handback](../review/route-3-consume-role-implementation-handback.md)).
+9. Implement RT-5 `attest` as the controlled interactive root role, reusing the
+   accepted cleanup engine with trigger `attest` and enforcing its unit-state
+   precondition before cleanup. **Assigned by Peter on 2026-10-17.** The
+   non-root executor and OC-1/OC-2/OC-3 remain outside this slice.
 
 ## Acceptance criteria
 
-- every implemented operation row used by RT-2, RT-3 and RT-4 is traced to an
+- every implemented operation row used by RT-1 through RT-4 is traced to an
   executable test or a named real-host check;
 - cleanup never removes an unattributed, damaged or foreign object;
 - mutation failures are fail-closed and unconfirmed manager effects are never
@@ -115,12 +137,13 @@ Implementation defaults may be refined by tests. Initially:
 
 ## Finish line
 
-The series ended with all three PID-1 role vectors performing their real behavior on
-`oracle-test`, no production activation, Peter's 2026-10-14 acceptance based on
-the running system, and completed independent re-review of the subsequent
-security remediation. The selected `tmpfiles.d` ordering is installed, proved
-across a real reboot and accepted for continued development. Before production
-activation, decide the transient inspection-failure risk and complete the final
-production security review.
+The accepted inactive-role series ended with its three PID-1 vectors performing
+their real behavior on `oracle-test`, no production activation, Peter's
+2026-10-14 acceptance based on the running system, and completed independent
+re-review of the subsequent security remediation. The selected `tmpfiles.d`
+ordering is installed, proved across a real reboot and accepted for continued
+development. RT-1 `consume` is accepted, and the current sequence now continues
+with RT-5 `attest`. Before production activation, decide the transient
+inspection-failure risk and complete the final production security review.
 Additional source-proof work is not an allowed substitute for implementation
 and executable tests.

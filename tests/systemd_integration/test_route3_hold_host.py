@@ -189,15 +189,17 @@ class Activation:
         return f"{self.id}-backstop.service"
 
     def prepare(self, *, rules_dir: bool = True, capture: str = "mkdir", lease: dict | None = None,
-                restart: bool = True) -> None:
+                restart: bool = True, service: str | None = None) -> None:
+        """``service`` replaces the capture unit's whole ``[Service]`` body (RT-1 adds its
+        ``ExecStartPre=+``); it is written before the baseline is computed, so H-1 pins it."""
         self.lease.update(lease or {})
         for sub in ("", "a2", "h1", "activation"):
             (STORE / sub).mkdir(mode=0o755, exist_ok=True)
             os.chmod(STORE / sub, 0o755)
         command = {"mkdir": f"/usr/bin/mkdir -m 0700 {self.capture_root}", "long": "/usr/bin/sleep 600"}[capture]
+        body = service if service is not None else f"Type=exec\nExecStart={command}\n"
         CAPTURE_UNIT_FILE.write_text(
-            "[Unit]\nDescription=RP-11 synthetic capture pass (disposable host test)\n\n"
-            f"[Service]\nType=exec\nExecStart={command}\n"
+            f"[Unit]\nDescription=RP-11 synthetic capture pass (disposable host test)\n\n[Service]\n{body}"
         )
         run("systemctl", "daemon-reload", check=True)
         run("systemctl", "reset-failed", "rp11-capture-pass-a.service")
@@ -206,7 +208,8 @@ class Activation:
         assert baseline is not None and baseline["unit"]["load_state"] == "loaded"
         self.fx = ActivationFixture(
             LAYOUT, self.id, Path("/proc/sys/kernel/random/boot_id").read_text().strip(), baseline,
-            params=PARAMS, pass_doc={"schema": PASS_SCHEMA, "capture_root": self.capture_root},
+            params=PARAMS,
+            pass_doc={"schema": PASS_SCHEMA, "capture_root": self.capture_root, "activation_id": self.id},
         )
         self.fx.rules_dir_preexists = rules_dir
         self.fx.write_authority(lease=self.lease)

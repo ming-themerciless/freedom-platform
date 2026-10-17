@@ -277,7 +277,15 @@ class CountingFlag:
 class World:
     """One synthetic activation prepared as AP-0 … SA-1 would leave it."""
 
-    def __init__(self, layout: Layout, tmp_path: Path, *, rules_dir: bool = True, lease: dict | None = None) -> None:
+    def __init__(
+        self,
+        layout: Layout,
+        tmp_path: Path,
+        *,
+        rules_dir: bool = True,
+        lease: dict | None = None,
+        pass_extra: dict | None = None,
+    ) -> None:
         me = pwd.getpwuid(os.getuid())
         self.layout = layout
         self.tmp = tmp_path
@@ -290,7 +298,7 @@ class World:
             _baseline(),
             operator_user=me.pw_name,
             params=Params(pk_op_ms=5_000, lock_wait_ms=1_000),
-            pass_doc={"schema": PASS_SCHEMA, "capture_root": self.capture_root, "pass": "a"},
+            pass_doc={"schema": PASS_SCHEMA, "capture_root": self.capture_root, "pass": "a", **(pass_extra or {})},
         )
         self.lease = dict(lease or LEASE)
         self.a2 = self.fx.write_authority(lease=self.lease)
@@ -1781,7 +1789,16 @@ def test_hl_pass_failed_early_needs_a_consumed_line(world):
         consume.mkdir(mode=0o755)
         lines, prev = [], GENESIS
         for seq, (op, fields) in enumerate(
-            [("run-start", {"boot_id": BOOT, "invocation_id": "cd" * 16}), ("consumed", {})], start=1
+            [
+                ("run-start", {
+                    "invocation_id": "cd" * 16, "boot_id": BOOT, "claim": {"dev": 1, "ino": 2},
+                    "act_journal": {"sha256": "0" * 64, "length": 1},
+                    "lock": {"object": {"path": "/run/k", "dev": 1, "ino": 3}, "mode": "held", "wait_ms": 0},
+                    "helper": {"role": "consume", "tool_sha256": "absent"},
+                }),
+                ("consumed", {"pk_status": "not-authorized", "inactive_enter_us": 0}),
+            ],
+            start=1,
         ):
             line = serialize_line(JournalKind.CONSUME, seq=seq, prev=prev, run=consume_run(ACT_ID), op=op, fields=fields)
             lines.append(line)

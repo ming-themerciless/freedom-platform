@@ -1,4 +1,4 @@
-# Active handover — SA-2 `stop` accepted — 2026-10-16
+# Active handover — RT-5 `attest` assigned after RT-1 acceptance — 2026-10-17
 
 **IMPLEMENTATION AND FULL DISPOSABLE-SERVER TESTING AUTHORIZED**
 
@@ -65,9 +65,52 @@ re-review found no blocking issue after the refusal-diagnostic, typed-result and
 test-only host-job assertion remediations. The exact-unit unrelated-job proof,
 the complete SA-2 host module and the focused application/artifact suites passed
 on `oracle-test`; see the [`stop` handback`](route-3-stop-role-implementation-handback.md).
-No further Package 5.0 slice is assigned by this acceptance. Production/staging
-activation remains unauthorized; do not turn the remaining activation safeguards
-into a documentation-only proof chain.
+That acceptance did not itself assign another slice. Peter has now approved the
+recommended sequence and assigned RT-1 `consume` as the next bounded Package
+5.0 implementation slice under the
+[`consume` implementation prompt](route-3-consume-role-implementation-claude-prompt.md).
+Claude implemented the PID-1 `ExecStartPre=+` role as an **uncommitted
+candidate** and exercised it fully on `oracle-test`
+([handback](route-3-consume-role-implementation-handback.md)). Independent Codex
+review found two blocking failure-path defects: an evidence failure while
+recording an already-selected failure can bypass grant-priority processing, and
+an unexpected CQ-5 exception can silently run PK/2 twice. Peter has assigned
+one bounded remediation under the
+[`consume` review-remediation prompt](route-3-consume-role-review-remediation-claude-prompt.md).
+The remediation is complete. Independent Codex re-review found no blocking
+issue: the focused set passed with 2062 tests and 2 documented resource-limit
+skips, the fresh controlled-artifact root/systemd consume module passed all 14
+tests, compilation and diff checks passed, and separate host cleanup inspection
+was clean. Peter accepted RT-1 for continued non-production development on
+2026-10-17.
+
+Peter now assigns RT-5 `attest` as the next bounded Package 5.0 slice. Implement
+the existing interactive root role through the controlled artifact, reusing the
+accepted cleanup engine with trigger `attest` and enforcing its unit-state
+precondition before cleanup. Exercise it fully on `oracle-test`, including real
+`sudo -n`, refusal while the holder or either backstop unit is in an active
+transitional state, cleanup/recovery outcomes, interruption, exact argument and
+environment refusal, artifact integrity and clean teardown. Return one concise
+handback for independent review. Do not reopen accepted RT-1 behavior except for
+a demonstrated regression.
+
+The controlled vector is:
+
+```text
+sudo -n /usr/bin/python3.14 -I -S /usr/local/libexec/freedom-blades-rp11/rp11_h1.py deact <activation_id> <a2_sha256> attest
+```
+
+It accepts only the validated activation and A-2 operands, reads no environment
+variable, runs no unit, and must refuse cleanup while the holder, backstop
+service or backstop timer is `activating`, `active`, `deactivating` or
+`reloading`. Otherwise it runs the accepted cleanup procedure with trigger
+`attest`; it must never infer success from missing evidence or an unconfirmed
+authorization result.
+
+The non-root executor and its OC-1/OC-2/OC-3 checks, a production capture-unit
+installer, and production or staging activation remain outside this assignment.
+Do not turn the remaining activation safeguards into a documentation-only proof
+chain.
 
 [Active delivery plan](../project-management/active-delivery-plan.md) ·
 [Phase 5 packages](../implementation-plan.md#phase-5--existing-automation-migration) ·

@@ -5,10 +5,13 @@
     /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py backstop <id> <a2>
     /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py start <id> <a2> <lease-s> <stop-timeout-s>
     /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py stop
+    /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py consume
 
-These are the only five argument vectors (RT-2, RT-3, RT-4, SA-1 and SA-2); the
-systemd adapter builds the three PID-1 vectors, the SA-1 role consumes DI-2 to
-create the holder and the SA-2 role, which takes no operand, consumes DI-S. ``-I`` keeps the script directory and the
+These are the only six argument vectors (RT-2, RT-3, RT-4, SA-1, SA-2 and RT-1); the
+systemd adapter builds the three PID-1 vectors of the holder and backstop, the SA-1
+role consumes DI-2 to create the holder, the SA-2 role, which takes no operand,
+consumes DI-S, and the RT-1 role, which takes no operand either, is the capture
+unit's ``ExecStartPre=+`` step. ``-I`` keeps the script directory and the
 environment out of ``sys.path``, and ``-S`` skips site initialization, so the
 artifact names its one import directory, ``lib/`` beside this file, itself. That
 directory holds the Route 3 adapter and its hash-verified D-Bus client
@@ -34,7 +37,8 @@ file is executed: descriptors 0–2 must be open (else 71); every descriptor ≥
 is closed, found by listing ``/proc/self/fd`` rather than up to any limit, and
 the closing is verified by a second listing (else 71); every resettable signal disposition is reset and the mask cleared;
 ``umask`` is ``022`` and the working directory ``/``. The inherited environment
-is untrusted: the only fact taken from it, by the unit-started roles, is systemd's
+is untrusted: the only fact taken from it, by the unit-started roles (``hold``,
+``deact``, ``backstop`` and ``consume``), is systemd's
 ``INVOCATION_ID`` (as provenance, diagnostic only), read from the process's own initial environment,
 which must hold it at most once and as 32 lowercase hex digits (else 64); the
 environment is then emptied. The ``start`` and ``stop`` roles read no environment variable at
@@ -263,6 +267,8 @@ def parse_role_argv(argv: list[str]) -> tuple[str, str, str, tuple[int, ...]] | 
         role = "stop-post"
     elif argv == ["stop"]:
         return "stop", "", "", ()
+    elif argv == ["consume"]:
+        return "consume", "", "", ()
     elif len(argv) == 5 and argv[0] == "start" and all(_SECONDS.fullmatch(v) for v in argv[3:]):
         role = "start"
         extra = (int(argv[3]), int(argv[4]))
@@ -308,6 +314,7 @@ def main(argv: list[str], provenance=None) -> int:
         import adapters.rp11.hold  # noqa: F401
         import adapters.rp11.start  # noqa: F401
         import adapters.rp11.stop  # noqa: F401
+        import adapters.rp11.consume  # noqa: F401
         import jeepney
         import rp11_roles
     except ImportError as exc:

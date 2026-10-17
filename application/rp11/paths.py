@@ -38,6 +38,15 @@ class Layout:
         "/usr/share/polkit-1/rules.d",
     )
 
+    @property
+    def tree_p(self) -> str:
+        return f"{self.run}/freedom-blades-rp11"
+
+    @property
+    def pass_config(self) -> str:
+        """Fixed: RT-1 finds the activation through it before any id is known."""
+        return f"{self.tree_p}/{PASS_NAME}"
+
 
 @dataclass(frozen=True)
 class ActivationPaths:
@@ -62,11 +71,11 @@ class ActivationPaths:
 
     @property
     def tree_p(self) -> str:
-        return f"{self.layout.run}/freedom-blades-rp11"
+        return self.layout.tree_p
 
     @property
     def pass_config(self) -> str:
-        return f"{self.tree_p}/{PASS_NAME}"
+        return self.layout.pass_config
 
     @property
     def lock_dir(self) -> str:

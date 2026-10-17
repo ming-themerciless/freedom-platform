@@ -23,6 +23,11 @@ field lists below are this implementation's choice, pinned by tests:
   ``{object, mode "held", wait_ms}`` (the holder writes it only after K is
   created and locked by its one attempt), ``helper.role`` ``hold`` and
   ``helper.tool_sha256`` equal to ``tool_sha256``;
+* the consume journal (RT-1) opens with ``run-start`` carrying RT-1's own
+  ``invocation_id`` and ``boot_id``, the claim directory's ``(dev, ino)``, the
+  exact ACT-journal ``{sha256, length}`` it was read at, and the accepted
+  ``lock``/``helper`` fields; ``consumed`` is ``{pk_status, inactive_enter_us}``;
+  ``run-end`` is ``consumed`` or ``failed``;
 * ``ACT`` ``igr`` is ``{outcome, identity}`` (RT2.IGR.3): the GRR outcome and
   the in-memory grant identity it used, or ``"absent"`` when AM-1G never
   produced one (then the outcome can only be ``absent``);
@@ -230,6 +235,8 @@ ACT_RUN_END_OUTCOMES = frozenset(
 IGR_OUTCOMES = frozenset(
     {"removed", "absent", "kept-damaged", "kept-foreign", "kept-uninspected", "unremovable"}
 )
+# The consume journal's ``run-end`` states only whether RT-1 reached CQ-6.
+CONSUME_RUN_END_OUTCOMES = frozenset({"consumed", "failed"})
 MAX_IMAGES = 16
 
 # The in-memory grant identity GRR re-verifies against (RT2.IGR.2 … .3).
@@ -342,14 +349,27 @@ OPS: dict[JournalKind, dict[str, dict[str, Validator]]] = {
         "child": _CHILD_LINE,
     },
     JournalKind.CONSUME: {
-        "run-start": {"boot_id": BOOT_ID, "invocation_id": INVOCATION},
+        "run-start": {
+            "invocation_id": INVOCATION,
+            "boot_id": BOOT_ID,
+            "claim": _object({"dev": UINT, "ino": UINT}),
+            "act_journal": _object({"sha256": HEX64, "length": UINT}),
+            "lock": _object(
+                {
+                    "object": _IDENTITY,
+                    "mode": lambda v: v == "held",
+                    "wait_ms": UINT,
+                }
+            ),
+            "helper": _object({"role": lambda v: v == "consume", "tool_sha256": _or_absent(HEX64)}),
+        },
         "remove-intent": _REMOVE_INTENT,
         "removed": _REMOVED,
         "remove-failed": _REMOVE_FAILED,
         "grant-check": _GRANT_CHECK,
-        "consumed": {},
+        "consumed": {"pk_status": TOKEN, "inactive_enter_us": UINT},
         "consume-failed": {"step": TOKEN, "class": TOKEN},
-        "run-end": _RUN_END,
+        "run-end": {"outcome": _one_of(CONSUME_RUN_END_OUTCOMES)},
         "child": _CHILD_LINE,
     },
 }

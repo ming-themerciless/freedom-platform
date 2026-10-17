@@ -465,9 +465,10 @@ def test_a_tree_problem_is_reported_by_main_as_77(artifact, monkeypatch):
         (["backstop", ACT, A2], ("backstop", ACT, A2, ())),
         (["start", ACT, A2, "900", "60"], ("start", ACT, A2, (900, 60))),
         (["stop"], ("stop", "", "", ())),
+        (["consume"], ("consume", "", "", ())),
     ],
 )
-def test_entry_accepts_exactly_the_five_role_vectors(argv, expected):
+def test_entry_accepts_exactly_the_six_role_vectors(argv, expected):
     assert entry.parse_role_argv(argv) == expected
 
 
@@ -482,6 +483,21 @@ def test_entry_accepts_exactly_the_five_role_vectors(argv, expected):
         ["deact", ACT, A2, "attest"],
         ["backstop", ACT, A2, "stop-post"],
         ["consume", ACT, A2],
+        ["consume", ACT],
+        ["consume", ""],
+        ["consume", "consume"],
+        ["consume", "--now"],
+        ["consume", "-c", "import os"],
+        ["consume", "rp11-capture-pass-a.service"],
+        ["CONSUME"],
+        ["Consume"],
+        ["consume "],
+        [" consume"],
+        ["consume\n"],
+        ["consume\x00"],
+        ["--consume"],
+        ["consume-capture"],
+        ["consumed"],
         ["start", ACT, A2, "0", "60"],
         ["start", ACT, A2, "0900", "60"],
         ["start", ACT, A2, "900", "604801"],
@@ -554,7 +570,7 @@ def test_hold_runs_its_composition_root_with_the_provenance(monkeypatch):
 
 def test_an_unknown_role_still_refuses():
     roles = _load("rp11_roles_prod4", HERE / "rp11_roles.py")
-    assert roles.run("consume", ACT, A2) == 69
+    assert roles.run("attest", ACT, A2) == 69
 
 
 def test_start_runs_its_composition_root_with_only_validated_operands(monkeypatch):
@@ -593,6 +609,29 @@ def test_stop_runs_its_composition_root_with_no_operand(monkeypatch):
     assert calls == [((), {})]
     assert roles.run("stop", "", "", 5) == 69  # an operand is never forwarded
     assert len(calls) == 1
+
+
+def test_consume_runs_its_composition_root_with_only_the_invocation_id(monkeypatch):
+    import adapters.rp11.consume as consume
+
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append((args, kwargs))
+        return 27
+
+    monkeypatch.setattr(consume, "run_consume", fake)
+    roles = _load("rp11_roles_consume", HERE / "rp11_roles.py")
+    assert roles.run("consume", "", "", invocation_id="d" * 32, parent_pid=1) == 27
+    assert calls == [((), {"invocation_id": "d" * 32})]
+    assert roles.run("consume", "", "", 5, invocation_id="d" * 32) == 69  # an operand is never forwarded
+    assert len(calls) == 1
+
+
+def test_the_entry_imports_the_consume_root_up_front():
+    source = (HERE / "rp11_h1.py").read_text()
+    assert "import adapters.rp11.consume  # noqa: F401" in source
+    assert {"application/rp11/consume.py", "adapters/rp11/consume.py"} <= set(build.SOURCES)
 
 
 def test_the_entry_imports_the_stop_root_up_front():
@@ -774,11 +813,35 @@ def test_no_environment_value_can_change_a_valid_start(artifact, tmp_path, name)
 
 
 @pytest.mark.parametrize("name", ["malformed", "uppercase", "short", "empty", "oversized"])
-@pytest.mark.parametrize("role_argv", [["deact", ACT, A2, "stop-post"], ["hold", ACT, A2], ["backstop", ACT, A2]])
+@pytest.mark.parametrize(
+    "role_argv", [["deact", ACT, A2, "stop-post"], ["hold", ACT, A2], ["backstop", ACT, A2], ["consume"]]
+)
 def test_the_same_values_still_refuse_every_role_that_consumes_the_provenance(
     artifact, tmp_path, name, role_argv
 ):
     proc, state = _start_probe(artifact, tmp_path, HOSTILE_INVOCATION_IDS[name], role_argv)
+    assert proc.returncode == 64 and state is None
+    assert "malformed or duplicate INVOCATION_ID" in proc.stderr
+
+
+@pytest.mark.parametrize("name", ["well-formed", "none"])
+def test_consume_takes_only_a_well_formed_invocation_id_or_the_literal_absent(artifact, tmp_path, name):
+    """RT1.FI.1 / H-FI.1: ``consume`` reads INVOCATION_ID (provenance) and no other variable."""
+    env = {**HOSTILE_INVOCATION_IDS[name], "PYTHONPATH": "/evil", "LD_PRELOAD": "/evil.so"}
+    proc, state = _start_probe(artifact, tmp_path, env, ["consume"])
+    assert proc.returncode == 0, proc.stderr
+    assert state["role"] == "consume" and state["operands"] == []
+    expected = HOSTILE_INVOCATION_IDS[name].get("INVOCATION_ID", "absent")
+    assert state["provenance"] == {"invocation_id": expected, "parent_pid": os.getpid()}
+    assert state["environ"] == [] and state["fds"] == [] and state["umask"] == 0o022
+    assert state["cwd"] == "/" and state["mask"] == []
+
+
+@pytest.mark.parametrize("name", ["malformed", "uppercase", "short", "empty", "oversized"])
+def test_consume_refuses_a_malformed_or_oversized_invocation_id_before_any_state_operation(
+    artifact, tmp_path, name
+):
+    proc, state = _start_probe(artifact, tmp_path, HOSTILE_INVOCATION_IDS[name], ["consume"])
     assert proc.returncode == 64 and state is None
     assert "malformed or duplicate INVOCATION_ID" in proc.stderr
 
@@ -835,7 +898,9 @@ def test_a_genuinely_duplicated_invocation_id_cannot_affect_a_valid_start(artifa
     assert "INVOCATION_ID" not in proc.stderr.decode()
 
 
-@pytest.mark.parametrize("role_argv", [["deact", ACT, A2, "stop-post"], ["hold", ACT, A2], ["backstop", ACT, A2]])
+@pytest.mark.parametrize(
+    "role_argv", [["deact", ACT, A2, "stop-post"], ["hold", ACT, A2], ["backstop", ACT, A2], ["consume"]]
+)
 def test_a_genuinely_duplicated_invocation_id_refuses_every_provenance_role(artifact, tmp_path, role_argv):
     proc, state = _raw_start_probe(artifact, tmp_path, DUPLICATE_ENVP, role_argv)
     assert proc.returncode == 64 and state is None

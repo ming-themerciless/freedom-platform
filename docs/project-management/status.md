@@ -1,6 +1,6 @@
 # Project status
 
-## Current status — SA-2 `stop` accepted — 2026-10-16
+## Current status — RT-5 `attest` assigned after RT-1 acceptance — 2026-10-17
 
 **Baseline v1.9 is active. Implementation and unrestricted testing on the
 disposable `oracle-test` server are authorized.**
@@ -48,7 +48,23 @@ unrelated systemd job remained queued. Independent Codex re-review found no
 blocking issue; Peter accepted SA-2 for continued non-production development on
 2026-10-16
 ([handback](../review/route-3-stop-role-implementation-handback.md)). No further
-Package 5.0 slice is assigned by this acceptance.
+Package 5.0 slice was assigned by this acceptance. Peter subsequently approved
+the recommended implementation sequence and assigned RT-1 `consume` to Claude
+as the next bounded slice
+([assignment](../review/route-3-consume-role-implementation-claude-prompt.md)).
+Claude implemented it as an uncommitted candidate that runs as the capture
+unit's PID-1 `ExecStartPre=+` and exercised it fully on `oracle-test`
+([handback](../review/route-3-consume-role-implementation-handback.md)).
+Independent Codex review found two blocking failure-path defects: failure
+evidence can become unwritable without entering grant priority, and an
+unexpected CQ-5 exception can retry PK/2. One bounded
+[remediation](../review/route-3-consume-role-review-remediation-claude-prompt.md)
+was implemented and verified on `oracle-test`. Independent Codex re-review found
+no blocking issue, independently reproduced the focused **2062 passed, 2
+skipped** result and the fresh root/systemd **14 passed** result, and verified
+clean teardown. Peter accepted RT-1 for continued non-production development on
+2026-10-17. Peter then assigned RT-5 `attest` as the next bounded slice. The
+non-root executor and its OC-1/OC-2/OC-3 checks remain later work.
 Production and staging activation remain out of scope. Before any production
 activation, the transient inspection-failure risk needs an explicit decision
 and the completed series needs its final production security review.

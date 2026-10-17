@@ -33,4 +33,14 @@ is implemented and accepted for continued non-production development
 typed-result and test-only host-job assertion remediations are complete;
 independent Codex re-review found no blocking issue, and Peter accepted SA-2 for
 continued non-production development on 2026-10-16.
+Peter then assigned RT-1 `consume` to Claude under the
+[`consume` implementation prompt](route-3-consume-role-implementation-claude-prompt.md).
+Claude implemented it as an uncommitted candidate
+([handback](route-3-consume-role-implementation-handback.md)); independent Codex
+review found two blocking failure-path defects. One bounded
+[review remediation](route-3-consume-role-review-remediation-claude-prompt.md)
+was completed. Independent Codex re-review found no blocking issue, and Peter
+accepted RT-1 for continued non-production development on 2026-10-17. Peter
+then assigned RT-5 `attest` as the next bounded slice. The non-root executor and
+its OC-1/OC-2/OC-3 checks remain later work.
 The remaining production-activation gates are summarized in the active handover.

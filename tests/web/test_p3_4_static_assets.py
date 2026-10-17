@@ -902,6 +902,10 @@ PERMITTED_ROUTE_3_ADAPTER = frozenset({
     # Second Package 5.0 consumer (2026-10-15): SA-2 `stop` through DI-S.
     "application/rp11/stop.py",
     "adapters/rp11/stop.py",
+    # Third Package 5.0 consumer (2026-10-16): RT-1 `consume`, the capture unit's
+    # `ExecStartPre=+` role.
+    "application/rp11/consume.py",
+    "adapters/rp11/consume.py",
 })
 
 

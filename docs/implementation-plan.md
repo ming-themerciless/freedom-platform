@@ -2544,8 +2544,17 @@ continued non-production development on 2026-10-15. Claude then implemented
 static SA-2 `stop` through the existing narrow stop-unit boundary. After its
 refusal-diagnostic, typed-result and test-only host-job assertion remediations,
 independent Codex re-review found no blocking issue, and Peter accepted SA-2 for
-continued non-production development on 2026-10-16. No further Package 5.0
-slice is assigned by this acceptance.
+continued non-production development on 2026-10-16. That acceptance did not
+itself assign another slice. Peter subsequently approved the recommended
+continuation and assigned RT-1 `consume` as the capture unit's PID-1
+`ExecStartPre=+` role, with full `oracle-test` testing and independent Codex
+review after Claude's handback. That review found two blocking failure-path
+defects: failure evidence can become unwritable without entering grant priority,
+and an unexpected CQ-5 exception can retry PK/2. The bounded remediation closed
+both defects; independent Codex re-review found no blocking issue, and Peter
+accepted RT-1 for continued non-production development on 2026-10-17. Peter
+then assigned RT-5 `attest` as the next bounded root-role slice. The non-root
+executor and its OC-1/OC-2/OC-3 checks remain later work.
 
 All testing levels are authorized on `oracle-test`, including root/systemd,
 network, packages, PostgreSQL and destructive recovery drills. Production and

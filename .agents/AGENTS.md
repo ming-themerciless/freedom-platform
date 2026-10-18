@@ -652,11 +652,36 @@ authorization/privacy, data-authority or irreversible architecture decision.
 
 ### Handoff
 
-Write one concise handback for a meaningful implementation slice. Include only
-behavior delivered, files changed, exact tests and results, skipped checks,
-deployment/migration/recovery effects, remaining production risks and the next
-action. Do not include reading ledgers, file hashes, transcripts or recursive
-prompt histories unless specifically requested.
+Write one concise handback for a meaningful implementation slice. Evidence is
+for judging correctness, safety, regression risk and readiness for the requested
+environment; it is not a terminal transcript. Include only behavior delivered,
+files changed, tests and checks that establish the material claims, their actual
+results and skips, deployment/migration/recovery effects, remaining production
+risks and the next action. Do not include reading ledgers, file hashes,
+transcripts or recursive prompt histories unless a specific integrity question
+makes one material.
+
+Use evidence proportional to the claim. Focused tests establish local behavior;
+integration or real-host checks establish behavior that mocks cannot; production
+activation retains its separate security and operational gates. State the
+material environment and any deviation from the canonical suite procedure.
+Standard repository suites may cite the canonical command in this agreement or
+the disposable-server runbook. A checked-in verification script may be cited by
+its exact invocation. Paste an exact command only when it is bespoke or when its
+privilege, environment, ordering, reboot phases or status propagation changes
+what the result proves.
+
+Every reported result must have a reliable status: a pipeline or trailing
+command must not hide the tested process's exit. Report failures, errors, skips
+and their disposition. Call a failure pre-existing only after a meaningful
+comparison with the accepted baseline. A documentation-only correction does not
+require behavioral suites to be rerun unless it changes executable instructions,
+test tooling or the interpretation of the earlier result.
+
+An evidence omission blocks review only when it prevents assessment of a
+material correctness, safety or regression claim. Missing routine command
+transcription or another formatting defect is non-blocking when the
+implementation and relevant result can otherwise be independently assessed.
 
 Do not claim a check passed unless it was actually run. Independent review is
 required before production activation and for security, authorization, privacy,

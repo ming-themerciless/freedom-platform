@@ -63,7 +63,7 @@ from .authority import AUTHORITY_LIMIT, Authority, AuthorityError, Params, load_
 from .canonical import ABSENT, CanonicalError, canonical_bytes, parse_canonical
 from .evidence import INVALID_ACT, ActEvidence, PriorRemovals, act_evidence
 from .journal import JournalKind, ParsedJournal, attempt_run, consume_run, parse_journal
-from .paths import MAX_ATTEMPTS, ActivationPaths
+from .paths import MAX_ATTEMPTS, PASS_NAME, ActivationPaths
 from .pk import PROCEDURE, PkMode, PkOutcome, PkResult, PkSeries, unconfirmed_without_subject
 from .ports import (
     ActivationFs,
@@ -106,6 +106,7 @@ K_S0 = "s0-kept"
 class Trigger(str, Enum):
     STOP_POST = "stop-post"
     BACKSTOP = "backstop"
+    ATTEST = "attest"  # RT-5: interactive root recovery, no unit and no provenance
 
 
 class GrrOutcome(str, Enum):
@@ -148,17 +149,27 @@ class Invocation:
     activation_id: str
     a2_sha256: str
     trigger: Trigger
-    parent_pid: int
-    invocation_id: str  # 32 lowercase hex or "absent"; diagnostic only
+    # Provenance of the two unit-started triggers. ``attest`` reads no environment and
+    # records no caller, so it carries neither (``None``); the others always carry both.
+    parent_pid: int | None
+    invocation_id: str | None  # 32 lowercase hex or "absent"; diagnostic only
     # The holder's state as this role knows it: ``deactivating`` for its own
     # ExecStopPost; for ``backstop`` the BS-1 observation (inactive/failed/not-loaded).
     holder_state: str = "deactivating"
+
+    def __post_init__(self) -> None:
+        if (self.trigger is Trigger.ATTEST) != (self.parent_pid is None and self.invocation_id is None):
+            raise ValueError("provenance belongs to the unit-started triggers only")
+        if self.trigger is not Trigger.ATTEST and (
+            type(self.parent_pid) is not int or type(self.invocation_id) is not str
+        ):
+            raise ValueError("a unit-started trigger carries its provenance")
 
     @property
     def holder_invocation_id(self) -> str:
         """Only ``stop-post`` runs inside the holder's invocation; a backstop
         firing's ``INVOCATION_ID`` is its own service's, never the holder's."""
-        return self.invocation_id if self.trigger is Trigger.STOP_POST else ABSENT
+        return self.invocation_id if self.trigger is Trigger.STOP_POST and self.invocation_id else ABSENT
 
 
 @dataclass
@@ -418,25 +429,23 @@ class CleanupProcedure:
             self._enter_gp("E-a")
             return None
         lock_object = s.lock.object
-        self._append(
-            "run-start",
-            {
-                "trigger": self._inv.trigger.value,
-                "boot_id": s.boot_at_start or "00000000-0000-0000-0000-000000000000",
-                "holder_state": self._inv.holder_state,
-                "lock": {
-                    "object": identity_doc(lock_object),
-                    "mode": s.lock.mode.value,
-                    "wait_ms": s.lock.wait_ms,
-                },
-                "helper": {"role": self._inv.trigger.value, "tool_sha256": self._tool_sha256},
-                "provenance": {
-                    "parent_pid": self._inv.parent_pid,
-                    "invocation_id": self._inv.invocation_id,
-                },
+        run_start = {
+            "trigger": self._inv.trigger.value,
+            "boot_id": s.boot_at_start or "00000000-0000-0000-0000-000000000000",
+            "holder_state": self._inv.holder_state,
+            "lock": {
+                "object": identity_doc(lock_object),
+                "mode": s.lock.mode.value,
+                "wait_ms": s.lock.wait_ms,
             },
-            entry="E-a",
-        )
+            "helper": {"role": self._inv.trigger.value, "tool_sha256": self._tool_sha256},
+        }
+        if self._inv.trigger is not Trigger.ATTEST:
+            run_start["provenance"] = {
+                "parent_pid": self._inv.parent_pid,
+                "invocation_id": self._inv.invocation_id,
+            }
+        self._append("run-start", run_start, entry="E-a")
         self._append("cl-g", {"outcome": s.grr.value, "errno": s.grr_errno}, entry="E-b")
         return None
 
@@ -853,6 +862,73 @@ class CleanupProcedure:
             and bool(s.st1_checks)
             and s.lock is not None
             and not s.gp
+            and self._attest_eligible()
+        )
+
+    def _attest_eligible(self) -> bool:
+        """RT-5 success needs evidence the unit-started triggers can do without.
+
+        ``attest`` runs with no holder, no provenance and often after a reboot, so
+        absence of an activation-owned object proves nothing by itself: the valid
+        ACT journal must exist, and after a boot change the ``/run`` objects must
+        each carry the complete ``cleared-by-boot`` proof (differing boot ids,
+        observed ``tmpfs``, valid old identity, ENOENT), or a durable earlier
+        removal. ``never-linked`` / ``absent-before-removal`` never stand in for it, and
+        neither does ``never-created`` for a linked tree's directory with no identity line.
+        ``stop-post`` and ``backstop`` are unchanged."""
+        s = self._s
+        if self._inv.trigger is not Trigger.ATTEST:
+            return True
+        if not s.act.valid or any(c == "invalid-journal" for _step, c in s.failures):
+            return False
+        if s.same_boot:
+            return True
+        # Tree P is mandatory activation evidence: one exact intent, one matching link,
+        # and (below) its top identity. Absence of tree P in the journal is not
+        # "never created", whatever PK/2 and the baseline say.
+        if not self._tree_p_recorded():
+            return False
+        # A linked activation-owned directory without its old identity line is not
+        # "never created": only a durable earlier removal of that exact path covers it.
+        if any(path not in s.prior.paths for path in s.act.unidentified_directories()):
+            return False
+        weak = {"never-linked", "absent-before-removal"}
+        classes = [s.rule_class, s.pass_class, s.grant_id_class]
+        classes += [d["class"] for d in s.directories]
+        return not weak & set(classes)
+
+    def _tree_p_recorded(self) -> bool:
+        """The ACT journal holds exactly the production tree-P history for the fixed paths.
+
+        ``/run`` is the parent, the top is the fixed tree-P name, the temporary name is
+        derived from the activation id, the tag is ``p`` and the inventory is the top
+        directory (``0755``) and the pass configuration file. A second or hybrid
+        history is rejected rather than resolved by picking an entry."""
+        p, layout = self._paths, self._paths.layout
+        top = p.tree_p.rsplit("/", 1)[1]
+        act = self._s.act
+        trees = act.trees_at(layout.run, top)
+        if len(trees) != 1 or sum(t.tag == "p" for t in act.trees) != 1:
+            return False
+        authority = self._s.authority
+        if authority is None:
+            return False
+        pass_bytes = authority.pins.pass_bytes  # hashes to the pinned digest (A-2 validation)
+        return trees[0].is_exactly(
+            parent=layout.run,
+            top=top,
+            temp=f".rp11-{self._inv.activation_id}-p.tmp",
+            tag="p",
+            members=(
+                (".", "dir", 0o755),
+                (
+                    PASS_NAME,
+                    "file",
+                    0o644,
+                    authority.pins.pass_config_sha256,
+                    len(pass_bytes),
+                ),
+            ),
         )
 
     def _cl_7(self) -> CleanupOutcome:

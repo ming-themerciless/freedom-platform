@@ -1,4 +1,4 @@
-# Active handover — RT-5 `attest` assigned after RT-1 acceptance — 2026-10-17
+# Active handover — non-root executor OC interruption slice assigned — 2026-10-18
 
 **IMPLEMENTATION AND FULL DISPOSABLE-SERVER TESTING AUTHORIZED**
 
@@ -84,15 +84,17 @@ tests, compilation and diff checks passed, and separate host cleanup inspection
 was clean. Peter accepted RT-1 for continued non-production development on
 2026-10-17.
 
-Peter now assigns RT-5 `attest` as the next bounded Package 5.0 slice. Implement
-the existing interactive root role through the controlled artifact, reusing the
-accepted cleanup engine with trigger `attest` and enforcing its unit-state
-precondition before cleanup. Exercise it fully on `oracle-test`, including real
-`sudo -n`, refusal while the holder or either backstop unit is in an active
-transitional state, cleanup/recovery outcomes, interruption, exact argument and
-environment refusal, artifact integrity and clean teardown. Return one concise
-handback for independent review. Do not reopen accepted RT-1 behavior except for
-a demonstrated regression.
+Peter now assigns RT-5 `attest` as the next bounded Package 5.0 slice under the
+[`attest` implementation prompt](route-3-attest-role-implementation-claude-prompt.md).
+Implement the existing interactive root role through the controlled artifact,
+reusing the accepted cleanup engine with trigger `attest` and enforcing its
+unit-state precondition before cleanup. Exercise it fully on `oracle-test`,
+including real `sudo -n`, refusal while the holder or either backstop unit is in
+an active transitional state, same-boot cleanup, a real-reboot
+`cleared-by-boot` proof, interruption, exact argument and environment refusal,
+artifact integrity and clean teardown. Return one concise handback for
+independent review. Do not reopen accepted RT-1 behavior except for a
+demonstrated regression.
 
 The controlled vector is:
 
@@ -107,10 +109,68 @@ service or backstop timer is `activating`, `active`, `deactivating` or
 `attest`; it must never infer success from missing evidence or an unconfirmed
 authorization result.
 
-The non-root executor and its OC-1/OC-2/OC-3 checks, a production capture-unit
-installer, and production or staging activation remain outside this assignment.
-Do not turn the remaining activation safeguards into a documentation-only proof
-chain.
+Claude implemented the role as an **uncommitted candidate** and exercised it fully on
+`oracle-test`, including real `sudo -n`, a real kernel reboot and clean teardown
+([handback](route-3-attest-role-implementation-handback.md)). Independent Codex
+review found two blocking issues: RT-5 can publish `st1-verified` after required
+old-boot identity or trusted `/run` evidence is missing, and the handback's
+abbreviated commands are not independently reproducible. Peter assigns one
+bounded correction under the
+[`attest` review-remediation prompt](route-3-attest-role-review-remediation-claude-prompt.md).
+Claude completed that remediation and returned the candidate for independent Codex
+re-review (appended section of the handback). Two later reviews each found a further
+false-success path; the latest, a missing mandatory tree-P `tree-intent`/`tree-linked`,
+was remediated under the
+[third review prompt](route-3-attest-role-review-remediation-r3-claude-prompt.md) and
+returned for independent Codex re-review. Nothing here records acceptance.
+
+That re-review found one further blocking false-success path: the exact tree-P
+check discards file-member mode/digest/size, collapses duplicate directory
+declarations and ignores undeclared directory identities, allowing canonical
+changed-boot evidence with an inexact production-tree history to publish
+`st1-verified`. Peter assigns one bounded correction under the
+[`fifth attest review-remediation prompt`](route-3-attest-role-review-remediation-r5-claude-prompt.md).
+Claude completed it and returned the candidate for independent Codex re-review
+(**Fifth review remediation** in the handback). Nothing here records acceptance.
+
+Independent Codex re-review found no remaining implementation-quality blocker.
+The fifth correction preserves and compares the complete ordered tree-P member
+and identity history, derives the expected file facts from validated A-2 data,
+and remains scoped to changed-boot RT-5; the reviewer independently reproduced
+the focused **2369 passed, 2 documented environment skips** result against
+matching files on `oracle-test`.
+
+Peter's 2026-10-18 evidence-policy clarification applies the canonical
+`.agents/AGENTS.md` handoff standard: evidence must establish material
+correctness, safety and regression claims, but a handback is not a terminal
+transcript. The fifth section's summarized commands are therefore a
+non-blocking documentation variance, not grounds for another remediation or
+full-suite cycle. Reliable statuses and disclosed failures/skips remain
+required, as do exact invocations where privilege, environment, ordering,
+reboot phases or status propagation materially affect the claim.
+
+Peter accepted RT-5 for continued non-production development on 2026-10-18.
+Peter now assigns Claude the first bounded non-root executor slice under the
+[`executor OC implementation prompt`](route-3-executor-oc-implementation-claude-prompt.md).
+Implement the real OS-6 interruption path: as unprivileged `ubuntu`, read the
+fixed capture unit and the activation-derived consume journal, make the route
+available only when exact OC-1/OC-2/OC-3 evidence holds, and then invoke the
+accepted static SA-2 `stop` role at most once through its fixed `sudo -n`
+controlled-artifact vector. Every uncertain, malformed, stale-looking or
+unavailable input fails closed without privilege or mutation; CX-3 leaves the
+pass running without a grant.
+
+Exercise the slice fully on `oracle-test`, including the real unprivileged to
+`sudo -n` boundary, active success, activating/start-pre refusal, invocation
+mismatch, missing/torn/consumed-less journals, SA-2 uncertainty, absence of
+retry, unrelated-unit isolation and clean teardown. Return one concise handback
+for independent Codex review.
+
+The full coordinator, start orchestration, automatic attestation, production
+capture-unit/executor installers, production or staging activation,
+migration/cutover and RB-1 remain outside this assignment. Do not reopen the
+accepted roles absent a demonstrated regression and do not replace executable
+testing with another proof-document chain.
 
 [Active delivery plan](../project-management/active-delivery-plan.md) ·
 [Phase 5 packages](../implementation-plan.md#phase-5--existing-automation-migration) ·

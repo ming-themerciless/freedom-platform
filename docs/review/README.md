@@ -41,6 +41,25 @@ review found two blocking failure-path defects. One bounded
 [review remediation](route-3-consume-role-review-remediation-claude-prompt.md)
 was completed. Independent Codex re-review found no blocking issue, and Peter
 accepted RT-1 for continued non-production development on 2026-10-17. Peter
-then assigned RT-5 `attest` as the next bounded slice. The non-root executor and
-its OC-1/OC-2/OC-3 checks remain later work.
+then assigned RT-5 `attest` as the next bounded slice under the
+[`attest` implementation prompt](route-3-attest-role-implementation-claude-prompt.md).
+Claude implemented it as an uncommitted candidate
+([handback](route-3-attest-role-implementation-handback.md)). Independent Codex
+review found a blocking false-success path with missing boot evidence and
+non-reproducible abbreviated commands. One bounded
+[review remediation](route-3-attest-role-review-remediation-claude-prompt.md) was
+completed and returned for independent Codex re-review; the second and third
+remediations (missing directory identity; missing mandatory tree-P evidence, see
+[third review prompt](route-3-attest-role-review-remediation-r3-claude-prompt.md)) were
+likewise returned for re-review. A fifth correction made the exact tree-P
+comparison lossless; independent Codex re-review found no remaining
+implementation-quality blocker and independently reproduced the focused 271-test
+pass, then the complete focused role set at **2369 passed, 2 documented
+environment skips**. The 2026-10-18 governing evidence clarification treats summarized routine
+commands as non-blocking when material claims remain assessable. Peter accepted
+RT-5 for continued non-production development on 2026-10-18. The non-root
+executor and its OC-1/OC-2/OC-3 checks were outside that accepted slice. Peter
+then assigned Claude the first real executor interruption path under the
+[`executor OC implementation prompt`](route-3-executor-oc-implementation-claude-prompt.md).
+The full coordinator and production installers/activation remain later work.
 The remaining production-activation gates are summarized in the active handover.

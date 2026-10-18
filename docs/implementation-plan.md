@@ -2430,10 +2430,21 @@ architecture or production activation.
 Write one concise handback per implementation slice containing:
 
 - behavior delivered and files changed;
-- exact tests/checks run and results, including skips;
+- tests/checks that establish the material implementation claims and their
+  actual results, including failures, errors and skips;
 - deployment, migration or recovery effects;
 - remaining production risks; and
 - the next implementation action.
+
+Apply the implementation-evidence standard in `.agents/AGENTS.md`: evidence
+must let the reviewer judge correctness, safety, regression risk and readiness,
+not recreate a terminal session. Standard suites may cite their canonical
+command; exact commands are needed only when a bespoke invocation or its
+privilege, environment, ordering, reboot phases or status propagation is
+material to the claim. Reliable exit status and honest failure disposition
+remain mandatory. An omission is blocking only when it prevents assessment of
+a material claim; routine command transcription and formatting are not review
+gates by themselves.
 
 Do not add byte/hash ledgers, transcript-style reading logs, prompt activation
 records or recursive remediation packages unless Peter explicitly requests
@@ -2553,8 +2564,30 @@ defects: failure evidence can become unwritable without entering grant priority,
 and an unexpected CQ-5 exception can retry PK/2. The bounded remediation closed
 both defects; independent Codex re-review found no blocking issue, and Peter
 accepted RT-1 for continued non-production development on 2026-10-17. Peter
-then assigned RT-5 `attest` as the next bounded root-role slice. The non-root
-executor and its OC-1/OC-2/OC-3 checks remain later work.
+then assigned RT-5 `attest` as the next bounded root-role slice under the
+[`attest` implementation prompt](review/route-3-attest-role-implementation-claude-prompt.md).
+Claude implemented it as an **uncommitted candidate**
+([handback](review/route-3-attest-role-implementation-handback.md)). Independent
+Codex review found a blocking false-success path with missing boot evidence and
+non-reproducible abbreviated commands. Peter assigned one bounded
+[review remediation](review/route-3-attest-role-review-remediation-claude-prompt.md),
+which Claude completed and returned for independent Codex re-review.
+Later reviews found further changed-boot false-success paths involving missing
+directory identity, missing mandatory tree-P history and a lossy tree-P
+projection. Claude completed the fifth bounded correction. Independent Codex
+re-review found no remaining implementation-quality blocker and independently
+reproduced the focused **2369 passed, 2 documented environment skips** result.
+Under the 2026-10-18
+implementation-evidence clarification, summarized routine commands are a
+non-blocking documentation variance when the material claims and results can
+otherwise be assessed; reliable status and failure disclosure remain required.
+Peter accepted RT-5 for continued non-production development on 2026-10-18.
+Peter then assigned the first non-root executor interruption slice under the
+[`executor OC implementation prompt`](review/route-3-executor-oc-implementation-claude-prompt.md):
+unprivileged reads of the fixed capture unit and activation-derived consume
+journal, exact fail-closed OC-1/OC-2/OC-3 evaluation, and at most one invocation
+of the accepted SA-2 `stop` role. The full coordinator, start orchestration,
+automatic attestation and production installers/activation remain later work.
 
 All testing levels are authorized on `oracle-test`, including root/systemd,
 network, packages, PostgreSQL and destructive recovery drills. Production and

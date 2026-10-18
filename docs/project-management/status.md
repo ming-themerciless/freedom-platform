@@ -1,6 +1,6 @@
 # Project status
 
-## Current status — RT-5 `attest` assigned after RT-1 acceptance — 2026-10-17
+## Current status — non-root executor OC interruption slice assigned — 2026-10-18
 
 **Baseline v1.9 is active. Implementation and unrestricted testing on the
 disposable `oracle-test` server are authorized.**
@@ -64,7 +64,35 @@ no blocking issue, independently reproduced the focused **2062 passed, 2
 skipped** result and the fresh root/systemd **14 passed** result, and verified
 clean teardown. Peter accepted RT-1 for continued non-production development on
 2026-10-17. Peter then assigned RT-5 `attest` as the next bounded slice. The
-non-root executor and its OC-1/OC-2/OC-3 checks remain later work.
+assignment is defined by the
+[`attest` implementation prompt](../review/route-3-attest-role-implementation-claude-prompt.md).
+Claude implemented it as an **uncommitted candidate** and exercised it on
+`oracle-test`, including a real reboot
+([handback](../review/route-3-attest-role-implementation-handback.md)). Independent
+Codex review found a blocking false-success path when old-boot identity or
+trusted `/run` evidence is missing, plus non-reproducible abbreviated commands
+in the handback. Peter assigned one bounded
+[review remediation](../review/route-3-attest-role-review-remediation-claude-prompt.md),
+which Claude completed and returned for independent Codex re-review. Two further
+reviews found and Claude remediated, in turn, a missing directory identity and a missing
+mandatory tree-P `tree-intent`/`tree-linked`; the third remediation was returned for
+independent Codex re-review ([third review prompt](../review/route-3-attest-role-review-remediation-r3-claude-prompt.md)).
+A fifth bounded correction then made the changed-boot tree-P comparison lossless
+for member fields, declaration cardinality and identity history. Independent
+Codex re-review found no remaining implementation-quality blocker and
+independently reproduced the focused **2369 passed, 2 documented environment
+skips** result against matching files on `oracle-test`. Under Peter's 2026-10-18 evidence-policy clarification,
+the fifth handback's summarized routine commands are a non-blocking
+documentation variance rather than another remediation trigger. Peter accepted
+RT-5 for continued non-production development on 2026-10-18. The non-root
+executor and its fail-closed OC-1/OC-2/OC-3 checks were outside that accepted
+slice. Peter subsequently assigned Claude the first real executor interruption
+path under the
+[`executor OC implementation prompt`](../review/route-3-executor-oc-implementation-claude-prompt.md):
+unprivileged fixed-unit and consume-journal reads, exact OC-1/OC-2/OC-3
+evaluation, and at most one fixed `sudo -n` call to the accepted SA-2 `stop`
+role. The full coordinator, start orchestration, automatic attestation and
+production installers/activation remain out of scope.
 Production and staging activation remain out of scope. Before any production
 activation, the transient inspection-failure risk needs an explicit decision
 and the completed series needs its final production security review.

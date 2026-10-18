@@ -1,6 +1,6 @@
 # Active delivery plan — implementation-first reset
 
-Status: approved and active; RT-5 `attest` assigned after RT-1 acceptance 2026-10-17
+Status: approved and active; non-root executor OC interruption slice assigned 2026-10-18
 Owner and acceptance authority: Peter Duscha
 Baseline: v1.9
 
@@ -24,6 +24,10 @@ are not prerequisites that must be made formally complete.
   impractical.
 - Do not create proof chains, byte-identity ledgers, prompt-review cycles or
   per-question closure packages unless Peter explicitly asks for them.
+- Judge implementation evidence by whether it establishes material correctness,
+  safety and regression claims. Routine command transcription is not a gate;
+  reliable statuses, disclosed failures/skips and exact invocations when their
+  special environment or sequencing affects the claim remain required.
 
 ## Current implementation slice
 
@@ -69,8 +73,11 @@ under one bounded
 [remediation](../review/route-3-consume-role-review-remediation-claude-prompt.md).
 Independent Codex re-review found no blocking issue, and Peter accepted RT-1
 for continued non-production development on 2026-10-17. Peter then assigned
-RT-5 `attest` as the next bounded slice. The non-root executor and its
-OC-1/OC-2/OC-3 checks remain later work.
+RT-5 `attest` as the next bounded slice. After implementation and five bounded
+false-success corrections, independent Codex re-review found no remaining
+implementation-quality blocker. Peter accepted RT-5 for continued
+non-production development on 2026-10-18. The non-root executor and its
+OC-1/OC-2/OC-3 checks remain later work and are not yet assigned.
 
 Implementation defaults may be refined by tests. Initially:
 
@@ -115,8 +122,33 @@ Implementation defaults may be refined by tests. Initially:
    ([handback](../review/route-3-consume-role-implementation-handback.md)).
 9. Implement RT-5 `attest` as the controlled interactive root role, reusing the
    accepted cleanup engine with trigger `attest` and enforcing its unit-state
-   precondition before cleanup. **Assigned by Peter on 2026-10-17.** The
-   non-root executor and OC-1/OC-2/OC-3 remain outside this slice.
+   precondition before cleanup. **Assigned by Peter on 2026-10-17 under the
+   [implementation prompt](../review/route-3-attest-role-implementation-claude-prompt.md).**
+   Claude implemented it as an uncommitted candidate
+   ([handback](../review/route-3-attest-role-implementation-handback.md));
+   independent Codex review found a false `st1-verified` path when required
+   boot evidence is missing and non-reproducible command evidence in the
+   handback. One bounded
+   [review remediation](../review/route-3-attest-role-review-remediation-claude-prompt.md)
+   was completed and returned for independent Codex re-review; a third
+   [remediation](../review/route-3-attest-role-review-remediation-r3-claude-prompt.md)
+   (mandatory tree-P evidence) was likewise returned for re-review, as was a fifth
+   (lossless exact tree-P member and identity history). Independent Codex
+   re-review found no remaining implementation-quality blocker: the final code
+   keeps and compares the complete ordered tree-P history, and the reviewer
+   independently reproduced the focused **2369 passed, 2 documented environment
+   skips** result. The fifth handback's
+   summarized rather than literal routine commands are non-blocking under the
+   governing evidence standard. Peter accepted RT-5 for continued
+   non-production development on 2026-10-18. The non-root executor and
+   OC-1/OC-2/OC-3 remain outside this accepted slice.
+10. Implement the first real non-root executor slice: read the fixed capture
+    unit and activation-derived consume journal as `ubuntu`, establish exact
+    OC-1/OC-2/OC-3 fail-closed, and invoke the accepted SA-2 `stop` role at most
+    once through its fixed `sudo -n` vector. **Assigned by Peter on 2026-10-18
+    under the [executor OC implementation prompt](../review/route-3-executor-oc-implementation-claude-prompt.md).**
+    The full coordinator, start orchestration, automatic attestation and
+    production installers/activation remain later work.
 
 ## Acceptance criteria
 
@@ -132,8 +164,9 @@ Implementation defaults may be refined by tests. Initially:
 - no new bot, web or Foundry failure/error is introduced relative to the
   established baseline, and skips are explained;
 - no production/staging service or real player data is touched; and
-- the handback contains only the implemented behavior, files changed, exact
-  test commands/results, remaining production risks and the next action.
+- the handback contains only the implemented behavior, files changed, material
+  test/check results and skips, remaining production risks and the next action,
+  with exact commands only where invocation details affect what is proved.
 
 ## Finish line
 
@@ -142,8 +175,9 @@ their real behavior on `oracle-test`, no production activation, Peter's
 2026-10-14 acceptance based on the running system, and completed independent
 re-review of the subsequent security remediation. The selected `tmpfiles.d`
 ordering is installed, proved across a real reboot and accepted for continued
-development. RT-1 `consume` is accepted, and the current sequence now continues
-with RT-5 `attest`. Before production activation, decide the transient
-inspection-failure risk and complete the final production security review.
+development. RT-1 `consume` and RT-5 `attest` are accepted. The current slice is
+the assigned non-root executor OC interruption path. Before production
+activation, decide the transient inspection-failure risk and complete the final
+production security review.
 Additional source-proof work is not an allowed substitute for implementation
 and executable tests.

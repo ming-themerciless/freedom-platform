@@ -253,10 +253,18 @@ def _igr_consistent(fields: Mapping[str, object]) -> bool:
     return fields["identity"] != ABSENT or fields["outcome"] == "absent"
 
 
+def _attempt_run_start_consistent(fields: Mapping[str, object]) -> bool:
+    """``attest`` is the trigger and the helper role together or not at all."""
+    helper = fields.get("helper")
+    role = helper.get("role") if type(helper) is dict else None
+    return (fields.get("trigger") == "attest") == (role == "attest")
+
+
 # Relations between the fields of one line, checked after each field's grammar.
 _CROSS: dict[tuple[JournalKind, str], Callable[[Mapping[str, object]], bool]] = {
     (JournalKind.ACT, "run-start"): _act_run_start_consistent,
     (JournalKind.ACT, "igr"): _igr_consistent,
+    (JournalKind.ATTEMPT, "run-start"): _attempt_run_start_consistent,
 }
 
 OPS: dict[JournalKind, dict[str, dict[str, Validator]]] = {
@@ -402,8 +410,19 @@ class JournalSchemaError(ValueError):
     pass
 
 
-def check_fields(kind: JournalKind, op: str, fields: Mapping[str, object]) -> None:
+def _schema_for(kind: JournalKind, op: str, fields: Mapping[str, object]) -> dict[str, Validator] | None:
+    """The closed field set of one line. An ``attest`` attempt (RT-5) is started by an
+    interactive root role that reads no environment, so its ``run-start`` carries no
+    ``provenance`` object at all; the shapes of the two unit-started triggers are unchanged
+    and a hybrid of either is outside both grammars."""
     schema = OPS[kind].get(op)
+    if schema is not None and (kind, op) == (JournalKind.ATTEMPT, "run-start") and fields.get("trigger") == "attest":
+        return {name: valid for name, valid in schema.items() if name != "provenance"}
+    return schema
+
+
+def check_fields(kind: JournalKind, op: str, fields: Mapping[str, object]) -> None:
+    schema = _schema_for(kind, op, fields)
     if schema is None:
         raise JournalSchemaError(f"unknown op {op!r} for a {kind.value} journal")
     if set(fields) != set(schema):

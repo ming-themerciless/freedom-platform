@@ -906,6 +906,10 @@ PERMITTED_ROUTE_3_ADAPTER = frozenset({
     # `ExecStartPre=+` role.
     "application/rp11/consume.py",
     "adapters/rp11/consume.py",
+    # Fourth Package 5.0 consumer (2026-10-17): RT-5 `attest`, the interactive root
+    # recovery role that runs the shared cleanup behind its unit-state precondition.
+    "application/rp11/attest.py",
+    "adapters/rp11/attest.py",
 })
 
 

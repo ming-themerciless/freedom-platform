@@ -6,12 +6,14 @@
     /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py start <id> <a2> <lease-s> <stop-timeout-s>
     /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py stop
     /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py consume
+    sudo -n /usr/bin/python3.14 -I -S <artifact>/rp11_h1.py deact <id> <a2> attest
 
-These are the only six argument vectors (RT-2, RT-3, RT-4, SA-1, SA-2 and RT-1); the
-systemd adapter builds the three PID-1 vectors of the holder and backstop, the SA-1
+These are the only seven argument vectors (RT-2, RT-3, RT-4, SA-1, SA-2, RT-1 and RT-5);
+the systemd adapter builds the three PID-1 vectors of the holder and backstop, the SA-1
 role consumes DI-2 to create the holder, the SA-2 role, which takes no operand,
-consumes DI-S, and the RT-1 role, which takes no operand either, is the capture
-unit's ``ExecStartPre=+`` step. ``-I`` keeps the script directory and the
+consumes DI-S, the RT-1 role, which takes no operand either, is the capture
+unit's ``ExecStartPre=+`` step, and RT-5 ``attest`` is the interactive root recovery
+role an operator starts through ``sudo -n`` (no unit, no PID-1 timeout). ``-I`` keeps the script directory and the
 environment out of ``sys.path``, and ``-S`` skips site initialization, so the
 artifact names its one import directory, ``lib/`` beside this file, itself. That
 directory holds the Route 3 adapter and its hash-verified D-Bus client
@@ -41,8 +43,8 @@ is untrusted: the only fact taken from it, by the unit-started roles (``hold``,
 ``deact``, ``backstop`` and ``consume``), is systemd's
 ``INVOCATION_ID`` (as provenance, diagnostic only), read from the process's own initial environment,
 which must hold it at most once and as 32 lowercase hex digits (else 64); the
-environment is then emptied. The ``start`` and ``stop`` roles read no environment variable at
-all (H-FI.1). Nothing else here starts a process.
+environment is then emptied. The ``start``, ``stop`` and ``attest`` roles read no environment
+variable at all (H-FI.1) and record no provenance. Nothing else here starts a process.
 
 Exit status: 64 malformed arguments or environment selection, 70 import
 failure, 71 a closed standard descriptor or a descriptor ≥ 3 not proved closed, 77 unsafe artifact ownership, mode or
@@ -142,11 +144,19 @@ def close_descriptors_from_3():
         return False
 
 
+def reads_environment_for(argv: list[str]) -> bool:
+    """Whether the role named by ``argv`` takes ``INVOCATION_ID`` from the environment.
+
+    Decided from ``argv`` alone, before anything is read: ``start``, ``stop`` and
+    ``deact <id> <a2> attest`` take no environment fact (H-FI.1, SA1.FI.1, RT5.FI.1)."""
+    return not (argv[:1] in (["start"], ["stop"]) or (argv[:1] == ["deact"] and argv[3:4] == ["attest"]))
+
+
 def first_image_controls(reads_environment=True):
     """RH-1 … RH-3. Returns the provenance dict, or an exit status to refuse with.
 
-    ``reads_environment`` is ``False`` for the static ``start`` and ``stop`` roles
-    (H-FI.1, SA1.FI.1): they read no environment variable, so no value can select, refuse or
+    ``reads_environment`` is ``False`` for the static ``start`` and ``stop`` roles and
+    the interactive ``attest`` role (H-FI.1, SA1.FI.1, RT5.FI.1): they read no environment variable, so no value can select, refuse or
     otherwise affect it. The environment is still emptied.
     """
     for fd in (0, 1, 2):
@@ -263,8 +273,8 @@ def parse_role_argv(argv: list[str]) -> tuple[str, str, str, tuple[int, ...]] | 
     extra = ()
     if len(argv) == 3 and argv[0] in ("hold", "backstop"):
         role = argv[0]
-    elif len(argv) == 4 and argv[0] == "deact" and argv[3] == "stop-post":
-        role = "stop-post"
+    elif len(argv) == 4 and argv[0] == "deact" and argv[3] in ("stop-post", "attest"):
+        role = argv[3]
     elif argv == ["stop"]:
         return "stop", "", "", ()
     elif argv == ["consume"]:
@@ -315,6 +325,7 @@ def main(argv: list[str], provenance=None) -> int:
         import adapters.rp11.start  # noqa: F401
         import adapters.rp11.stop  # noqa: F401
         import adapters.rp11.consume  # noqa: F401
+        import adapters.rp11.attest  # noqa: F401
         import jeepney
         import rp11_roles
     except ImportError as exc:
@@ -336,9 +347,9 @@ def main(argv: list[str], provenance=None) -> int:
 
 
 if __name__ == "__main__":
-    # The role is chosen by argv alone, before anything is imported: ``start`` is
-    # the roles that must not read the environment are ``start`` and ``stop``.
-    _controls = first_image_controls(reads_environment=sys.argv[1:2] not in (["start"], ["stop"]))
+    # The role is chosen by argv alone, before anything is imported: the roles that
+    # must not read the environment are ``start``, ``stop`` and ``deact … attest``.
+    _controls = first_image_controls(reads_environment=reads_environment_for(sys.argv[1:]))
     if isinstance(_controls, int):
         sys.exit(_controls)
     sys.exit(main(sys.argv[1:], _controls))

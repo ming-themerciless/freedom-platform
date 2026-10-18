@@ -456,13 +456,21 @@ def procedure(
     record_io: FileIO | None = None,
     clock=None,
     a2: str | None = None,
+    trigger: Trigger = Trigger.STOP_POST,
+    holder_state: str = "deactivating",
 ) -> tuple[CleanupProcedure, Events]:
     events = events if events is not None else Events()
     paths = ActivationPaths(layout, ACT_ID)
     fs = RecordingFs(layout.owner, events, crash)
     clock = clock or FakeClock()
     proc = CleanupProcedure(
-        Invocation(ACT_ID, a2 or fx.a2_sha256, Trigger.STOP_POST, 4242, "0123456789abcdef0123456789abcdef"),
+        Invocation(
+            ACT_ID,
+            a2 or fx.a2_sha256,
+            trigger,
+            *((None, None) if trigger is Trigger.ATTEST else (4242, "0123456789abcdef0123456789abcdef")),
+            holder_state=holder_state,
+        ),
         paths,
         fs=fs,
         journals=fs,

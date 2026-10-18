@@ -466,9 +466,10 @@ def test_a_tree_problem_is_reported_by_main_as_77(artifact, monkeypatch):
         (["start", ACT, A2, "900", "60"], ("start", ACT, A2, (900, 60))),
         (["stop"], ("stop", "", "", ())),
         (["consume"], ("consume", "", "", ())),
+        (["deact", ACT, A2, "attest"], ("attest", ACT, A2, ())),
     ],
 )
-def test_entry_accepts_exactly_the_six_role_vectors(argv, expected):
+def test_entry_accepts_exactly_the_seven_role_vectors(argv, expected):
     assert entry.parse_role_argv(argv) == expected
 
 
@@ -480,7 +481,31 @@ def test_entry_accepts_exactly_the_six_role_vectors(argv, expected):
         ["hold", ACT],
         ["hold", ACT, A2, "extra"],
         ["deact", ACT, A2],
-        ["deact", ACT, A2, "attest"],
+        ["deact", ACT, A2, "attest", "extra"],
+        ["deact", ACT, A2, "Attest"],
+        ["deact", ACT, A2, "ATTEST"],
+        ["deact", ACT, A2, "attest "],
+        ["deact", ACT, A2, " attest"],
+        ["deact", ACT, A2, "attest\n"],
+        ["deact", ACT, A2, "attest\x00"],
+        ["deact", ACT, A2, "--attest"],
+        ["deact", ACT, A2, "attested"],
+        ["deact", ACT, A2, ""],
+        ["deact", ACT, A2.upper(), "attest"],
+        ["deact", ACT, A2[:-1], "attest"],
+        ["deact", ACT + " ", A2, "attest"],
+        ["deact", ACT.upper(), A2, "attest"],
+        ["deact", "rp11-capture-pass-a.service", A2, "attest"],
+        ["deact", ACT + "-backstop.timer", A2, "attest"],
+        ["deact", "../" + ACT, A2, "attest"],
+        ["deact", ACT + ";x", A2, "attest"],
+        ["deact", ACT, A2, "attest", "-c", "import os"],
+        ["deact", "attest", ACT, A2],
+        ["attest", ACT, A2],
+        ["attest"],
+        ["backstop", ACT, A2, "attest"],
+        ["hold", ACT, A2, "attest"],
+        ["deact", ACT, "attest"],
         ["backstop", ACT, A2, "stop-post"],
         ["consume", ACT, A2],
         ["consume", ACT],
@@ -568,9 +593,34 @@ def test_hold_runs_its_composition_root_with_the_provenance(monkeypatch):
     assert seen == {"activation_id": ACT, "a2": A2, "invocation_id": "a" * 32, "parent_pid": 1}
 
 
+def test_attest_runs_its_composition_root_with_only_the_two_validated_operands(monkeypatch):
+    import adapters.rp11.attest as attest
+
+    seen = {}
+
+    def fake(activation_id, a2, **kw):
+        seen.update(kw, activation_id=activation_id, a2=a2)
+        return 34
+
+    monkeypatch.setattr(attest, "run_attest", fake)
+    roles = _load("rp11_roles_attest", HERE / "rp11_roles.py")
+    # The provenance the first image would hand every other role is never forwarded.
+    assert roles.run("attest", ACT, A2, invocation_id="d" * 32, parent_pid=1) == 34
+    assert seen == {"activation_id": ACT, "a2": A2}
+    assert roles.run("attest", ACT, A2, 5) == 69  # an operand is never forwarded
+
+
+def test_the_entry_imports_the_attest_root_up_front():
+    source = (HERE / "rp11_h1.py").read_text()
+    assert source.count("import adapters.rp11.attest  # noqa: F401") == 1
+    assert {"application/rp11/attest.py", "adapters/rp11/attest.py"} <= set(build.SOURCES)
+    assert len(build.SOURCES) == len(set(build.SOURCES))
+
+
 def test_an_unknown_role_still_refuses():
     roles = _load("rp11_roles_prod4", HERE / "rp11_roles.py")
-    assert roles.run("attest", ACT, A2) == 69
+    assert roles.run("not-a-role", ACT, A2) == 69
+    assert roles.run("deact", ACT, A2) == 69
 
 
 def test_start_runs_its_composition_root_with_only_validated_operands(monkeypatch):
@@ -908,6 +958,38 @@ def test_a_genuinely_duplicated_invocation_id_refuses_every_provenance_role(arti
 
 
 STOP_ARGV = ["stop"]
+ATTEST_ARGV = ["deact", ACT, A2, "attest"]
+
+
+@pytest.mark.parametrize("name", sorted(HOSTILE_INVOCATION_IDS))
+def test_no_environment_value_can_change_a_valid_attest(artifact, tmp_path, name):
+    """RT5.FI.1 / H-FI.1: ``attest`` reads no environment variable and records no provenance."""
+    env = {**HOSTILE_INVOCATION_IDS[name], "PYTHONPATH": "/evil", "LD_PRELOAD": "/evil.so", "SUDO_USER": "x"}
+    proc, state = _start_probe(artifact, tmp_path, env, ATTEST_ARGV)
+    assert proc.returncode == 0, proc.stderr
+    assert state["role"] == "attest" and state["operands"] == []
+    assert state["environ"] == [] and state["fds"] == [] and state["umask"] == 0o022
+    assert state["cwd"] == "/" and state["mask"] == []
+    assert "INVOCATION_ID" not in proc.stderr and "malformed" not in proc.stderr
+
+
+def test_a_genuinely_duplicated_invocation_id_cannot_affect_a_valid_attest(artifact, tmp_path):
+    control, control_state = _raw_start_probe(artifact, tmp_path, [], ATTEST_ARGV)
+    (tmp_path / "probe.json").unlink()
+    proc, state = _raw_start_probe(artifact, tmp_path, DUPLICATE_ENVP, ATTEST_ARGV)
+    assert control.returncode == 0 and proc.returncode == 0, proc.stderr
+    assert state == control_state
+    assert proc.stderr.decode().replace(str(tmp_path), "") == control.stderr.decode().replace(str(tmp_path), "")
+    assert state["role"] == "attest" and state["environ"] == [] and state["fds"] == []
+    assert "INVOCATION_ID" not in proc.stderr.decode()
+
+
+def test_attest_refuses_a_bad_vector_whatever_the_environment_before_any_role(artifact, tmp_path):
+    for env in ({}, HOSTILE_INVOCATION_IDS["malformed"]):
+        for tail in (["deact", ACT, A2, "attest", "x"], ["deact", ACT, A2, "ATTEST"]):
+            proc, state = _start_probe(artifact, tmp_path, env, tail)
+            assert proc.returncode == 64 and state is None, tail
+            assert "not an accepted role vector" in proc.stderr or "INVOCATION_ID" in proc.stderr
 
 
 @pytest.mark.parametrize("name", sorted(HOSTILE_INVOCATION_IDS))
@@ -988,10 +1070,14 @@ def test_a_valid_start_never_calls_the_environment_reading_helper(monkeypatch):
     assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
 
 
-def test_only_the_start_and_stop_vectors_select_the_environment_free_path():
+def test_only_the_start_stop_and_attest_vectors_select_the_environment_free_path():
     source = (HERE / "rp11_h1.py").read_text()
-    assert 'first_image_controls(reads_environment=sys.argv[1:2] not in (["start"], ["stop"]))' in source
+    assert "first_image_controls(reads_environment=reads_environment_for(sys.argv[1:]))" in source
     assert entry.first_image_controls.__defaults__ == (True,)
+    free = [["start", ACT, A2, "900", "60"], ["stop"], ["deact", ACT, A2, "attest"]]
+    taking = [["consume"], ["hold", ACT, A2], ["backstop", ACT, A2], ["deact", ACT, A2, "stop-post"], []]
+    assert [entry.reads_environment_for(argv) for argv in free] == [False] * 3
+    assert [entry.reads_environment_for(argv) for argv in taking] == [True] * 5
 
 
 def test_a_closed_standard_descriptor_is_refused(artifact, tmp_path):
@@ -1104,7 +1190,13 @@ def test_a_refused_close_runs_no_role(artifact, tmp_path):
 def test_the_role_vector_is_validated_before_the_role(artifact, tmp_path):
     out = tmp_path / "probe.json"
     (artifact / "lib/rp11_roles.py").write_text(PROBE % str(out))
-    for tail in (["deact", ACT, A2, "attest"], ["deact", ACT, A2], ["deact", ACT, A2.upper(), "stop-post"]):
+    for tail in (
+        ["deact", ACT, A2, "attest", "x"],
+        ["deact", ACT, A2, "Attest"],
+        ["deact", ACT, A2.upper(), "attest"],
+        ["deact", ACT, A2],
+        ["deact", ACT, A2.upper(), "stop-post"],
+    ):
         proc = subprocess.run(
             [sys.executable, "-I", "-S", str(artifact / "rp11_h1.py"), *tail],
             capture_output=True, text=True, env={}, cwd="/",

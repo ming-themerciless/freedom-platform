@@ -23,10 +23,46 @@ class TreeEvidence:
     tag: str
     linked: bool
     directories: tuple[Identity, ...]  # top first, then members in pre-order
+    declared: tuple[str, ...] = ()  # every directory path the intent's member inventory names
+    members: tuple[tuple, ...] = ()  # the intent's complete ordered inventory: (rel, kind, mode[, sha256, size])
+    identity_rels: tuple[str, ...] = ()  # every ``dir-identity`` rel in journal order, declared or not
+    declared_modes: tuple[int, ...] = ()  # the directories' declared modes, in ``declared`` order
+    links: int = 0  # ``tree-linked`` lines that followed this intent, matching or not
+    ordered: bool = True  # false: a ``dir-identity`` came after a link, or a link named another path
 
     @property
     def top_path(self) -> str:
         return _join(self.parent, self.top)
+
+    def unidentified(self) -> tuple[str, ...]:
+        """Declared directories whose ``dir-identity`` line the journal never made durable."""
+        identified = {identity.path for identity in self.directories}
+        return tuple(path for path in self.declared if path not in identified)
+
+    def is_exactly(
+        self,
+        *,
+        parent: str,
+        top: str,
+        temp: str,
+        tag: str,
+        members: tuple[tuple, ...],
+    ) -> bool:
+        """The intent names exactly this tree and was followed by exactly one matching link.
+
+        ``members`` is the complete ordered production inventory, each ``(rel, kind, mode)``
+        with ``(sha256, size)`` appended for a file. Nothing is projected: duplicates, extra
+        or reordered members and every differing field fail. The identity lines may only be
+        missing (judged by ``unidentified``), never duplicated, undeclared or out of order."""
+        directories = iter(m[0] for m in members if m[1] == "dir")
+        return (
+            (self.parent, self.top, self.temp, self.tag) == (parent, top, temp, tag)
+            and self.linked
+            and self.links == 1
+            and self.ordered
+            and self.members == members
+            and all(rel in directories for rel in self.identity_rels)  # an in-order subsequence
+        )
 
 
 @dataclass(frozen=True)
@@ -66,6 +102,20 @@ class ActEvidence:
                 if identity.path == path:
                     return identity
         return None
+
+    def unidentified_directories(self) -> tuple[str, ...]:
+        """Directories of every *linked* tree whose old identity the journal lacks.
+
+        A linked tree is activation-owned; a member without an identity line cannot be
+        proved cleared by a boot, and its absence is not "never created". An unlinked
+        tree never became an activation object and contributes nothing."""
+        if not self.valid:
+            return ()
+        return tuple(path for tree in self.trees if tree.linked for path in tree.unidentified())
+
+    def trees_at(self, parent: str, top: str) -> tuple[TreeEvidence, ...]:
+        """Every tree whose intent names this parent and top, in journal order."""
+        return tuple(t for t in self.trees if (t.parent, t.top) == (parent, top)) if self.valid else ()
 
     def temp_names(self) -> tuple[tuple[str, str], ...]:
         """``(parent, temporary name)`` of every tree: S0 if found (never removed)."""
@@ -119,10 +169,13 @@ def act_evidence(parsed: ParsedJournal | None) -> ActEvidence:
             if current is not None:
                 trees.append(_tree(current))
             modes = {m["rel"]: m["mode"] for m in f["members"] if m["kind"] == "dir"}
-            current = {"intent": dict(f), "modes": modes, "dirs": [], "linked": False}
+            current = {"intent": dict(f), "modes": modes, "dirs": [], "rels": [], "linked": False, "links": 0, "ordered": True}
         elif line.op == "dir-identity" and current is not None:
             rel = f["rel"]
+            current["rels"].append(rel)
             mode = current["modes"].get(rel)
+            if current["links"]:
+                current["ordered"] = False
             if mode is not None:
                 top = _join(current["intent"]["parent"], current["intent"]["top"])
                 path = top if rel == "." else _join(top, rel)
@@ -131,8 +184,11 @@ def act_evidence(parsed: ParsedJournal | None) -> ActEvidence:
                 )
         elif line.op == "tree-linked" and current is not None:
             intent = current["intent"]
+            current["links"] += 1
             if (f["parent"], f["top"]) == (intent["parent"], intent["top"]):
                 current["linked"] = True
+            else:
+                current["ordered"] = False
         elif line.op == "igr":
             # Only a removal of the very grant this journal identified counts.
             igr_removed = igr_removed or (
@@ -181,6 +237,7 @@ def _is_journaled_grant(identity: object, files: dict[str, Identity], grants: se
 
 def _tree(state: dict) -> TreeEvidence:
     intent = state["intent"]
+    top = _join(intent["parent"], intent["top"])
     return TreeEvidence(
         parent=intent["parent"],
         top=intent["top"],
@@ -188,6 +245,17 @@ def _tree(state: dict) -> TreeEvidence:
         tag=intent["tag"],
         linked=state["linked"],
         directories=tuple(state["dirs"]),
+        declared=tuple(top if rel == "." else _join(top, rel) for rel in state["modes"]),
+        members=tuple(
+            (m["rel"], m["kind"], m["mode"], m["sha256"], m["size"])
+            if m["kind"] == "file"
+            else (m["rel"], m["kind"], m["mode"])
+            for m in intent["members"]
+        ),
+        identity_rels=tuple(state["rels"]),
+        declared_modes=tuple(state["modes"].values()),
+        links=state["links"],
+        ordered=state["ordered"],
     )
 
 

@@ -1,5 +1,30 @@
 # Decision register
 
+## Decision — RT-5 accepted; non-root OC interruption slice assigned — 2026-10-18
+
+Peter Duscha accepts the fifth-remediated RT-5 `attest` role for continued
+non-production development. Independent Codex re-review found no remaining
+implementation-quality blocker under the governing evidence standard and
+independently reproduced the focused **2369 passed, 2 documented environment
+skips** result on the matching `oracle-test` candidate.
+
+Peter assigns Claude the next bounded slice: the real non-root OS-6 interruption
+path. It reads the fixed capture unit and activation-derived consume journal as
+`ubuntu`, makes the route available only when exact OC-1/OC-2/OC-3 evidence
+holds, and then invokes the accepted static SA-2 `stop` role at most once through
+its fixed `sudo -n` controlled-artifact vector. Independent Codex review follows
+one concise handback.
+
+This assignment does not authorize the full coordinator, start orchestration,
+automatic attestation, a production capture-unit/executor installer,
+production/staging activation, migration/cutover or RB-1. The transient
+inspection-failure decision and final production security review remain open.
+
+[Executor implementation prompt](../review/route-3-executor-oc-implementation-claude-prompt.md)
+· [Accepted RT-5 handback](../review/route-3-attest-role-implementation-handback.md)
+· [Active delivery plan](active-delivery-plan.md) ·
+[Active handover](../review/Handover%20information).
+
 ## Decision — static SA-2 `stop` accepted — 2026-10-16
 
 Peter Duscha accepts the static SA-2 `stop` role through DI-S for continued

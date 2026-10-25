@@ -1,0 +1,45 @@
+# Managed-By: tools.executor_supervisor_install
+# Repository definition (Route 3 executor OC). Nothing installs, enables or starts it implicitly. The package
+# installer `python -m tools.executor_supervisor_install` places it, root-owned, in /etc/systemd/system and enables it
+# in the SYSTEM manager only, so the dedicated account can neither replace, shadow, reload nor control it (account,
+# linger and sudoers are verified, never edited); production use remains an explicit operator action behind its own
+# review.
+#
+# The supervisor is the restartable admission/recovery worker. It runs as the unprivileged `freedom-executor`
+# account. The dedicated account's lingering systemd USER MANAGER is the kernel owner: every admitted SA-2
+# invocation is a separate transient service (freedom-executor-stop-<nonce>.service) created through that user
+# manager's StartTransientUnit, so stopping or restarting this unit never touches a populated invocation unit.
+# KillMode here only concerns this unit's own cgroup.
+#
+# `-E` makes the interpreter ignore PYTHONPATH, PYTHONHOME, PYTHONUSERBASE and every other PYTHON* variable (the
+# system manager's or the account's); `-s` drops the account's user site. The configured environment is minimal;
+# systemd may add service metadata, which is not an input to the supervisor's privileged decision.
+[Unit]
+Description=Freedom Blades executor supervisor (owner of SA-2 stop invocations)
+# Never run beside a leftover user-service candidate: two supervisors would have two ownership stores.
+ConditionPathExists=!/etc/systemd/user/freedom-blades-executor-supervisor.service
+# The account's user manager (and its bus) may not be up yet at boot: keep retrying, fail closed meanwhile.
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=freedom-executor
+Group=freedom-executor
+WorkingDirectory=/opt/freedom-blades/platform
+Environment=PATH=/usr/bin:/bin
+ExecStart=/opt/freedom-blades/runtime/venv-web/bin/python -E -s -m adapters.executor.supervisor
+Restart=always
+RestartSec=1
+TimeoutStartSec=60
+TimeoutStopSec=10
+StateDirectory=freedom-blades-executor
+StateDirectoryMode=0700
+RuntimeDirectory=freedom-blades-executor
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+UMask=0077
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

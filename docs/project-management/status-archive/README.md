@@ -14,6 +14,7 @@ authority or disposition.
 
 | Snapshot | Scope | SHA-256 at archival |
 |---|---|---|
+| [`status-through-2026-10-24-route-3-production-readiness-acceptance.md`](../status-through-2026-10-24-route-3-production-readiness-acceptance.md) | Complete predecessor status immediately before production-readiness acceptance and current-state consolidation | `43c5c540ded2bd03aa1d86fb923d98c02709d52cad8b20e7e75aff34c767e762` |
 | [`status-through-2026-10-13-route-3-hold-active.md`](../status-through-2026-10-13-route-3-hold-active.md) | Verbatim Route 3 `hold`-active status superseded by acceptance of the complete inactive role series | `a15af842f717a8604624d00011df2985cf65482755a26a3db7647f6e21495755` |
 | [`status-through-2026-10-12-wp3-contract-review.md`](../status-through-2026-10-12-wp3-contract-review.md) | Verbatim WP-3 contract-review status superseded by the baseline v1.9 implementation-first reset | `bb5a1176d4f4c62b19a912cf38917adccbbf135495fd4c4cb64db7c6cb190c3d` |
 | [`status-through-2026-10-12-lit-full-wp3-contract-integration-authorization.md`](../status-through-2026-10-12-lit-full-wp3-contract-integration-authorization.md) | Verbatim contract-integration authorization status immediately before Claude's single execution was returned and the four current-state pointers were reconciled | `0d22020969293f216006c4481bbcacb4f527d5d01d7592969714852e51fe7799` |

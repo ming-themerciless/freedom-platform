@@ -910,6 +910,21 @@ PERMITTED_ROUTE_3_ADAPTER = frozenset({
     # recovery role that runs the shared cleanup behind its unit-state precondition.
     "application/rp11/attest.py",
     "adapters/rp11/attest.py",
+    # Fifth Package 5.0 consumer (2026-10-18): the non-root executor's OS-6 interruption
+    # (OC-1..OC-3 gate, then SA-2 `stop` through `sudo -n`). Inactive; not in the artifact.
+    "application/executor/__init__.py",
+    "application/executor/interrupt.py",
+    "adapters/executor/__init__.py",
+    "adapters/executor/interrupt.py",
+    "adapters/executor/ownership.py",
+    "adapters/executor/usermanager.py",
+    "adapters/executor/supervisor.py",
+    "adapters/executor/protocol.py",
+    "adapters/executor/vector.py",
+    "adapters/executor/userbus.py",
+    # Third executor remediation: the inactive user-service definition of the persistent supervisor,
+    "infra/executor/freedom-blades-executor-supervisor.service",
+    "tools/executor_supervisor_install.py",
 })
 
 

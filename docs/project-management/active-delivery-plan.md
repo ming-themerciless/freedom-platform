@@ -1,183 +1,70 @@
-# Active delivery plan — implementation-first reset
+# Active delivery plan — implementation-first baseline v1.9
 
-Status: approved and active; non-root executor OC interruption slice assigned 2026-10-18
+Status: approved and active; production inspection returned no-go 2026-10-25
+
 Owner and acceptance authority: Peter Duscha
-Baseline: v1.9
-
-## Goal
-
-Resume delivery of the Freedom Blades Platform through small implementation
-increments and comprehensive testing. Research documents support the work but
-are not prerequisites that must be made formally complete.
 
 ## Working rules
 
-- Implement the smallest useful vertical slice, test it, review the result and
-  continue.
-- Reversible technical details may be chosen by the implementer and recorded in
-  code, tests or a short ADR. They do not require a separate decision package.
-- Ask Peter before changing product scope, production data authority,
-  authorization/privacy policy, destructive production behavior or an
-  irreversible architecture choice.
-- A discovery gap blocks implementation only when proceeding could expose a
-  secret, damage non-disposable data, bypass authorization, or make recovery
-  impractical.
-- Do not create proof chains, byte-identity ledgers, prompt-review cycles or
-  per-question closure packages unless Peter explicitly asks for them.
-- Judge implementation evidence by whether it establishes material correctness,
-  safety and regression claims. Routine command transcription is not a gate;
-  reliable statuses, disclosed failures/skips and exact invocations when their
-  special environment or sequencing affects the claim remain required.
+- Deliver small implementation slices and prove them with executable tests.
+- Use `oracle-test` for every required test level, including root/systemd,
+  PostgreSQL, failure injection, reboot and recovery work.
+- Production and staging access or mutation require separate explicit
+  authority. Never use real secrets or player data on the disposable host.
+- Reversible technical details may be selected and tested by the implementer.
+  Ask Peter before changing product scope, data authority,
+  authorization/privacy policy, destructive production behavior, irreversible
+  architecture or production activation.
+- Use one concise handback per slice. Historical prompts and remediation
+  records are evidence, not current authority.
 
-## Current implementation slice
+## Current delivery position
 
-The Route 3 manager/Polkit adapter represented by DI-1 through DI-6 and DI-S
-was accepted on 2026-10-13. Peter Duscha accepted the complete inactive role
-series on 2026-10-14 after independent review: shared cleanup and `stop-post`,
-`backstop`, and `hold`, including the GRR inspection- and descriptor-close
-exception-safety remediations. The historical WP-1 through WP-3 material
-supplies the detailed operation contract but is not a documentation gate.
+The cumulative inactive Route 3 production-readiness candidate is accepted for
+continued non-production development. Peter has selected production as the
+direction and bounded Route 3 to explicitly authorized, attended
+migration/cutover evidence activations. It is not a general maintenance
+facility and is not approved for recurring or unattended use.
 
-The later Route 3 security remediation is independently re-reviewed and has no
-remaining blocker to continued development. Its BS-3, retry-bound and durable
-cleanup-evidence corrections are complete. Two validator observations remain
-non-blocking hardening for the production security review and must not become a
-fourth prompt/review/remediation chain.
+The transient inspection-failure residual is accepted only inside that bounded
+use: every activation needs a named attending operator, pre/post residual-state
+checks and verified root removal or reboot before the operating window closes
+if cleanup is uncertain. Any recurring or unattended use requires a stronger
+trusted-identity and automated-reconciliation design, tests and independent
+security review.
 
-The Polkit `tmpfiles.d` prerequisite, its safe install/verify/remove boundary
-and a real reboot proof on `oracle-test` are implemented (see
-[handback](../review/route-3-polkit-tmpfiles-installer-handback.md)) and were
-accepted by Peter Duscha on 2026-10-15 after the effective-configuration,
-removal-race and restore-path remediations. This acceptance does not authorize
-production or staging activation and does not reopen the completed role
-implementation.
+Peter authorized the production-specific §6 read-only inspection on
+2026-10-25. The unprivileged portion is complete and made no change. It returned
+**NO-GO**: the required Python 3.14, account, Route 3 units/artifact/runtime
+paths and tmpfiles prerequisite are absent, and the live checkout plus Python
+3.12 venv fail the executor's root-owned trust boundary. Sudoers and private
+Polkit policy require root and remain incomplete.
 
-Claude implemented the first real Package 5.0 consumer, static SA-1 `start`,
-through DI-2. After the environment-read, duration, denial-proof and malformed-
-success remediations, independent Codex re-review found no blocking issue and
-Peter accepted SA-1 for continued non-production development on 2026-10-15. See the
-[`start` handback](../review/route-3-start-role-implementation-handback.md) and
-its [assignment](../review/route-3-start-role-implementation-claude-prompt.md).
-Static SA-2 `stop` through the existing narrow stop-unit boundary was then
-implemented, remediated and independently re-reviewed. Peter accepted it for
-continued non-production development on 2026-10-16; see the
-[`stop` handback](../review/route-3-stop-role-implementation-handback.md). No
-further Package 5.0 slice was assigned by that acceptance. Peter subsequently
-approved the recommended continuation and assigned RT-1 `consume` as the next
-bounded slice, with implementation and full `oracle-test` testing under its
-[`Claude prompt`](../review/route-3-consume-role-implementation-claude-prompt.md).
-Claude's uncommitted candidate and
-[handback](../review/route-3-consume-role-implementation-handback.md) received
-independent Codex review. Its two blocking failure-path defects were corrected
-under one bounded
-[remediation](../review/route-3-consume-role-review-remediation-claude-prompt.md).
-Independent Codex re-review found no blocking issue, and Peter accepted RT-1
-for continued non-production development on 2026-10-17. Peter then assigned
-RT-5 `attest` as the next bounded slice. After implementation and five bounded
-false-success corrections, independent Codex re-review found no remaining
-implementation-quality blocker. Peter accepted RT-5 for continued
-non-production development on 2026-10-18. The non-root executor and its
-OC-1/OC-2/OC-3 checks remain later work and are not yet assigned.
+The next gate is root-assisted completion of those two read-only policy checks,
+then a reviewed provisioning plan. Installation, remediation and activation
+are not authorized. Account-dependent inspection repeats after any separately
+authorized provisioning. The coordinator, start orchestration, automatic
+attestation, migration/cutover and RB-1 remain unassigned.
 
-Implementation defaults may be refined by tests. Initially:
+A bounded Claude follow-up prompt is prepared for that gate. Its existence is
+not authority to mutate production: the prompt requires Peter's named window,
+rollback owner, retention period and approved Python/artifact sources before
+writes, and it stops before supervisor installation or activation.
 
-- use the system bus;
-- preserve fail-closed errors and never silently retry an unconfirmed mutation;
-- select explicit systemd job modes in code and cover them with integration
-  tests instead of relying on command-line defaults;
-- report a completed stop as `ok(stopped)` rather than claiming whether it was
-  causally active or already stopped when the API cannot distinguish that;
-- treat uncertain pre-mutation error classifications as errors until a test or
-  supported API contract proves a narrower refusal safe; and
-- keep the existing PID/start-time/uid Polkit subject for the prototype while
-  retaining the documented race risk for the production decision.
+## Evidence and boundaries
 
-## Implementation sequence
+- Final focused checklist review: exact-tree **53/53**, clean `bash -n` and
+  `git diff --check`; the structural run retained one known baseline allowlist
+  failure.
+- The accessible production facts are recorded in handback §6.1. Sudo
+  `Defaults`, private Polkit policy, post-provision account facts, F-1 through
+  F-3, named operational ownership and the bounded activation/rollback
+  procedure remain open gates.
+- Discord remains the community platform and identity/integration source. Only
+  the legacy Freedom bot is eventually retired under implementation-plan
+  §15.2 after the full completion criteria are met.
 
-1. Implement the shared cleanup engine and `deact … stop-post`; exercise its
-   attribution, removal, journal, record, authorization and interruption paths.
-   **Complete 2026-10-13.**
-2. Implement `backstop` over that cleanup engine, including BS-1 through BS-4,
-   bounded retries and all three DI-4 disarm sites. **Complete 2026-10-13.**
-3. Implement `hold` after both cleanup rungs exist, including activation,
-   grant publication, verification, hold-loop observation and inline release.
-   **Complete and accepted 2026-10-14.**
-4. After each slice, run focused fake-boundary and real-host tests, clean the
-   host, and compare the final tree against the established bot, web and Foundry
-   baseline.
-5. Review each security-sensitive slice before production activation. Ordinary
-   non-production implementation may continue while non-blocking review
-   comments are addressed.
-6. Implement the first Package 5.0 consumer, static SA-1 `start`, through DI-2.
-   **Implemented by Claude, independently re-reviewed and accepted by Peter
-   2026-10-15.**
-7. Implement static SA-2 `stop` through the existing narrow stop-unit boundary.
-   **Implemented by Claude, independently re-reviewed and accepted by Peter
-   2026-10-16.** See the [handback](../review/route-3-stop-role-implementation-handback.md).
-8. Implement RT-1 `consume` as the capture unit's PID-1 `ExecStartPre=+` role,
-   including the one-shot claim, grant-priority removal, CQ-4 preconditions,
-   negative authorization proof and durable `consumed` commit. **Implemented,
-   remediated, independently re-reviewed and accepted by Peter for continued
-   non-production development on 2026-10-17**
-   ([handback](../review/route-3-consume-role-implementation-handback.md)).
-9. Implement RT-5 `attest` as the controlled interactive root role, reusing the
-   accepted cleanup engine with trigger `attest` and enforcing its unit-state
-   precondition before cleanup. **Assigned by Peter on 2026-10-17 under the
-   [implementation prompt](../review/route-3-attest-role-implementation-claude-prompt.md).**
-   Claude implemented it as an uncommitted candidate
-   ([handback](../review/route-3-attest-role-implementation-handback.md));
-   independent Codex review found a false `st1-verified` path when required
-   boot evidence is missing and non-reproducible command evidence in the
-   handback. One bounded
-   [review remediation](../review/route-3-attest-role-review-remediation-claude-prompt.md)
-   was completed and returned for independent Codex re-review; a third
-   [remediation](../review/route-3-attest-role-review-remediation-r3-claude-prompt.md)
-   (mandatory tree-P evidence) was likewise returned for re-review, as was a fifth
-   (lossless exact tree-P member and identity history). Independent Codex
-   re-review found no remaining implementation-quality blocker: the final code
-   keeps and compares the complete ordered tree-P history, and the reviewer
-   independently reproduced the focused **2369 passed, 2 documented environment
-   skips** result. The fifth handback's
-   summarized rather than literal routine commands are non-blocking under the
-   governing evidence standard. Peter accepted RT-5 for continued
-   non-production development on 2026-10-18. The non-root executor and
-   OC-1/OC-2/OC-3 remain outside this accepted slice.
-10. Implement the first real non-root executor slice: read the fixed capture
-    unit and activation-derived consume journal as `ubuntu`, establish exact
-    OC-1/OC-2/OC-3 fail-closed, and invoke the accepted SA-2 `stop` role at most
-    once through its fixed `sudo -n` vector. **Assigned by Peter on 2026-10-18
-    under the [executor OC implementation prompt](../review/route-3-executor-oc-implementation-claude-prompt.md).**
-    The full coordinator, start orchestration, automatic attestation and
-    production installers/activation remain later work.
-
-## Acceptance criteria
-
-- every implemented operation row used by RT-1 through RT-4 is traced to an
-  executable test or a named real-host check;
-- cleanup never removes an unattributed, damaged or foreign object;
-- mutation failures are fail-closed and unconfirmed manager effects are never
-  silently retried or promoted to success;
-- authorization failures do not become successes, and a live grant is removed
-  before cleanup performs slower persistent work;
-- disposable-host tests cover success, malformed evidence, interruption,
-  timeout, duplicate/concurrent calls, service restart and cleanup/recovery;
-- no new bot, web or Foundry failure/error is introduced relative to the
-  established baseline, and skips are explained;
-- no production/staging service or real player data is touched; and
-- the handback contains only the implemented behavior, files changed, material
-  test/check results and skips, remaining production risks and the next action,
-  with exact commands only where invocation details affect what is proved.
-
-## Finish line
-
-The accepted inactive-role series ended with its three PID-1 vectors performing
-their real behavior on `oracle-test`, no production activation, Peter's
-2026-10-14 acceptance based on the running system, and completed independent
-re-review of the subsequent security remediation. The selected `tmpfiles.d`
-ordering is installed, proved across a real reboot and accepted for continued
-development. RT-1 `consume` and RT-5 `attest` are accepted. The current slice is
-the assigned non-root executor OC interruption path. Before production
-activation, decide the transient inspection-failure risk and complete the final
-production security review.
-Additional source-proof work is not an allowed substitute for implementation
-and executable tests.
+[Active handover](../review/Handover%20information) ·
+[Current status](status.md) ·
+[Implementation plan](../implementation-plan.md) ·
+[Archived predecessor plan](active-delivery-plan-through-2026-10-24-route-3-production-readiness.md)

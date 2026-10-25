@@ -2586,8 +2586,126 @@ Peter then assigned the first non-root executor interruption slice under the
 [`executor OC implementation prompt`](review/route-3-executor-oc-implementation-claude-prompt.md):
 unprivileged reads of the fixed capture unit and activation-derived consume
 journal, exact fail-closed OC-1/OC-2/OC-3 evaluation, and at most one invocation
-of the accepted SA-2 `stop` role. The full coordinator, start orchestration,
-automatic attestation and production installers/activation remain later work.
+of the accepted SA-2 `stop` role. At that assignment point the full coordinator,
+start orchestration, automatic attestation and production installer/activation
+work remained later; the inactive executor supervisor package was subsequently
+assigned as recorded below, while production/staging installation and
+activation remain gated.
+
+The executor's bounded cgroup settlement cannot guarantee disappearance of a
+task in uninterruptible sleep. Peter approves in principle the narrow lifecycle
+change allowing a still-contained unsettled invocation to be transferred to a
+persistent owner that blocks orchestration and continues recovery until the
+boundary is empty. The second-remediation candidate was nevertheless **blocked
+after independent review on 2026-10-19**: its marker is created only after
+launch, so marker failure still permits `UNSETTLED` or an ordinary propagated
+exception while a member remains, and no already-running supervised recovery
+owner or restart proof exists. Durable recoverable ownership must be
+established before privileged launch and proved across every exit path before
+that candidate could be accepted. Peter assigned the bounded correction under the
+[third executor review-remediation prompt](review/route-3-executor-oc-review-remediation-r3-claude-prompt.md).
+The selected design uses a restartable supervisor and a distinct transient
+service for each invocation. Durable exclusive prepared state precedes the sole
+`StartTransientUnit` request, which launches the exact fixed sudo vector
+directly inside the manager-owned invocation cgroup; the supervisor can
+therefore restart independently of a stuck member. The dedicated account's
+lingering systemd user manager owns each transient invocation service. Peter
+selected, for the inactive package, a root-owned system-service wrapper for the
+persistent supervisor (`User=freedom-executor`, enabled only in the system
+manager); production installation and lingering remain a later deployment
+decision.
+No successor slice is assigned. The inactive executor supervisor package (service
+fragment, `tools/executor_supervisor_install.py` and provisioning runbook) was
+directly assigned by Peter and its defects are corrected under the
+[fourth executor review-remediation prompt](review/route-3-executor-oc-review-remediation-r4-claude-prompt.md)
+and the [fifth executor review-remediation prompt](review/route-3-executor-oc-review-remediation-r5-claude-prompt.md); this is not acceptance, and
+production/staging installation or activation is not assigned.
+Peter accepted and assigned a sixth bounded implementation correction on 2026-10-21 while preserving that
+topology: failed request writes are ambiguous handoffs, readiness follows the
+serving-thread start, and installer verification covers effective drop-ins and
+execution identity. The observed PATH-only member environment is retained as
+defense in depth, not claimed as an atomic invariant; privilege instead rests on
+the fixed sudoers/SA-2 argv, Python `-I -S` and the root-owned `stop` artifact's
+no-environment-read behavior. Claude returned that candidate under the
+[accepted R6 implementation prompt](review/route-3-executor-oc-r6-implementation-claude-prompt.md).
+Independent Codex review reproduced the principal focused and root/systemd
+evidence but found that `KeyboardInterrupt` or another `BaseException` at or
+after the request-write boundary can escape rather than return `HANDED_OFF`.
+Peter assigns one direct correction, its deterministic interruption regressions
+and current-document reconciliation under the
+[R6 review-remediation prompt](review/route-3-executor-oc-r6-review-remediation-claude-prompt.md).
+Claude returned that remediation with the corrected ownership boundary.
+Independent Codex re-review found no remaining implementation defect but found
+the two real-socket proofs nondeterministic (a single `recv` may return a
+prefix) and the current-state text stale. Peter accepted the
+[second remediation prompt](review/route-3-executor-oc-r6-review-remediation-r2-claude-prompt.md)
+and assigned Claude the correction, which returned for independent re-review.
+Codex found no implementation or production-safety defect. Peter classified
+the remaining separately-delivered-surplus test-helper overclaim as
+non-blocking and assigned optional bounded test hardening plus its final
+test-only ordering correction. Claude returned the correction; independent
+Codex re-review found no remaining finding and reproduced the focused **511
+passed, 5 documented host-only skips** result on `oracle-test`. Peter accepted
+the cumulative executor OC R6 candidate for continued non-production
+development on 2026-10-22. Peter then assigned Claude the bounded
+[Route 3 production-readiness and security-gate preparation](review/route-3-production-readiness-claude-prompt.md):
+complete-chain review, exact-path root-owned lifecycle rehearsal on
+`oracle-test`, transient inspection-failure decision preparation and a minimal
+production-specific read-only fact checklist. Independent review found blocking installer
+recovery and sudo run-as defects; the bounded remediation (verified recovery, `recovery-incomplete` status 15, exact
+run-as/tag verification, corrected residual analysis and fact methods) has been returned for re-review and is not
+accepted. A second independent review reproduced three installer recovery gaps and two inspection-method defects; the
+bounded second remediation (handback "Second review remediation return") has been returned for re-review and is not
+accepted. That re-review found two remaining upgrade-restoration verification defects (unknown unit-state observations can
+compare equal; a non-zero enable/disable restoration command is discarded when its link effect matches) and a dedicated-account
+user-unit-path inspection gap. Peter assigns the bounded
+[third remediation](review/route-3-production-readiness-review-remediation-r3-claude-prompt.md), which Claude has returned for
+re-review (handback "Third review remediation return"; not accepted). Production/staging access or
+activation remains prohibited; the risk decision and any later inspection or
+activation require separate acceptance.
+That re-review found one remaining strict wants-link observation defect, two
+secret-safe/fixed-account defects in checklist item 5b, and stale current-state
+headings. Peter assigned the bounded
+[fourth remediation](review/route-3-production-readiness-review-remediation-r4-claude-prompt.md),
+which Claude has returned for independent Codex re-review (handback "Fourth review remediation return",
+2026-10-23: strict `enablement-unavailable`/`recovery-incomplete` wants-link observation, fixed-account allowlisted item 5b,
+reconciled headings). The candidate remains unaccepted; production/staging access, inspection and
+activation remain prohibited, and the risk decision remains separate.
+Codex's review of that return found a non-reproducible host-state discrepancy, residual status masking in checklist item 5b and a missing fourth-return section; the bounded
+[fifth remediation](review/route-3-production-readiness-review-remediation-r5-claude-prompt.md) has been returned for independent Codex re-review (handback "Fifth review remediation return", 2026-10-23: fail-closed item 5b/5/11, 47 executable checks, fresh final-tree runs; no product code changed). The candidate remains unaccepted, and the same prohibitions apply.
+Codex's review of the fifth return reproduced one remaining false-completion
+path: item 5b reports `COMPLETE` after a directory search or unit query fails.
+Peter assigns Claude the direct completion correction under the existing
+round-five scope, with two focused regressions and only the focused checklist,
+shell-syntax, directly affected structural and diff checks. This is not a sixth
+remediation round and no full-suite rerun is required. The candidate remains
+unaccepted; the transient-risk decision and production/staging access,
+inspection and activation remain separate and prohibited.
+Claude returned the final portability follow-up using an isolated fixed Python
+errno/type probe rather than diagnostic-text parsing. Independent Codex focused
+re-review found no remaining implementation defect: the extracted checklist
+matched between the workspace and `oracle-test`, **53/53** focused tests,
+`bash -n` and `git diff --check` passed, and the structural run reproduced
+**127 passed, 1 known baseline allowlist failure**. Codex recommends acceptance
+for continued non-production development. Peter accepted the cumulative Route
+3 production-readiness candidate on 2026-10-24, closing this implementation and
+review chain. On 2026-10-25 Peter selected production as the direction,
+classified Route 3 as a bounded, attended migration/cutover evidence facility
+rather than general maintenance, and accepted the transient inspection-failure
+residual only within that bounded use. Each activation requires explicit
+authority, a named attending operator, clean precondition and post-pass checks,
+and verified removal or reboot before the operating window closes if cleanup is
+uncertain. Recurring or unattended use requires a stronger trusted-identity and
+automated-reconciliation design and independent review. No successor
+implementation or production operation was assigned by that decision. Peter
+then explicitly authorized handback §6 production read-only fact collection on
+2026-10-25. The accessible checks made no change and returned no-go: Python
+3.14, the executor account, Route 3 units/artifact and tmpfiles/runtime
+prerequisites are absent, and the live checkout plus Python 3.12 venv fail the
+root-owned executor trust boundary. Sudoers and private Polkit policy remain
+incomplete pending root-assisted read-only inspection. Production remediation,
+installation and activation remain prohibited without separate explicit
+authority.
 
 All testing levels are authorized on `oracle-test`, including root/systemd,
 network, packages, PostgreSQL and destructive recovery drills. Production and

@@ -14,6 +14,7 @@ assignment or operational authority.
 
 | Snapshot | Scope | SHA-256 at archival |
 |---|---|---|
+| [`Handover-information-through-2026-10-24-route-3-production-readiness-acceptance.md`](../Handover-information-through-2026-10-24-route-3-production-readiness-acceptance.md) | Complete predecessor handover immediately before production-readiness acceptance and current-state consolidation | `1798dd4c8f7bb61d623cfa5ee13a6c4a38cc336bcdc3e1592692abd776a20146` |
 | [`Handover-information-through-2026-10-13-route-3-hold-active.md`](../Handover-information-through-2026-10-13-route-3-hold-active.md) | Verbatim Route 3 `hold`-active handover superseded by acceptance of the complete inactive role series | `506abaed3166e6b2b23919abc9b4ea5e21cc67102a0e88d21cdb2e7eb1e47ce8` |
 | [`Handover-information-through-2026-10-12-wp3-contract-review.md`](../Handover-information-through-2026-10-12-wp3-contract-review.md) | Verbatim WP-3 contract-review handover superseded by the baseline v1.9 implementation-first reset | `67968c49b66f47a32c04a8faa7988d27439e44e76f4e82460947462108007d9a` |
 | [`Handover-information-through-2026-10-12-lit-full-wp3-contract-integration-authorization.md`](../Handover-information-through-2026-10-12-lit-full-wp3-contract-integration-authorization.md) | Verbatim contract-integration authorization handover immediately before Claude's single execution was returned and the four current-state pointers were reconciled | `31c771509eba112f9307de02561862a1283bc1d5dcd8a58aebc0f5b7d9eaecba` |

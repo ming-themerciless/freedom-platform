@@ -1,6 +1,100 @@
 # RAID register
 
-**Current-state note, 2026-10-16.** Peter Duscha accepted static SA-2 `stop`
+**Current-state note, 2026-10-25 (production inspection no-go).** Peter
+authorized the handback §6 read-only production inspection. Secret-safe checks
+confirmed that Python 3.14, the executor account, Route 3 units/artifact/runtime
+paths and the tmpfiles prerequisite are absent, and that the live checkout and
+Python 3.12 venv fail the executor's root-owned trust boundary. No production
+state changed. Sudoers and private Polkit policy remain incomplete because root
+access was unavailable; account-dependent checks remain deferred. This is a
+no-go for provisioning or activation, not authority to remediate. The next gate
+is root-assisted read-only completion and a separately reviewed provisioning
+plan.
+
+**Current-state note, 2026-10-25 (bounded production direction selected).**
+Peter classifies Route 3 as an explicitly authorized, attended
+migration/cutover evidence facility and accepts the transient
+inspection-failure residual only within that boundary. Pre/post residual checks
+and verified removal or reboot are mandatory; Route 3 is disabled or removed
+after the evidence window. General maintenance, recurring and unattended use
+are excluded and require a stronger trusted-identity/automated-reconciliation
+design. Production facts and operational ownership remain open; no
+production/staging access, inspection, installation or activation is yet
+authorized.
+
+**Current-state note, 2026-10-24 (production-readiness accepted).** Peter
+accepts the cumulative Route 3 production-readiness candidate for continued
+non-production development and closes its implementation/review chain. No
+implementation finding remains open and no successor slice is assigned. The
+transient inspection-failure residual remains undecided; its monitoring
+condition does not yet exist. Production-specific read-only facts, F-1 through
+F-3, the sudo `Defaults` premise, operational ownership and rollback/monitoring
+gates remain open. Production/staging access, inspection, installation and
+activation remain unauthorized.
+
+**Current-state note, 2026-10-24 (checklist completion independently
+re-reviewed).** Codex found no remaining implementation defect and recommends
+acceptance for continued non-production development. Exact checklist identity,
+**53/53** focused tests, `bash -n` and `git diff --check` passed on
+`oracle-test`; the structural run reproduced **127 passed, 1 known baseline
+allowlist failure**. Peter's acceptance and transient-risk decision remain
+separate; production/staging access, inspection and activation remain
+unauthorized.
+
+**Current-state note, 2026-10-23 (checklist completion assigned).** Codex's
+review of the fifth return reproduced one bounded defect: item 5b prints
+`COMPLETE` after a directory search or unit query fails. Peter assigns Claude
+the direct correction under the accepted fifth-remediation scope, with two
+focused regressions and no full-suite rerun. This is not a sixth remediation
+round. The candidate remains unaccepted; the transient-risk decision and all
+production/staging access, inspection and activation remain unauthorized.
+
+**Current-state note, 2026-10-23 (fifth review remediation returned).** Claude has returned the **fifth** production-readiness review remediation for independent Codex re-review (handback "Fifth review remediation return", 2026-10-23): checklist item 5b (and the identical path-set/pid copies in items 5 and 11) now fails closed on every fact-gathering status (root and account NSS records validated without a masking pipeline, the account-context `unit-paths` result usable only at status 0, every append/sort/search reported, scratch removed by an `EXIT` trap), proved by 47 executable checks and a host decoy probe; `oracle-test` was already in the documented canonical state when inspected (the root-owned Python 3.14 state Codex saw was not reproducible and its cause is not established) and is unchanged apart from removed scratch; the fourth-return section Codex found absent is present in the tree, but its figures are replaced by fresh final-tree runs. No installer or product code changed. Not accepted; no transient-risk decision; no production/staging access, inspection or activation. New observation: an unexplained root-owned Python 3.14 state of the disposable checkout reported by Codex could not be reproduced; recurrence cannot be excluded.
+
+**Current-state note, 2026-10-23 (fourth review remediation returned).** Claude returned the bounded correction ([handback](../review/route-3-production-readiness-handback.md), "Fourth review remediation return"): strict enablement observation (`enablement-unavailable` before an upgrade, `recovery-incomplete` after) and a fixed-account, allowlisted-output item 5b. Residual: the new enablement failure paths are proved only in the deterministic harness (an I/O error on the real wants link cannot be injected race-free on the host); item 5b must still be repeated after provisioning. Not accepted; transient risk undecided.
+
+**Current-state note, 2026-10-23 (fourth review remediation assigned; history).**
+Codex's re-review of the third remediation reproduced an enablement-observation
+failure that can falsely verify restoration, a unit-description disclosure and
+ambient-account redirection in checklist item 5b, and stale current-state
+headings. Peter assigns the bounded
+[fourth remediation](../review/route-3-production-readiness-review-remediation-r4-claude-prompt.md).
+The candidate and transient risk remain unaccepted; production/staging access,
+inspection and activation remain unauthorized.
+
+**Current-state note, 2026-10-23 (third review remediation returned).** Claude returned the bounded correction ([handback](../review/route-3-production-readiness-handback.md), "Third review remediation return"): strict unit-state observation and a conjunctive enable/disable restoration check in the installer, and an account-context user-unit inspection (item 5b). Residual: the new failure paths are proved only in the deterministic harness; item 5b must be repeated after provisioning. Not accepted; transient risk undecided.
+
+**Current-state note, 2026-10-22 (third review remediation assigned).** Codex's re-review of the second remediation reproduced
+two remaining installer verification gaps: unavailable pre/post `ActiveState` observations compare as the same empty value, and
+the restoration path discards a non-zero `enable`/`disable` result when the wants link happens to match. The production checklist
+also scans the invoking operator's user-unit paths instead of the dedicated account's home/runtime/transient/generator paths.
+Peter assigns the bounded [third remediation](../review/route-3-production-readiness-review-remediation-r3-claude-prompt.md).
+The candidate and transient risk remain unaccepted; production/staging access, inspection and activation remain unauthorized.
+
+**Current-state note, 2026-10-22 (second review remediation).** A second Codex review reproduced three installer recovery gaps
+(manager exceptions bypassing upgrade recovery; failed upgrade leaving enablement introduced by the attempt; removal of a running
+supervisor with an absent fragment ending in an ordinary failure with no owner) and two defects in the proposed production
+inspection checklist (a process listing that could print command-line credentials; command shapes that did not parse). Claude
+returned the bounded correction ([handback](../review/route-3-production-readiness-handback.md), "Second review remediation
+return"). Residual: the installer's recovery remains an operator-recoverable state, not an automatic repair, and the
+transient-risk residual (below) is unchanged and undecided.
+
+**Current-state note, 2026-10-22 (production-readiness review remediation).** Codex's review of the production-readiness
+handback found two blocking installer defects (unverified restore failure; sudo run-as wider than documented) and a wrong
+residual-lifecycle statement. Claude returned the bounded remediation for re-review ([handback](../review/route-3-production-readiness-handback.md) §0).
+The corrected residual: a genuine rule with both identity sources lost is detected but **not cleared** by CP or `attest`,
+is cleared by reboot or a verified root removal, and has no automatic bound once BS-3 disarms; no alert exists
+in the repository (a monitoring condition is proposed for Peter's decision, not built). Risk R: unaccepted until Peter decides.
+
+**Current-state note, 2026-10-22.** Peter Duscha accepted the cumulative
+executor OC R6 candidate and assigned Claude the Route 3 production-readiness
+and security-gate preparation slice. It must rehearse the exact-path root-owned
+lifecycle on `oracle-test`, prepare the transient inspection-failure decision
+and identify production-specific read-only facts for independent Codex review.
+Production/staging access and activation remain unauthorized; Peter has not yet
+accepted the residual inspection-failure risk.
+
+**Earlier current-state note, 2026-10-16.** Peter Duscha accepted static SA-2 `stop`
 through DI-S for continued non-production development after its three bounded
 remediations and independent Codex re-review. No SA-2 implementation finding
 remains open. No later Package 5.0 slice is assigned. Production activation

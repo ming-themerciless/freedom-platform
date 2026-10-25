@@ -1,5 +1,307 @@
 # Decision register
 
+## Authorization and result — production read-only inspection — 2026-10-25
+
+Peter Duscha explicitly authorizes the production inspection in handback §6.
+Codex confirmed the current host is production and performed only secret-safe,
+read-only checks; no production state changed. The observed state is a no-go
+for provisioning or activation: required Route 3 prerequisites are absent and
+the live checkout/Python 3.12 venv do not satisfy the root-owned executor trust
+boundary. Sudoers and private Polkit classification remain incomplete because
+the operator has no non-interactive root access. This authorization does not
+extend to root credential disclosure, remediation, installation, service
+restart, provisioning or activation. Next gate: root-assisted read-only policy
+completion, then a separately reviewed and authorized provisioning plan.
+
+## Decision — bounded Route 3 production direction — 2026-10-25
+
+Peter Duscha selects production as the direction and classifies Route 3 as a
+bounded, attended migration/cutover evidence facility. It is not a general
+production-maintenance facility and is not approved for recurring or
+unattended operation.
+
+Peter accepts the transient inspection-failure residual only for that bounded
+use. Every activation requires separate explicit authority, a named attending
+operator and escalation contact, proof before activation that no residual rule
+or activation state exists, and proof after the pass that both are absent. If
+cleanup is uncertain, verified root removal or reboot is required before the
+operating window closes. Route 3 is disabled or removed when the evidence
+window ends.
+
+Any recurring or unattended use requires a stronger design that preserves a
+trusted rule identity and performs safe automated reconciliation, with failure
+injection, disposable-host rehearsal and independent security review. This
+decision does not authorize production/staging access, inspection,
+installation, activation or migration/cutover execution. The next gate is
+separate authorization of the handback §6 production-specific read-only fact
+checklist.
+
+## Decision — cumulative Route 3 production-readiness accepted — 2026-10-24
+
+Peter Duscha accepts the cumulative Route 3 production-readiness candidate for
+continued non-production development. This closes the assignment and review
+chain after Claude's final checklist portability correction and Codex's clean
+focused re-review: exact checklist identity between the workspace and
+`oracle-test`, **53/53** focused tests, clean `bash -n` and `git diff --check`,
+and **127 passed with 1 known baseline structural allowlist failure**.
+
+No successor implementation slice is assigned. This decision does not select
+a transient inspection-failure disposition, authorize production or staging
+access, inspection, installation or activation, or authorize the coordinator,
+start orchestration, automatic attestation, migration/cutover or RB-1. Any
+production-specific read-only fact collection requires a separate explicit
+instruction.
+
+## Independent review — production-readiness checklist direct completion — 2026-10-24
+
+Codex independently re-reviewed the final portability follow-up and found no
+remaining implementation defect. The extracted checklist matched between the
+workspace and `oracle-test`; the complete focused module passed **53/53**;
+`bash -n` and `git diff --check` were clean; and the directly affected
+structural run reproduced **127 passed, 1 known baseline allowlist failure**.
+Codex recommends acceptance for continued non-production development. This is
+not an acceptance or transient-risk decision and authorizes no production or
+staging access, inspection or activation.
+
+## Assignment — production-readiness checklist direct completion — 2026-10-23
+
+Peter accepts Codex's review disposition and assigns Claude one direct
+completion correction under the existing accepted fifth-remediation scope.
+Item 5b must report `INCOMPLETE` after any directory-search or unit-query
+failure and may report `COMPLETE` only after the path set, searches and all
+three unit queries succeed. Two focused regressions and the focused checklist,
+shell-syntax, directly affected structural and diff checks are required. This
+is not a sixth remediation round; no full-suite rerun, transient-risk decision,
+production/staging access, inspection or activation is authorized. The
+candidate remains unaccepted pending the focused return and final review.
+
+## Return — production-readiness fifth review remediation — 2026-10-23
+
+Claude has returned the **fifth** production-readiness review remediation for independent Codex re-review (handback "Fifth review remediation return", 2026-10-23): checklist item 5b (and the identical path-set/pid copies in items 5 and 11) now fails closed on every fact-gathering status (root and account NSS records validated without a masking pipeline, the account-context `unit-paths` result usable only at status 0, every append/sort/search reported, scratch removed by an `EXIT` trap), proved by 47 executable checks and a host decoy probe; `oracle-test` was already in the documented canonical state when inspected (the root-owned Python 3.14 state Codex saw was not reproducible and its cause is not established) and is unchanged apart from removed scratch; the fourth-return section Codex found absent is present in the tree, but its figures are replaced by fresh final-tree runs. No installer or product code changed. Not accepted; no transient-risk decision; no production/staging access, inspection or activation. Reversible choices recorded in code and tests: a second literal seam line `RUN_USER_DIR=/run/user` (no production override), `save`/`req`/`step` helpers and an `EXIT` trap in the checklist. No decision is taken; the transient-risk decision remains Peter's.
+
+## Return — production-readiness fourth review remediation — 2026-10-23
+
+Claude returned the bounded fourth remediation for independent Codex re-review (prompt: [`route-3-production-readiness-review-remediation-r4-claude-prompt.md`](../review/route-3-production-readiness-review-remediation-r4-claude-prompt.md)). Reversible choices recorded in code and tests: a separate strict `Installer._observed_enabled()` (only `FileNotFoundError` is "disabled", only the expected link is "enabled", anything else is `enablement-unavailable`, exit 13, before an upgrade and `recovery-incomplete`, 15, after it) while the lenient `_enabled()` stays in `verify`/`remove`; checklist item 5b hard-codes `freedom-executor`, validates the account-database entry, runtime directory and bus before use, and asks the manager only for allowlisted `show` properties (item 5's system-manager `list-units` had the same description disclosure and was changed likewise). No topology, authorization, SA-2 vector, accepted role behavior or residual-risk option changed. **Not accepted. Peter has not made the transient-risk decision**; no production or staging access, inspection or activation is authorized.
+
+## Assignment — production-readiness fourth review remediation — 2026-10-23
+
+Peter accepts Codex's re-review findings and assigns Claude one bounded
+correction under the
+[`fourth remediation prompt`](../review/route-3-production-readiness-review-remediation-r4-claude-prompt.md).
+The correction makes wants-link observation strict, prevents checklist item 5b
+from printing descriptions or honoring an ambient account override, and
+reconciles current-state headings. No topology, authorization, SA-2 vector,
+accepted role behavior or residual-risk option changes. The candidate remains
+unaccepted; no production/staging access, inspection or activation is
+authorized.
+
+## Assignment — production-readiness third review remediation — 2026-10-22
+
+Peter accepts Codex's re-review findings and assigns Claude one bounded correction under the
+[`third remediation prompt`](../review/route-3-production-readiness-review-remediation-r3-claude-prompt.md). The correction must
+distinguish successful unit-state observations from unavailable ones during upgrade recovery, require both a zero manager result
+and the expected link for enablement restoration, and enumerate the dedicated `freedom-executor` account's effective user-unit
+paths in the production read-only checklist. No topology, authorization, SA-2 vector, accepted role behavior or residual-risk
+option changes. The candidate remains unaccepted; no production/staging access, inspection or activation is authorized.
+
+## Return — production-readiness third review remediation — 2026-10-23
+
+Claude returned the bounded third remediation for independent Codex re-review (prompt: [`route-3-production-readiness-review-remediation-r3-claude-prompt.md`](../review/route-3-production-readiness-review-remediation-r3-claude-prompt.md)). Reversible choices recorded in code and tests: an unit-state observation is a value only when the manager reported a recognized state (`state-unavailable`, exit 13, before an upgrade; `recovery-incomplete`, 15, afterwards), and an enable/disable restoration needs a zero manager result and the expected link. No topology, authorization, SA-2 vector or role change. **Not accepted. Peter has not made the transient-risk decision**; no production or staging access or activation is authorized.
+
+## Return — production-readiness second review remediation — 2026-10-22
+
+Claude returned the bounded second remediation for independent Codex re-review (prompt:
+[`route-3-production-readiness-review-remediation-r2-claude-prompt.md`](../review/route-3-production-readiness-review-remediation-r2-claude-prompt.md)).
+Reversible implementation choices recorded in code and tests: manager exceptions and timeouts after an upgrade may have changed
+the fragment enter the same verified restoration as a non-zero result; enablement restoration is symmetric; `remove` of a
+running or listening supervisor whose fragment is absent is **refused** (`owner-without-fragment`, exit 11) rather than given a
+new recovery path, because a manager's in-memory copy is not a persistent owner. No topology, authorization, SA-2 vector or
+role change. **Not accepted. Peter has not made the transient-risk decision**; no production or staging access or activation is
+authorized.
+
+## Return — production-readiness review remediation — 2026-10-22
+
+Claude returned the bounded remediation of the production-readiness candidate for independent Codex re-review: verified
+installer recovery with a distinct `recovery-incomplete` status, exact run-as/tag sudo verification, a corrected residual
+lifecycle (CP and `attest` detect but do not clear a foreign residual; reboot or verified root removal does; no automatic
+bound after BS-3), options A/A′/B/C with a **proposed** monitoring condition, and complete read-only production fact
+methods. **Not accepted. Peter has not made the transient-risk decision** (A′, B or C) and no production or staging
+access or activation is authorized. [Handback §0](../review/route-3-production-readiness-handback.md).
+
+## Assignment — Route 3 production-readiness preparation — 2026-10-22
+
+Peter Duscha assigns Claude one bounded production-readiness and security-gate
+preparation slice for the complete accepted inactive Route 3 privileged chain.
+Claude will perform an exact-path root-owned install, reboot, failure/recovery,
+rollback/removal and restoration rehearsal on `oracle-test`; review the complete
+privileged boundary; prepare the transient inspection-failure risk decision;
+and list the minimal production-specific read-only facts required before a
+later activation decision. The result returns to Codex for independent review.
+
+This assignment authorizes no production or staging access, inspection,
+installation or activation; makes no risk-acceptance or authorization-policy
+decision; and does not assign the full coordinator, start orchestration,
+automatic attestation, migration/cutover or RB-1.
+
+[Accepted Claude prompt](../review/route-3-production-readiness-claude-prompt.md).
+
+## Decision — executor OC R6 candidate accepted — 2026-10-22
+
+Claude returned the final bounded, test-only socket-proof ordering correction.
+Independent Codex re-review found no remaining finding: the corrected
+real-socket test records and requires the successful complete-request crossing,
+always injects `BrokenPipeError`, retains one request and returns
+`HANDED_OFF`. The reviewer reproduced the five targeted cases in 12 consecutive
+`oracle-test` runs and the focused **511 passed, 5 documented host-only skips**
+result; `compileall` and `git diff --check` were clean.
+
+Peter Duscha accepts the cumulative executor OC R6 candidate for continued
+non-production development. This closes the executor OC implementation/review
+slice. It assigns no successor and does not authorize the full coordinator,
+start orchestration, automatic attestation, production capture-unit/executor
+installation, production or staging activation, migration/cutover or RB-1.
+
+[Cumulative handback and acceptance](../review/route-3-executor-oc-implementation-handback.md#independent-codex-re-review-of-the-r6-socket-proof-ordering-remediation-and-acceptance-2026-10-22).
+
+## Decision — executor OC R6 R2 review clean; test hardening non-blocking — 2026-10-21
+
+Independent Codex re-review reproduced the focused executor result and found no
+implementation or production-safety defect in the returned R6 R2 candidate. The
+complete fixed request is held by the peer before `crossed`; one narrower helper
+claim is overstated because a legal stream read can return the exact request while
+leaving a separately delivered surplus byte queued.
+
+Peter Duscha classifies that observation as non-blocking and authorizes one
+optional test-only hardening under the
+[Claude prompt](../review/route-3-executor-oc-r6-nonblocking-test-hardening-claude-prompt.md).
+Codex recommends candidate acceptance, but this record does not itself accept the
+candidate, assign a successor slice, or authorize production/staging installation
+or activation.
+
+## Decision — executor OC R6 review remediation R2 accepted and returned — 2026-10-21
+
+Claude returned the first R6 implementation candidate; independent Codex review found the post-write `BaseException` ownership gap; Peter assigned the first bounded review remediation; Claude returned it with the corrected ownership boundary; independent Codex re-review found no remaining implementation defect but found a nondeterministic real-socket proof (single `recv`) and stale current-state text; Peter accepted the second bounded remediation prompt and assigned Claude the correction. Claude has returned that correction (full-request socket synchronization; documents reconciled) for independent Codex re-review. The candidate remains unaccepted, no successor slice is assigned, and production/staging installation or activation remains prohibited.
+
+This entry corrects the current-state description only; the entry below remains the
+historical record of the first remediation assignment. It records no candidate
+acceptance and authorizes no activation or successor slice.
+
+[Second remediation prompt](../review/route-3-executor-oc-r6-review-remediation-r2-claude-prompt.md)
+· [Handback](../review/route-3-executor-oc-implementation-handback.md#r6-review-remediation-r2-return-2026-10-21).
+
+## Decision — executor OC R6 review remediation assigned — 2026-10-21
+
+Claude returned the accepted R6 implementation assignment. Independent Codex
+review reproduced the focused executor, SA-2/artifact, documentation and
+root/systemd package results, but found one blocking contract defect: a
+`KeyboardInterrupt` or other `BaseException` at or after
+`sendall(PROTOCOL_REQUEST)` can escape rather than become the required
+`HANDED_OFF` result. The active handover, active-delivery pointer and
+implementation-plan §20 also remained at the completed first-assignment state.
+
+Peter Duscha accepts the recommendation and assigns Claude one bounded direct
+correction under the
+[R6 review-remediation prompt](../review/route-3-executor-oc-r6-review-remediation-claude-prompt.md).
+It establishes an explicit write-started ownership boundary, deterministic
+write/reply/close interruption regressions and reconciled current-state
+documentation. The selected topology, fixed privilege vector and R6 environment
+decision are unchanged. This records no candidate acceptance and authorizes no
+production/staging activation or successor slice.
+
+[Independent review](../review/route-3-executor-oc-implementation-handback.md#independent-codex-review-of-the-claude-r6-return-2026-10-21)
+· [Active handover](../review/Handover%20information).
+
+## Decision — executor supervisor R6 implementation prompt accepted — 2026-10-21
+
+Peter Duscha approves the independent-review recommendation to retain the Route 3
+topology and correct the inactive executor supervisor candidate in place. The member
+environment remains minimized and tested, but exact equality is no longer a security
+claim: the manager-environment query and `StartTransientUnit` are separate operations.
+The privileged invariant is instead the fixed sudoers/SA-2 argv plus Python `-I -S`
+and the root-owned `stop` artifact's no-environment-read behavior. The correction also
+treats any request-write error as an ambiguous handoff, publishes readiness only after
+the serving thread starts, and verifies the effective loaded system unit, including
+drop-ins and execution identity.
+
+This accepts and assigns the bounded Claude implementation, documentation and
+disposable-host test cycle, not the corrected candidate itself. Claude must
+inspect and complete the existing shared-tree candidate, update the existing
+handback and return it for independent Codex review. Production/staging installation
+or activation and every successor slice remain unauthorized.
+
+[Handback](../review/route-3-executor-oc-implementation-handback.md#sixth-executor-review-correction-2026-10-21)
+· [Accepted implementation prompt](../review/route-3-executor-oc-r6-implementation-claude-prompt.md)
+· [Active handover](../review/Handover%20information).
+
+## Decision — executor supervisor wrapper: root-controlled system service — 2026-10-20
+
+Peter Duscha directs implementation of the independent Codex review
+recommendations for the inactive executor supervisor package and selects the root-controlled
+system-service wrapper. The persistent supervisor is a root-owned unit in
+`/etc/systemd/system`, enabled only in the system manager and running as
+`User=freedom-executor`/`Group=freedom-executor`; it starts its interpreter with
+`-E -s` and a minimal fixed environment. The dedicated account's lingering
+systemd user manager still owns each separate transient invocation service, the
+fixed SA-2 vector and the one-shot/ownership protocol are unchanged, and the
+unaccepted globally enabled user-service wrapper is replaced (a leftover
+instance is refused, not migrated). This is an inactive, reversible deployment
+correction under the
+[fifth executor review-remediation prompt](../review/route-3-executor-oc-review-remediation-r5-claude-prompt.md);
+it records no acceptance and authorizes no production/staging installation or
+activation, account/linger/sudoers change, broader sudo command or successor
+slice.
+
+[Change record](change-log.md) · [Active handover](../review/Handover%20information)
+· [Active delivery plan](active-delivery-plan.md).
+
+## Decision — executor persistent ownership approved in principle; candidate blocked — 2026-10-19
+
+Peter Duscha approves the narrow lifecycle change under which the non-root
+executor may return with an unsettled invocation only after that invocation
+remains kernel-contained and has been durably transferred to an
+already-established persistent owner. That owner must block further
+orchestration and continue recovery until the boundary is empty; recovery must
+never invoke SA-2 again.
+
+Peter selects the concrete architecture for the assigned R3 correction. A
+restartable `ubuntu` supervisor runs under the systemd user manager, and every
+admitted invocation runs in a separate transient service created through
+`StartTransientUnit`. The supervisor durably commits exclusive `prepared`
+state before that one call; systemd launches the exact accepted sudo vector
+directly inside the new unit's cgroup. The invocation does not share the
+supervisor service's cgroup, so the supervisor can restart while PID 1 and the
+user manager retain a stuck invocation. A deterministic unit name, boot
+identity, manager-issued `InvocationID` and exact cgroup identity bind recovery
+without retrying the launch.
+
+The disposable host currently has systemd 259, unified cgroup v2 and an active
+`ubuntu` user manager with `Linger=no`. R3 may enable linger temporarily for
+the host proof and must restore it. Selecting production user lingering or an
+equivalent system-level installation remains a later deployment decision and
+is not authorized here.
+
+Peter does not accept the current candidate. Independent Codex review found
+that its marker is a best-effort action after privileged launch: marker failure
+can still return `UNSETTLED`, and an ordinary exception can propagate after the
+failed hand-off while the member remains and the scope closes. The candidate
+also provides no already-running supervised recovery owner, and its host test
+uses manually started one-shot recovery rather than proving owner restart and
+continuous recovery.
+
+The executor OC slice remains blocked. Its next correction must establish
+durable recoverable ownership before privileged launch, retain it across every
+normal and exceptional exit, and prove on `oracle-test` persistent-owner
+restart, continued orchestration blocking, no duplicate SA-2 invocation and
+eventual cleanup. Peter assigns Claude that bounded correction under the
+[third executor review-remediation prompt](../review/route-3-executor-oc-review-remediation-r3-claude-prompt.md).
+No successor slice, production/staging activation, installer, migration or
+cutover is authorized. Baseline v1.9 and the product/release scope are
+unchanged.
+
+[Handback and independent review](../review/route-3-executor-oc-implementation-handback.md#independent-review-of-the-second-remediation-2026-10-19)
+· [Change record](change-log.md) · [Active handover](../review/Handover%20information)
+· [Active delivery plan](active-delivery-plan.md).
+
 ## Decision — RT-5 accepted; non-root OC interruption slice assigned — 2026-10-18
 
 Peter Duscha accepts the fifth-remediated RT-5 `attest` role for continued

@@ -1,6 +1,84 @@
 # Decision register
 
-## Authorization and result — production read-only inspection — 2026-10-25
+## Decision — Route 3 provisioning plan accepted; release fields remain a hard NO-GO — 2026-11-03
+
+Peter accepts runbook part P after Codex's independent R6/R7 re-review found no
+remaining issue. This closes the provisioning-plan review gate and accepts the
+attended status-28 package/hold recovery boundary. It does **not** authorize a
+production operation.
+
+Every block-F release field remains `UNSET`. The next work is to establish the
+committed release revision and off-production artifact identities, then obtain
+separate authority for the read-only production S0.0 package-closure/origin
+observation. S1 inert provisioning requires a later written decision after the
+complete release record is supplied and reviewed; S3 arming/install and S4
+activation remain still-later independent decisions. Production provisioning,
+installation, activation, migration/cutover and RB-1 remain unauthorized.
+
+The accepted deployment remains `/opt/freedom-route3/{code,venv}` and the
+production checklist remains v2. The completed prompt chain is preserved in the
+[November 2026 archive](../review/archive/route-3-production-provisioning-2026-11/README.md).
+See [change-log](change-log.md) `C-ROUTE3-PROVISION-PLAN-ACCEPT-20261103`.
+
+## Decision — grant absent confirmed; Phase A deviation accepted; provisioning plan under review — 2026-10-31 (history; review closed above)
+
+Peter confirmed on 2026-10-31 that `/etc/sudoers.d/zz-claude-window` was absent
+and accepted the Phase A stop/order deviation. The subsequent R1–R7 plan chain
+is preserved in the archive linked above; its final disposition is the
+2026-11-03 acceptance. Provisioning, installation and activation were not
+authorized by this historical decision.
+
+## Current state — R4 independently reviewed — 2026-10-30 (open items closed 2026-10-31, above)
+
+Supersedes the current-state statements of the two entries below (their
+history stands). **Decided by Peter:** Route 3 uses the distinct trusted
+deployment `/opt/freedom-route3/{code,venv}`; it is implemented and rehearsed only on `oracle-test`, the
+live services are untouched, and nothing is provisioned on production. **Open
+blocker:** the temporary grant file `/etc/sudoers.d/zz-claude-window` (three
+grants by Peter, one name; last timer deadline 2026-10-25 21:18:45 UTC). Claude's
+read-only observation on 2026-10-29 19:45 UTC found no effective passwordless
+grant (`sudo -n true` rc 1; no `NOPASSWD: ALL`), but the file itself is
+unobservable without root and the vanished timer is supporting evidence only,
+so the item stays open until Peter confirms with `sudo ls -l /etc/sudoers.d/`.
+**Open, undecided:** the Phase A stop/order deviation (Peter has neither
+accepted nor rejected it). Provisioning, installation and activation remain
+no-go. The production checklist is v2 (trusted paths, item 8 from the trusted
+deployment); §6.1's result belongs to v1. Independent Codex review of the R4
+direct-completion return found no remaining executable defect on 2026-10-30;
+reviewer-authorized documentation corrections need no separate review.
+Provisioning and activation remain no-go. Handback §6.2 and its R4
+direct-completion return.
+
+## Decision — separate Route 3 deployment root selected — 2026-10-25
+
+Peter Duscha selects a distinct trusted deployment root and venv for Route 3 on
+the production host, rather than replacing the live `platform`/`venv-web` paths
+or dropping Route 3. This is the direction only. No production change is
+authorized by it: the plan (including how the fixed `CODE_ROOT`/`VENV` paths
+are separated and whether the live services must move) is to be written and
+rehearsed on `oracle-test`, reviewed, and then authorized separately. The
+temporary-grant and Phase A deviation items remain open. Implemented on
+`oracle-test` 2026-10-25 as `/opt/freedom-route3/{code,venv}` with the live
+services untouched (handback §6.2).
+
+## Result — Route 3 root-assisted production follow-up (history; superseded for current state above) — 2026-10-25
+
+Peter Duscha gave the follow-up assignment, named the window, himself as
+rollback owner and evidence retention until reviewed, and created a temporary
+root grant. Root-assisted sudoers and private-Polkit classification completed:
+nothing reaches the future `freedom-executor` account. Phase B stopped on a
+live-path coexistence conflict (the fixed code root and venv are the
+`freedom-bot`/`freedom-worker` paths in the canonical working checkout); Phase C
+did not begin. Production changes: the temporary grant, the approved `chmod
+0440` of `/etc/sudoers.d/foundry-bot`, and the grant's removal. Nothing was
+provisioned or installed, no service restarted, no migration or cutover ran.
+Provisioning and activation remain no-go. **Pending Peter at that time:** (1) the
+architecture decision (since made: a distinct trusted deployment root/venv); (2) closure of the temporary grant (effective grant absent; file
+absence needs Peter's `sudo ls -l /etc/sudoers.d/`); (3) acceptance or rejection
+of the Phase A stop/order deviation (the approved chmod preceded the Phase B
+checkpoint, with no explicit supersession). See handback §6.2.
+
+## Authorization and result — production read-only inspection (unprivileged part; superseded for current state above) — 2026-10-25
 
 Peter Duscha explicitly authorizes the production inspection in handback §6.
 Codex confirmed the current host is production and performed only secret-safe,

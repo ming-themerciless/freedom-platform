@@ -1,12 +1,56 @@
 # RAID register
 
-**Current-state note, 2026-10-25 (production inspection no-go).** Peter
+**Current-state note, 2026-11-03.** Peter accepted the independently reviewed
+Route 3 production provisioning plan. The plan-quality risk described in the
+2026-10-31 note is **closed**; the attended status-28 recovery residual is
+accepted as the deliberate boundary. The remaining items are release and
+authority gates, not unresolved plan defects: every block-F identity is
+`UNSET`; the accepted candidate is not yet committed/published; production
+S0.0 read-only observation is not authorized; and S1, S3 and S4 each retain
+their separate authority boundary. Consequently the plan remains **NO-GO** and
+production provisioning, installation and activation remain unauthorized.
+
+**Current-state note, 2026-10-31 (history; plan risk closed 2026-11-03).** (1) **Temporary grant** — Peter confirmed on 2026-10-31 that `/etc/sudoers.d/zz-claude-window` is absent: **closed** (his decision, not a reproduced transcript). (2) **Phase A stop/order deviation** — Peter accepted it on 2026-10-31: **closed**. (3) **New risk — provisioning plan not yet exact:** review found provisioning mixed with activation (installer `install` enables the unit), no defined source or integrity identity for Python 3.14, the SA-2 artifact, the Jeepney wheel or the deployable code, an `rsync` publication, incomplete partial-provisioning rollback, an ambient `python3` for privileged installer calls and stale records. **Update 2026-11-01 (R2):** the independent review of the R1 return found four further defects — rollback deleting packages it did not install, an unclosed apt dependency set, fail-open identity queries in rollback, and an S1.0 failure that blocked both a rerun and rollback; the R2 return remediated them (operation-owned package records, an exact reviewed closure, three-valued identity/manager queries, staged-and-published S1.0 evidence with recovery block R0). **Update 2026-11-01 (R3):** review of the R2 return reproduced two more defects — a package installed by a separate apt transaction before Route 3's own lock was attributed to Route 3 and removed, and a failed `systemctl is-active` that printed a state was read as definite; the R3 return derives ownership from a record written inside the Route 3 apt transaction (ambiguity removes nothing, status 28) and reads manager state only from `systemctl show` with status 0. **Update 2026-11-01 (R4):** review of the R3 return reproduced one more defect — the pre-install record proved only what apt submitted, so after a kill before unpacking a later transaction's installation of a recorded package was removed by R; the R4 return makes ownership a completed-effect record published by a `DPkg::Post-Invoke` hook under apt's own lock (any interruption before it is ambiguous: nothing removed, status 28) and was returned. **Update 2026-11-01 (R5):** review of the R4 return reproduced one more defect — an earlier configured `DPkg::Post-Invoke` hook can separately install the same package name and version before the Route 3 hook queries dpkg, so the observation is not proof of who installed it and R4 removed it; the R5 return removes automatic package and hold rollback from R (status 0 only when packages and holds already equal the recorded state, otherwise nothing is changed, the differences are printed and R exits 28 for attended recovery) and was subsequently completed by R6/R7. Historical mitigation: runbook part P (staged S0–S4, one STOP-A, manifest-exact staged deployment, checkpointed rollback, one sanitized installer invocation).
+
+**Current-state note, 2026-10-30 (R4 independently reviewed; supersedes the 2026-10-25 open-risk list below).**
+(1) **Temporary grant — explicit blocker.** `/etc/sudoers.d/zz-claude-window`
+(three grants by Peter, one file name). A read-only observation on 2026-10-29
+19:45 UTC found no effective passwordless grant (`sudo -n true` rc 1; no
+`NOPASSWD: ALL`), but the file's presence is unobservable without root; the
+vanished expiry timer is supporting evidence, not proof of removal. Closes when
+Peter confirms with `sudo ls -l /etc/sudoers.d/`. (2) **Phase A stop/order
+deviation** — still open and undecided; not inferred closed by any later
+assignment. (3) The architecture decision is **made**: Peter selected the
+distinct trusted deployment `/opt/freedom-route3/{code,venv}`, implemented and
+rehearsed only on `oracle-test`, the live services untouched — it is no longer
+a risk awaiting decision. (4) Checklist v2 (trusted paths; item 8 runs
+`polkit_tmpfiles` from the trusted deployment) replaces v1; §6.1's result is
+v1 history. Independent Codex review of the R4 direct-completion return found no
+remaining executable defect; the reviewer directly corrected the current
+pointers and mutation-test count, with no separate review required for those
+documentation-only corrections. Provisioning and activation remain no-go.
+
+**Current-state note, 2026-10-25 (root-assisted follow-up; open items; superseded above).** Peter
+gave the follow-up assignment and named prerequisites. Root-assisted sudoers
+and private-Polkit classification completed; nothing reaches the future
+executor account. Phase B found a live-path coexistence conflict and Phase C
+did not begin. Production changed only by Peter's temporary root grant, the
+approved `chmod 0440` of `/etc/sudoers.d/foundry-bot` and the grant's removal;
+nothing was provisioned or installed and no service restarted. Provisioning and
+activation remain no-go. **Open risks:** (1) the temporary grant — effective
+grant verified absent, file absence unobservable without root; (2) Phase A
+stop/order deviation — the approved chmod preceded the Phase B checkpoint
+without explicit supersession, for Peter to accept or reject; (3) the
+architecture decision on a distinct trusted deployment root/venv or no Route 3
+on this host (since decided; see the 2026-10-29 note above). Handback §6.2.
+
+**Current-state note, 2026-10-25 (unprivileged inspection no-go; earlier note).** Peter
 authorized the handback §6 read-only production inspection. Secret-safe checks
 confirmed that Python 3.14, the executor account, Route 3 units/artifact/runtime
 paths and the tmpfiles prerequisite are absent, and that the live checkout and
-Python 3.12 venv fail the executor's root-owned trust boundary. No production
-state changed. Sudoers and private Polkit policy remain incomplete because root
-access was unavailable; account-dependent checks remain deferred. This is a
+Python 3.12 venv fail the executor's root-owned trust boundary. The unprivileged
+inspection changed nothing; the sudoers/Polkit completion is in the note above.
+Account-dependent checks remain deferred. This is a
 no-go for provisioning or activation, not authority to remediate. The next gate
 is root-assisted read-only completion and a separately reviewed provisioning
 plan.

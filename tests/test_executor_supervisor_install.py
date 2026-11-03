@@ -24,8 +24,8 @@ REPO = Path(__file__).resolve().parents[1]
 ME = os.getuid()
 ACCOUNT_UID = ME + 4000
 SUDO_OK = f"User {ACCOUNT} may run the following commands on host:\n    (root) NOPASSWD: {SA2}\n"
-PLATFORM = "opt/freedom-blades/platform"
-VENV = "opt/freedom-blades/runtime/venv-web"
+PLATFORM = "opt/freedom-route3/code"
+VENV = "opt/freedom-route3/venv"
 HOME_BIN = "opt/freedom-blades/runtime/pyhome/bin"
 
 
@@ -97,7 +97,7 @@ class World:
         (site / "jeepney" / "io.py").write_text("")
         (site / "_virtualenv.pth").write_text("import _virtualenv")
         (self.root / HOME_BIN / "python3.12").write_text("")
-        (self.root / VENV / "bin" / "python").symlink_to("../../pyhome/bin/python3.12")
+        (self.root / VENV / "bin" / "python").symlink_to("../../../freedom-blades/runtime/pyhome/bin/python3.12")
         (self.root / VENV / "pyvenv.cfg").write_text("home = /opt/freedom-blades/runtime/pyhome/bin\nversion_info = 3.12\n")
         (self.root / "var/lib/systemd/linger" / ACCOUNT).write_text("")
         for path in [*self.root.rglob("*"), self.root]:
@@ -371,7 +371,7 @@ def damage_case(world, name):
         shutil.rmtree(site / "jeepney")
         return "code-missing"
     if name == "venv-parent-writable":
-        (world.root / "opt/freedom-blades/runtime").chmod(0o777)
+        (world.root / "opt/freedom-route3").chmod(0o777)
         return "code-writable"
     if name == "fragment-writable":
         (world.repo / tool.SOURCE_RELATIVE).chmod(0o666)
@@ -846,7 +846,7 @@ def test_a_user_unit_of_the_same_name_in_the_accounts_own_configuration_changes_
 
 def test_the_system_installation_leaves_no_trace_in_any_user_manager(world):
     installer(world).install()
-    traces = [p for p in world.root.rglob("*") if (p.name.startswith(UNIT) or p.name == tool.STATE_NAME) and "platform" not in p.parts]
+    traces = [p for p in world.root.rglob("*") if (p.name.startswith(UNIT) or p.name == tool.STATE_NAME) and (world.root / PLATFORM) not in p.parents]
     assert sorted(str(p.relative_to(world.root)) for p in traces) == [
         f"etc/systemd/system/{UNIT}", f"etc/systemd/system/multi-user.target.wants/{UNIT}"]  # no user wants, no state, no runtime
 

@@ -22,9 +22,11 @@ DECOY = "DECOY_DESCRIPTION_SHOULD_NOT_PRINT"
 
 def script() -> str:
     text = HANDBACK.read_text()
-    match = re.search(r"\n## 6\. Production-specific read-only fact checklist.*?```bash\n(.*?)\n```", text, re.S)
-    assert match, "the §6 script is missing"
-    return match[1]
+    start = text.index("\n## 6. Production-specific read-only fact checklist")
+    current = text[start: text.index("\n### 6.1 Production inspection result", start)]  # the historical v1 record in §6.1 is never selected
+    blocks = re.findall(r"```bash\n(.*?)\n```", current, re.S)
+    assert len(blocks) == 1, "§6 must hold exactly one executable (v2) checklist"
+    return blocks[0]
 
 
 def section(start: str, end: str) -> str:

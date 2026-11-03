@@ -3,7 +3,7 @@ production unit as a root-owned **system service** running as the dedicated acco
 dedicated lingering account, a second lingering user and the exact SA-2 sudoers vector.
 
 Nothing of the real tree is chowned. A root-owned copy of the repository and a root-owned Python 3.14 venv (with the
-repository's pinned ``jeepney``) are bind-mounted over ``/opt/freedom-blades`` for the module and unmounted afterwards; the
+repository's pinned ``jeepney``) are bind-mounted over ``/opt/freedom-route3`` for the module and unmounted afterwards; the
 accounts, their linger, the sudoers drop-in, the shadow tree, the decoys, the SA-2 stand-in artifact and every mount are created
 here and removed (and asserted removed).
 
@@ -38,7 +38,8 @@ from tools import executor_supervisor_install as tool_module
 from tools.executor_supervisor_install import ACCOUNT, SA2, UNIT, DrainSession, Installer
 
 REPO = Path(__file__).resolve().parents[2]
-REAL_ROOT = Path("/opt/freedom-blades")
+REAL_ROOT = Path("/opt/freedom-blades")  # the ordinary checkout and venv: only the source of the pinned jeepney
+ROUTE3 = Path("/opt/freedom-route3")  # the dedicated trusted deployment root (production: root-owned, absent until provisioned)
 TOKEN = secrets.token_hex(3)
 SHADOW = Path(f"/var/tmp/fbpkg-{TOKEN}")
 SUDOERS = Path(f"/etc/sudoers.d/zz-fbpkg-{TOKEN}")
@@ -93,30 +94,30 @@ def residue() -> dict:
 @pytest.fixture(scope="module")
 def package():
     """A root-owned package, its account, a second lingering user and the sudoers entry; all undone (and checked) on exit."""
-    assert not mounted(REAL_ROOT), "a previous run left /opt/freedom-blades mounted"
+    assert not mounted(ROUTE3) and not ROUTE3.exists(), "a previous run left /opt/freedom-route3 mounted or present"
     for name in (ACCOUNT, OTHER):
         with pytest.raises(KeyError):
             pwd.getpwnam(name)
     assert not SUDOERS.exists() and not (USER_UNIT_DIR / UNIT).exists() and not (SYSTEM_DIR / UNIT).exists()
     before = residue()
     assert before["state"] == [] and before["runtime"] == [], "an earlier run left supervisor state or runtime"
-    before_root, before_tmp = os.lstat(REAL_ROOT), os.lstat("/var/tmp")
+    before_tmp = os.lstat("/var/tmp")
     mounts, account, other = [], None, None
     original_cwd = os.getcwd()
     os.chdir("/")  # nothing of this process may be inside the shadow mount, or it could never be unmounted
     try:
-        tree = SHADOW / "freedom-blades"
-        (tree / "runtime").mkdir(parents=True)
+        tree = SHADOW / "freedom-route3"
+        tree.mkdir(parents=True)
         run("rsync", "-a", "--chown=root:root", "--chmod=D755,F644", "--exclude=.git", "--exclude=venv-web", "--exclude=venv",
             "--exclude=__pycache__", "--exclude=*.pyc", "--exclude=.pytest_cache", "--exclude=node_modules",
-            f"{REPO}/", f"{tree}/platform/", check=True)
-        run("env", f"UV_CACHE_DIR={SHADOW}/uv-cache", "/usr/local/bin/uv", "venv", "--python", PY314, f"{tree}/runtime/venv-web", check=True)
-        (site,) = (tree / "runtime/venv-web/lib").glob("python3.*/site-packages")
+            f"{REPO}/", f"{tree}/code/", check=True)
+        run("env", f"UV_CACHE_DIR={SHADOW}/uv-cache", "/usr/local/bin/uv", "venv", "--python", PY314, f"{tree}/venv", check=True)
+        (site,) = (tree / "venv/lib").glob("python3.*/site-packages")
         for item in SITE.glob("jeepney*"):  # the pinned pure-Python dependency, copied from the repository's own venv
             run("cp", "-a", str(item), str(site), check=True)
         run("chown", "-R", "root:root", str(SHADOW))
         run("chmod", "-R", "go-w", str(SHADOW))
-        for directory in (SHADOW, tree, tree / "runtime"):
+        for directory in (SHADOW, tree):
             directory.chmod(0o755)
         SUDOERS.write_text(f"{ACCOUNT} ALL=(root) NOPASSWD: {SA2}\n")
         SUDOERS.chmod(0o440)
@@ -127,9 +128,10 @@ def package():
         for name, entry in ((ACCOUNT, account), (OTHER, other)):
             run("loginctl", "enable-linger", name, check=True)
             assert wait_until(lambda entry=entry: Path(f"/run/user/{entry.pw_uid}/bus").exists(), 60), f"{name}'s user manager did not start"
-        assert run("mount", "--bind", str(tree), str(REAL_ROOT)).returncode == 0
-        mounts.append(REAL_ROOT)
-        assert os.lstat(REAL_ROOT).st_uid == 0
+        ROUTE3.mkdir(mode=0o755)
+        mounts.append(ROUTE3)
+        assert run("mount", "--bind", str(tree), str(ROUTE3)).returncode == 0
+        assert os.lstat(ROUTE3).st_uid == 0
         yield account
     finally:
         if account is not None:
@@ -166,9 +168,12 @@ def package():
             run("rm", "-rf", str(SHADOW))
         os.chdir(original_cwd)
         assert not stuck, f"could not unmount {stuck}"
-        after = os.lstat(REAL_ROOT)
-        assert not mounted(REAL_ROOT) and (after.st_uid, after.st_gid, after.st_mode) == (
-            before_root.st_uid, before_root.st_gid, before_root.st_mode)
+        if not mounted(ROUTE3):  # the empty mount point this fixture created; never remove a mounted tree
+            try:
+                ROUTE3.rmdir()
+            except FileNotFoundError:
+                pass
+        assert not mounted(ROUTE3) and not ROUTE3.exists()
         for name in (ACCOUNT, OTHER):
             with pytest.raises(KeyError):
                 pwd.getpwnam(name)
@@ -182,7 +187,7 @@ def tool(action: str) -> subprocess.CompletedProcess:
     """The real installer, exactly as an operator runs it: root, an emptied environment, the repository as the working directory."""
     return subprocess.run(
         ["env", "-i", "PATH=/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE=1", PY314, "-m", "tools.executor_supervisor_install", action],
-        capture_output=True, text=True, cwd=str(REAL_ROOT / "platform"), check=False)
+        capture_output=True, text=True, cwd=str(ROUTE3 / "code"), check=False)
 
 
 def acct(account, *argv: str, user: str = ACCOUNT) -> subprocess.CompletedProcess:
@@ -214,7 +219,7 @@ def start_service() -> None:
 
 
 def one_stop(account, **env) -> str:
-    result = acct(account, "env", "-i", "PATH=/usr/bin:/bin", f"PYTHONPATH={REAL_ROOT}/platform", f"{REAL_ROOT}/runtime/venv-web/bin/python", "-B",
+    result = acct(account, "env", "-i", "PATH=/usr/bin:/bin", f"PYTHONPATH={ROUTE3}/code", f"{ROUTE3}/venv/bin/python", "-B",
                   "-c", ONE_STOP, user=ACCOUNT)
     return result.stdout.strip() or result.stderr.strip()
 
@@ -304,7 +309,7 @@ def test_install_is_inactive_and_creates_exactly_one_root_owned_system_service_t
     shown = sshow(UNIT, "User", "Group", "FragmentPath", "NeedDaemonReload", "LoadState", "ExecStart")
     assert (shown["User"], shown["Group"], shown["FragmentPath"], shown["NeedDaemonReload"], shown["LoadState"]) == (
         ACCOUNT, ACCOUNT, str(unit), "no", "loaded")
-    assert " -E -s -m adapters.executor.supervisor" in shown["ExecStart"] and "path=/opt/freedom-blades/runtime/venv-web/bin/python" in shown["ExecStart"]
+    assert " -E -s -m adapters.executor.supervisor" in shown["ExecStart"] and "path=/opt/freedom-route3/venv/bin/python" in shown["ExecStart"]
     assert active() == "inactive"  # install enables and never starts
     assert tool("verify").stdout.strip() == "executor-supervisor installed"
     not_ready = tool("verify-ready")
@@ -314,7 +319,7 @@ def test_install_is_inactive_and_creates_exactly_one_root_owned_system_service_t
     assert tool("verify-ready").stdout.strip() == "executor-supervisor ready"
     assert active() == "active" and listing(state_dir()) == []
     (pid, uid, argv), = supervisors()  # exactly one persistent supervisor on the host
-    assert uid == account.pw_uid and int(sshow(UNIT, "MainPID")["MainPID"]) == pid and argv[0] == f"{REAL_ROOT}/runtime/venv-web/bin/python"
+    assert uid == account.pw_uid and int(sshow(UNIT, "MainPID")["MainPID"]) == pid and argv[0] == f"{ROUTE3}/venv/bin/python"
     assert (STATE.stat().st_uid, stat.S_IMODE(STATE.stat().st_mode)) == (account.pw_uid, 0o700)
     assert (RUNTIME.stat().st_uid, stat.S_IMODE(RUNTIME.stat().st_mode)) == (account.pw_uid, 0o700)
     env = environ_of(pid)
@@ -347,8 +352,8 @@ def test_the_transient_invocation_is_created_in_the_dedicated_user_manager_with_
     start_service()
     (supervisor,) = supervisors()
     client = subprocess.Popen(
-        ["runuser", "-u", ACCOUNT, "--", "env", "-i", "PATH=/usr/bin:/bin", f"PYTHONPATH={REAL_ROOT}/platform",
-         f"{REAL_ROOT}/runtime/venv-web/bin/python", "-B", "-c", ONE_STOP], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd="/")
+        ["runuser", "-u", ACCOUNT, "--", "env", "-i", "PATH=/usr/bin:/bin", f"PYTHONPATH={ROUTE3}/code",
+         f"{ROUTE3}/venv/bin/python", "-B", "-c", ONE_STOP], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd="/")
     try:
         assert wait_until(lambda: len(invocation_units(account)) == 1, 20), invocation_units(account)
         (name,) = invocation_units(account)
@@ -415,7 +420,7 @@ def test_hostile_python_manager_and_account_settings_cannot_redirect_the_real_se
     try:
         # Controls: without the unit's flags, the very same decoys really do take over an account-run interpreter.
         env = [f"{key}={value}" for key, value in hostile.items() if key not in ("PYTHONHOME", "PYTHONINSPECT")]
-        interpreter = f"{REAL_ROOT}/runtime/venv-web/bin/python"
+        interpreter = f"{ROUTE3}/venv/bin/python"
         for flags, expect in (([], True), (["-s"], True), (["-E"], False), (["-E", "-s"], False)):  # a venv has no user site of its own
             mark.write_text("")
             done = acct(account, "env", *env, interpreter, "-B", *flags, "-c", "import sys; sys.exit(0)", user=ACCOUNT)
@@ -536,7 +541,7 @@ class FailNthReload:
 
 
 def real_installer(run_hook) -> Installer:
-    return Installer(REAL_ROOT / "platform", run=run_hook)
+    return Installer(ROUTE3 / "code", run=run_hook)
 
 
 def test_an_upgrade_loads_the_new_fragment_after_a_checked_reload_a_failed_reload_never_reports_success_and_the_restart_uses_it(installed):
@@ -669,8 +674,8 @@ def test_a_supervisor_restart_with_a_live_contained_member_keeps_the_record_the_
     sa2_stand_in.write_text("12")
     start_service()
     client = subprocess.Popen(
-        ["runuser", "-u", ACCOUNT, "--", "env", "-i", "PATH=/usr/bin:/bin", f"PYTHONPATH={REAL_ROOT}/platform",
-         f"{REAL_ROOT}/runtime/venv-web/bin/python", "-B", "-c", ONE_STOP], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd="/")
+        ["runuser", "-u", ACCOUNT, "--", "env", "-i", "PATH=/usr/bin:/bin", f"PYTHONPATH={ROUTE3}/code",
+         f"{ROUTE3}/venv/bin/python", "-B", "-c", ONE_STOP], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd="/")
     try:
         assert wait_until(lambda: len(invocation_units(account)) == 1 and (state_dir() / "active.json").exists(), 20)
         (name,) = invocation_units(account)
@@ -692,8 +697,8 @@ def test_a_supervisor_restart_with_a_live_contained_member_keeps_the_record_the_
 
 def spam(account, seconds: float, workers: int = 4, pause: float = 0.3) -> list[subprocess.Popen]:
     return [
-        subprocess.Popen(["runuser", "-u", ACCOUNT, "--", "env", "-i", "PATH=/usr/bin:/bin", f"PYTHONPATH={REAL_ROOT}/platform",
-                          f"{REAL_ROOT}/runtime/venv-web/bin/python", "-B", "-c", SPAM, str(seconds), str(pause)],
+        subprocess.Popen(["runuser", "-u", ACCOUNT, "--", "env", "-i", "PATH=/usr/bin:/bin", f"PYTHONPATH={ROUTE3}/code",
+                          f"{ROUTE3}/venv/bin/python", "-B", "-c", SPAM, str(seconds), str(pause)],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd="/")
         for _ in range(workers)
     ]
@@ -780,7 +785,7 @@ def test_removal_under_load_is_refused_while_an_invocation_is_admitted_and_compl
 
 
 def test_an_oversized_directory_in_the_trusted_tree_refuses_at_the_bound_without_unbounded_enumeration_or_memory(package):
-    big = REAL_ROOT / "platform/adapters/zz_oversize"
+    big = ROUTE3 / "code/adapters/zz_oversize"
     big.mkdir(mode=0o755)
     try:
         for index in range(250_000):
@@ -819,7 +824,7 @@ def test_an_oversized_directory_in_the_trusted_tree_refuses_at_the_bound_without
         tracemalloc.start()
         try:
             with pytest.raises(tool_module.Failure) as caught:
-                Installer(REAL_ROOT / "platform").install()
+                Installer(ROUTE3 / "code").install()
         finally:
             os.scandir = real_scandir
             _, peak = tracemalloc.get_traced_memory()

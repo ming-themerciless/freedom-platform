@@ -1,71 +1,58 @@
-# Active handover — Route 3 production inspection no-go — 2026-10-25
+# Active handover — Route 3 provisioning plan accepted; release identities pending (NO-GO) — 2026-11-03
 
 **IMPLEMENTATION AND FULL DISPOSABLE-SERVER TESTING AUTHORIZED**
 
-Peter accepts the cumulative Route 3 production-readiness candidate for
-continued non-production development after Claude's final checklist portability
-correction and Codex's clean independent re-review. The accepted evidence is in
-the [production-readiness handback](route-3-production-readiness-handback.md):
-the exact checklist matched between the workspace and `oracle-test`, the
-focused module passed **53/53**, `bash -n` and `git diff --check` were clean,
-and the directly affected structural run reproduced **127 passed, 1 known
-baseline allowlist failure**.
+Peter accepted the Route 3 production provisioning plan on 2026-11-03 after
+Codex's independent R6/R7 re-review found no remaining issue. The accepted
+plan is runbook part P. Its cumulative evidence is in the
+[production-readiness handback](route-3-production-readiness-handback.md), and
+the completed prompt chain is historical in the
+[November 2026 archive](archive/route-3-production-provisioning-2026-11/README.md).
 
-On 2026-10-25 Peter selected the production direction and accepted the
-transient inspection-failure residual only for a **bounded, attended
-migration/cutover evidence facility**. Route 3 is not a general maintenance
-facility and is not approved for recurring or unattended operation. Every
-future activation requires explicit authority, an attending named operator,
-pre-activation proof that no residual rule or activation state exists, and a
-post-pass proof that both are absent. A verified root removal or reboot is
-required before the operating window can close if cleanup is uncertain.
+The accepted safety direction is unchanged:
 
-Peter separately authorized the handback §6 **read-only production inspection**
-on 2026-10-25. Codex confirmed that the current host is production and ran the
-secret-safe checks available to the unprivileged operator. No service, account,
-policy, package, file ownership or runtime state was changed.
+- Route 3 is a bounded, attended migration/cutover evidence facility, not a
+  general maintenance or unattended facility.
+- The trusted deployment is `/opt/freedom-route3/{code,venv}`; the live
+  `freedom-bot`, `freedom-web` and `freedom-worker` paths remain untouched.
+- S1 is inert provisioning and stops at STOP-A. S3 arming/install and S4
+  activation require later, separate written decisions.
+- Rollback R never removes, purges, autoremoves, downgrades, holds or unholds a
+  package. A package or hold difference is preserved for attended recovery and
+  returns status 28; Peter decides any later package action from the evidence.
+- Every activation requires a named attending operator, clean pre-activation
+  state, post-pass residual checks, and verified removal or reboot before the
+  operating window closes if cleanup is uncertain.
 
-The result is **NO-GO for provisioning or activation**. The required
-`/usr/bin/python3.14`, `freedom-executor` account, Route 3 units, SA-2 artifact
-and runtime/state paths are absent. `tools.polkit_tmpfiles verify` returns 12:
-the fragment and `/run/polkit-1/rules.d` prerequisite are absent. The current
-live checkout and Python 3.12 venv are not a trusted executor deployment: the
-inspection counted 203 violating entries under `adapters/`, 185 under
-`application/`, two under `infra/executor`, and 5,334 under the venv because
-they are non-root-owned, writable, links or another refused type.
+## Current state and next action
 
-The sudoers and private `/etc/polkit-1/rules.d` classifications remain
-**incomplete**, because this operator has no non-interactive root access and no
-password was requested or supplied. Public Polkit rules contained no systemd1
-action or Route 3 identity match. The dedicated account is absent, so its user
-manager, effective sudo grant, Polkit effect and process exclusivity must be
-rechecked after provisioning. Item 12 also remains open: Peter has not yet
-named the maintenance window, rollback owner or evidence-retention period.
+The plan review gate is closed, but the plan remains **NO-GO**. Every
+production release field in runbook block F is still `UNSET`, and production
+does not have the required Python 3.14 closure, `freedom-executor` account,
+trusted deployment, SA-2 artifact, Route 3 units or runtime/state paths.
 
-## Current next action
+The next release-preparation actions are:
 
-The next production gate is **root-assisted completion of inspection §6 items
-4 and 6**, still read-only, followed by a reviewed provisioning plan that
-resolves the observed prerequisites and trust-root violations without treating
-the live working checkout as an executor trust root. Production installation
-has not been authorized. Do not provision, chown the live tree, install Python,
-create the account, edit sudoers/Polkit, restart a service or activate Route 3
-under the inspection authority.
+1. Peter commits and publishes the exact accepted candidate, establishing
+   `ROUTE3_RELEASE_REV`.
+2. The maintainer produces the code archive, manifest and their digests, plus
+   the reference interpreter and SA-2 tree identities, off production.
+3. Peter separately authorizes the read-only production S0.0 observation that
+   derives the exact Python package closure and accepted archive origins from
+   the production host's existing package lists.
+4. The supplied block-F release record is reviewed as an exact release input.
+5. Only after those fields are supplied may Peter separately decide whether to
+   authorize S1 inert provisioning. S3 and S4 remain later decisions.
 
-A bounded [Claude follow-up prompt](route-3-production-inspection-remediation-claude-prompt.md)
-is prepared. It is a proposal, not an active assignment: Peter's act of giving
-it to Claude authorizes its root inspection, while its production-write phase
-still requires the named window, rollback owner, retention period and approved
-Python/artifact sources stated in the prompt. It stops before supervisor
-installation or Route 3 activation.
-
-Production activation remains a later independent decision. Before it, the
-bounded operating procedure must name the attending operator and escalation
-contact, include the pre/post residual checks and cleanup/reboot response, and
-require removal or disablement of Route 3 after the evidence window closes.
+This acceptance authorizes none of those production actions by itself. Do not
+create `/opt/freedom-route3`, install or remove packages, create the account,
+edit sudoers or Polkit, install or start a unit, restart a service, reboot,
+activate Route 3, or run a migration/cutover without the applicable later
+written authority. Account-dependent sudo, Polkit, user-manager and process
+checks repeat after any separately authorized provisioning.
 
 [Current status](../project-management/status.md) ·
 [Active delivery plan](../project-management/active-delivery-plan.md) ·
 [Provisioning runbook](../operations/executor-supervisor-provisioning-runbook.md) ·
-[Archived predecessor handover](Handover-information-through-2026-10-24-route-3-production-readiness-acceptance.md) ·
-[Review archive](archive/route-3-production-readiness-2026-10/README.md)
+[Cumulative handback](route-3-production-readiness-handback.md) ·
+[Review archive](archive/README.md)

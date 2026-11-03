@@ -2699,13 +2699,35 @@ uncertain. Recurring or unattended use requires a stronger trusted-identity and
 automated-reconciliation design and independent review. No successor
 implementation or production operation was assigned by that decision. Peter
 then explicitly authorized handback §6 production read-only fact collection on
-2026-10-25. The accessible checks made no change and returned no-go: Python
+2026-10-25. Its unprivileged part changed nothing and returned no-go: Python
 3.14, the executor account, Route 3 units/artifact and tmpfiles/runtime
 prerequisites are absent, and the live checkout plus Python 3.12 venv fail the
-root-owned executor trust boundary. Sudoers and private Polkit policy remain
-incomplete pending root-assisted read-only inspection. Production remediation,
-installation and activation remain prohibited without separate explicit
-authority.
+root-owned executor trust boundary. Peter then gave the follow-up assignment and
+its named prerequisites; root-assisted sudoers and private-Polkit classification
+completed and found nothing that reaches the future account. Phase B found that
+the runbook's fixed code root and venv were the live `freedom-bot`/
+`freedom-worker` paths, and Phase C did not begin. Production was changed only
+by Peter's temporary root grant(s), the approved `chmod 0440` of
+`/etc/sudoers.d/foundry-bot` and an `rm -f` of the grant file whose status was
+never reported; nothing was provisioned or installed, no service restarted, and
+no migration or cutover ran. Peter then selected a distinct trusted deployment,
+`/opt/freedom-route3/{code,venv}`, implemented and rehearsed only on
+`oracle-test`; the live services are left on their paths. On 2026-10-31 Peter confirmed that the temporary grant file `/etc/sudoers.d/zz-claude-window` is absent and accepted the Phase A stop/order deviation; both blockers are closed. Independent Codex review of the R4 direct-completion return finished
+on 2026-10-30 with no remaining executable defect; reviewer-authorized
+documentation corrections need no separate review. The production provisioning
+plan in runbook part P was subsequently remediated through R6 plus the R7
+documentation correction. Codex's independent R6/R7 re-review found no
+remaining issue, and Peter accepted the plan on 2026-11-03. The completed
+prompt chain is historical in the November 2026 review archive.
+
+The plan review gate is closed, but every block-F release identity remains
+`UNSET`. The immediate next actions are to commit/publish the exact accepted
+candidate, produce the off-production artifact identities, separately authorize
+read-only production S0.0 for the exact Python closure/origins, and review the
+complete supplied release record. Production S1 inert provisioning, S3
+arming/install and S4 activation remain separate later decisions. Production
+provisioning, installation and activation remain prohibited without the
+applicable explicit authority.
 
 All testing levels are authorized on `oracle-test`, including root/systemd,
 network, packages, PostgreSQL and destructive recovery drills. Production and

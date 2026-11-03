@@ -101,9 +101,9 @@ DROPIN_DIRS = SYSTEM_UNIT_PATHS
 LEGACY_USER = ("/etc/systemd/user", "/etc/systemd/user/default.target.wants")
 #: Present in every fragment this installer writes: the only thing that lets a *differing* root-owned fragment be upgraded.
 MARKER = b"# Managed-By: tools.executor_supervisor_install\n"
-CODE_ROOT = "/opt/freedom-blades/platform"
+CODE_ROOT = "/opt/freedom-route3/code"
 CODE_TREES = ("adapters", "application")
-VENV = "/opt/freedom-blades/runtime/venv-web"
+VENV = "/opt/freedom-route3/venv"
 INTERPRETER = f"{VENV}/bin/python"
 DEPENDENCY_TREES = ("jeepney",)  # imported from site-packages by the supervisor; walked in full
 MAX_WALK = 20_000

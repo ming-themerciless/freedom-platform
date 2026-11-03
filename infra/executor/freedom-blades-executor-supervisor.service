@@ -26,9 +26,9 @@ Type=notify
 NotifyAccess=main
 User=freedom-executor
 Group=freedom-executor
-WorkingDirectory=/opt/freedom-blades/platform
+WorkingDirectory=/opt/freedom-route3/code
 Environment=PATH=/usr/bin:/bin
-ExecStart=/opt/freedom-blades/runtime/venv-web/bin/python -E -s -m adapters.executor.supervisor
+ExecStart=/opt/freedom-route3/venv/bin/python -E -s -m adapters.executor.supervisor
 Restart=always
 RestartSec=1
 TimeoutStartSec=60

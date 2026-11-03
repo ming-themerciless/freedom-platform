@@ -20,7 +20,7 @@ from tools import executor_supervisor_install as tool
 
 REPO = Path(__file__).resolve().parents[1]
 UNIT_TEXT = (REPO / tool.SOURCE_RELATIVE).read_text()
-INTERPRETER = "/opt/freedom-blades/runtime/venv-web/bin/python"
+INTERPRETER = "/opt/freedom-route3/venv/bin/python"
 
 
 def section(name: str) -> dict[str, list[str]]:

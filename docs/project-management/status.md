@@ -1,46 +1,49 @@
 # Project status
 
-## Current status — Route 3 production inspection no-go — 2026-10-25
+## Current status — Route 3 provisioning plan accepted; release identities pending (NO-GO) — 2026-11-03
 
 Baseline v1.9 remains active. Phase 3 and Phase 4 gates are approved; Phase 5
 implementation and unrestricted testing on the disposable `oracle-test` server
 remain authorized.
 
-Peter accepted the cumulative Route 3 production-readiness candidate for
-continued non-production development on 2026-10-24. The accepted chain now
-includes the inactive manager/Polkit roles, static start/stop, consume, attest,
-the non-root executor and persistent supervisor package, installer recovery,
-strict sudo verification, and the fail-closed production fact checklist.
-Independent final review reproduced **53/53** focused checklist tests on the
-exact `oracle-test` tree, clean shell syntax and diff checks, and only the known
-structural allowlist baseline failure.
+Peter accepted the Route 3 production provisioning plan on 2026-11-03 after
+Codex independently re-reviewed the R6 candidate and its R7 documentation
+correction with no remaining finding. Final evidence on the exact candidate
+included:
 
-Peter has now classified Route 3 as a bounded, attended migration/cutover
-evidence facility and accepted the transient inspection-failure residual only
-within that boundary. Route 3 is not approved for general maintenance,
-recurring use or unattended operation. Every activation must be explicitly
-authorized and attended, with pre/post residual checks and verified cleanup or
-reboot before the operating window closes. Recurring use requires a stronger
-trusted-identity and automated-reconciliation design.
+- `tests/test_provisioning_plan.py`: **309 passed**;
+- production checklist item 8: **51 passed**;
+- checklist 5b plus installer/system-service modules: **315 passed**;
+- guard suite: **40 passed**;
+- clean shell syntax, `git diff --check` and disposable-host cleanup; and
+- no production or staging access during the provisioning-plan remediation.
 
-### Open decisions and gates
+The completed inspection and provisioning-remediation prompts are historical
+in the [November 2026 archive](../review/archive/route-3-production-provisioning-2026-11/README.md).
+The cumulative behavior and evidence record remains the
+[production-readiness handback](../review/route-3-production-readiness-handback.md).
 
-- Peter authorized the §6 read-only production inspection on 2026-10-25. It
-  made no production change and returned **NO-GO** for provisioning or
-  activation: Python 3.14, the executor account, Route 3 units/artifact/runtime
-  paths and the tmpfiles prerequisite are absent, while the live checkout and
-  Python 3.12 venv fail the required root-owned, non-writable trust boundary.
-- Sudoers and private Polkit policy could not be read without root and remain
-  incomplete. They require a root-assisted, still read-only completion.
-- A bounded Claude inspection/prerequisite-remediation prompt is prepared but
-  is not active merely because it exists. It stops before supervisor install or
-  activation and requires the named production prerequisites before writes.
-- The account-dependent checks must be repeated after any later provisioning.
-  The maintenance window, rollback owner and evidence retention are unnamed.
-- Production installation and activation remain prohibited without their own
-  explicit instructions. The inspection authority does not permit remediation.
+### Open gates
+
+- The production release fields remain `UNSET`: reviewed revision, archive and
+  manifest digests, exact Python 3.14 package closure and origins, interpreter
+  digest, and SA-2 tree digest.
+- The accepted candidate must be committed and published before a release
+  revision or archive can be supplied.
+- Deriving the production package closure/origins requires a separately
+  authorized read-only S0.0 production observation.
+- Production S1 inert provisioning requires a later explicit written
+  authorization after all release fields are supplied and reviewed.
+- S3 arming/install and S4 activation are separate later decisions. Activation
+  also requires the named attending operator, escalation contact, bounded
+  window, pre/post residual checks and verified cleanup/reboot response.
+- Account-dependent sudo, Polkit, user-manager and process checks repeat after
+  any separately authorized provisioning.
+
+The plan therefore remains **NO-GO**. Provisioning, installation, activation,
+migration/cutover and RB-1 are unauthorized.
 
 [Active handover](../review/Handover%20information) ·
 [Active delivery plan](active-delivery-plan.md) ·
-[Accepted handback](../review/route-3-production-readiness-handback.md) ·
-[Archived predecessor status](status-through-2026-10-24-route-3-production-readiness-acceptance.md)
+[Implementation plan](../implementation-plan.md) ·
+[Provisioning runbook](../operations/executor-supervisor-provisioning-runbook.md)

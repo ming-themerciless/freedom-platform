@@ -1,6 +1,6 @@
 # Active delivery plan — implementation-first baseline v1.9
 
-Status: approved and active; production inspection returned no-go 2026-10-25
+Status: approved and active; provisioning plan accepted, release fields no-go 2026-11-03
 
 Owner and acceptance authority: Peter Duscha
 
@@ -34,32 +34,55 @@ trusted-identity and automated-reconciliation design, tests and independent
 security review.
 
 Peter authorized the production-specific §6 read-only inspection on
-2026-10-25. The unprivileged portion is complete and made no change. It returned
-**NO-GO**: the required Python 3.14, account, Route 3 units/artifact/runtime
-paths and tmpfiles prerequisite are absent, and the live checkout plus Python
-3.12 venv fail the executor's root-owned trust boundary. Sudoers and private
-Polkit policy require root and remain incomplete.
+2026-10-25. Its unprivileged part changed nothing and returned **NO-GO**: the
+required Python 3.14, account, Route 3 units/artifact/runtime paths and tmpfiles
+prerequisite are absent, and the live checkout plus Python 3.12 venv fail the
+executor's root-owned trust boundary.
 
-The next gate is root-assisted completion of those two read-only policy checks,
-then a reviewed provisioning plan. Installation, remediation and activation
-are not authorized. Account-dependent inspection repeats after any separately
-authorized provisioning. The coordinator, start orchestration, automatic
-attestation, migration/cutover and RB-1 remain unassigned.
+Peter then gave the follow-up assignment and named the window, himself as
+rollback owner and retention until reviewed. Root-assisted sudoers and private
+Polkit classification **completed** (nothing reaches the future account). Phase
+B stopped on a live-path coexistence conflict; Phase C did not begin. Production
+changes were Peter's temporary root grant(s), the approved `chmod 0440` of
+`/etc/sudoers.d/foundry-bot`, and an `rm -f` of the grant file whose status was
+never reported; nothing was provisioned or installed and no service restarted.
 
-A bounded Claude follow-up prompt is prepared for that gate. Its existence is
-not authority to mutate production: the prompt requires Peter's named window,
-rollback owner, retention period and approved Python/artifact sources before
-writes, and it stops before supervisor installation or activation.
+Peter then selected a distinct trusted deployment, `/opt/freedom-route3/{code,venv}`.
+It is implemented and rehearsed only on `oracle-test`; the live services stay on
+their paths and are not edited or restarted. The root does not exist on
+production, and the selection authorizes no production change.
+
+Peter confirmed on 2026-10-31 that `/etc/sudoers.d/zz-claude-window` is
+**absent** and accepted the Phase A stop/order deviation. Peter accepted the
+production provisioning plan on 2026-11-03 after Codex's independent R6/R7
+re-review found no remaining issue. The completed prompt chain is archived;
+runbook part P and the cumulative handback remain the forward contract and
+evidence.
+
+The plan review gate is closed, but every block-F release identity remains
+`UNSET`. The next work is release preparation: commit/publish the exact accepted
+candidate, produce the off-production archive/manifest/interpreter/SA-2
+identities, separately authorize read-only production S0.0 to derive the exact
+Python package closure and origins, and review the supplied release record.
+Only then may Peter separately decide whether to authorize S1 inert
+provisioning. S3 arming/install and S4 activation remain later independent
+decisions. Account-dependent inspection repeats after any separately authorized
+provisioning. The coordinator, start orchestration, automatic attestation,
+migration/cutover and RB-1 remain unassigned.
 
 ## Evidence and boundaries
 
+- Accepted provisioning-plan evidence: exact-tree **309 / 51 / 315 passed**,
+  guard suite **40 passed**, clean shell syntax and `git diff --check`, clean
+  disposable-host residue state, and a clean independent R6/R7 re-review.
 - Final focused checklist review: exact-tree **53/53**, clean `bash -n` and
   `git diff --check`; the structural run retained one known baseline allowlist
   failure.
-- The accessible production facts are recorded in handback §6.1. Sudo
-  `Defaults`, private Polkit policy, post-provision account facts, F-1 through
-  F-3, named operational ownership and the bounded activation/rollback
-  procedure remain open gates.
+- Production facts are in handback §§6.1–6.2; §6.1's counts come from checklist
+  v1 (old live paths) and the current checklist is v2 (trusted deployment paths).
+  Post-provision account facts, F-1 through F-3 and the bounded
+  activation/rollback procedure remain later gates; sudoers and Polkit policy
+  are no longer open.
 - Discord remains the community platform and identity/integration source. Only
   the legacy Freedom bot is eventually retired under implementation-plan
   §15.2 after the full completion criteria are met.

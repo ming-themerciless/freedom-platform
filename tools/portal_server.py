@@ -174,7 +174,12 @@ from application.web.config import ProcessRole, WebSettings
 #: logger covers both.
 _ACCESS_LOGGER = "uvicorn.access"
 #: The **exact** format string uvicorn 0.32.1 logs an access line with, in both
-#: `httptools_impl` and `h11_impl`. The precise-redaction branch is taken **only**
+#: `httptools_impl` and `h11_impl`. Re-verified unchanged against uvicorn 0.54.0
+#: on 2026-11-08 (pre-production currency): same format, same five arguments, same
+#: `get_client_addr`; a live 0.54.0 process with this filter installed logged
+#: `?<redacted>` and a pseudonym on both protocol implementations. The test that
+#: reads the installed uvicorn's source is what catches a future change.
+#: The precise-redaction branch is taken **only**
 #: for this contract, because recognising a record by its *shape* alone is not
 #: enough: a future uvicorn that prepends a field would still present a tuple
 #: with a string at index 2, and the filter would confidently redact the wrong

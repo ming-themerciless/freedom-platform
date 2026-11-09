@@ -514,6 +514,53 @@ def test_a_complete_activation_ends_by_hl_removes_its_grant_and_stop_post_verifi
         assert not os.path.lexists(path)
 
 
+def _open_journal_descriptors() -> list[str]:
+    """Open descriptors in this process that point at an RP-11 evidence journal."""
+    found = []
+    for name in os.listdir("/proc/self/fd"):
+        try:
+            target = os.readlink(f"/proc/self/fd/{name}")
+        except OSError:
+            continue  # the listing's own descriptor, already closed
+        if "-evidence/journal" in target:
+            found.append(target)
+    return found
+
+
+def test_a_finished_hold_and_cleanup_leave_no_journal_descriptor_open(world):
+    """R2 (2026-11-07): both roles opened their journal and never closed it.
+
+    A real process ends right after, which hid it; run in-process, every run kept
+    one descriptor, and the RP-11 modules together reached the default 1024 limit,
+    which broke later, unrelated tests with ``Too many open files``.
+    """
+    # Compared with what was open before, not with nothing: an unrelated test
+    # earlier in a full run can leave a fixture's journal open, and this test
+    # answers only for the two roles it runs.
+    before = set(_open_journal_descriptors())
+    ended_normally(world)
+    assert set(_open_journal_descriptors()) == before, "the hold role kept its ACT journal open"
+    cl = world.recover()
+    assert cl.terminal is Terminal.ST1_VERIFIED, cl.diagnostic(ACT_ID)
+    assert set(_open_journal_descriptors()) == before, "the cleanup role kept its attempt journal open"
+
+
+def test_closing_a_journal_appender_twice_cannot_close_another_descriptor(tmp_path):
+    """Descriptor numbers are reused at once; a second close must be a no-op."""
+    from adapters.rp11.fsops import FileIO, JournalAppender
+    from application.rp11.journal import JournalKind
+
+    first = os.open(tmp_path / "journal", os.O_WRONLY | os.O_CREAT, 0o600)
+    appender = JournalAppender(first, kind=JournalKind.ACT, run="r", io=FileIO())
+    appender.close()
+    other = os.open(tmp_path / "other", os.O_WRONLY | os.O_CREAT, 0o600)
+    try:
+        appender.close()  # idempotent: must not touch `other`, which may reuse the number
+        os.fstat(other)
+    finally:
+        os.close(other)
+
+
 def test_published_objects_have_their_accepted_identity_and_grant_id_names_the_rule(world):
     seen = {}
 

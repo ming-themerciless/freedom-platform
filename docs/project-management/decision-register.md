@@ -1,19 +1,84 @@
 # Decision register
 
-## Decision — Route 3 provisioning plan accepted; release fields remain a hard NO-GO — 2026-11-03
+## Record — currency continuation, unprivileged scope — 2026-11-08
+
+No new decision is requested. Open for Peter: the 15:27 write; whether to accept
+key-only `PermitRootLogin yes`; and approval to enable the NodeSource 24 and Caddy
+sources, upgrade Caddy, replace the bwrap AppArmor profile and rebuild the live
+virtualenvs with attended restarts (all root-only; the sandboxed session could not
+perform them). Node 26 is not adopted: Foundry v14 requires Node 24. An
+unintended scratch-cluster test run changed production's `freedom_test` (migration
+0013 to 0012 and a schema reset); it was repaired and is disclosed in the handback.
+
+## Record — dependency currency refresh — 2026-11-08
+
+No new decision is requested. Peter's pre-production currency policy resolved the
+reversible choice to raise the stale upper bounds (FastAPI, uvicorn, cryptography,
+SQLAlchemy, py_webauthn, pytest, pytest-asyncio) to the current releases; no upstream
+incompatibility required a pin, and the accepted contract's exclusions are unchanged.
+The contract's pin tables were revised in place with a dated note. Exact-tree
+`oracle-test` suites: bot 7,571 passed/337 skipped, web 2,893 passed/80 skipped,
+Foundry 171 passed. Open: the attended production virtualenv rebuilds.
+
+Independent review accepted the dependency and compatibility changes. The
+disposable host now runs Node 24.22.2, has no pending archive upgrades, and was
+reboot-verified with PostgreSQL 18 and SSH active and no failed units. The
+database-suite guard requires hostname `Test` before database resolution; the
+full exact-tree suites passed with that guard. These facts supersede the earlier
+unreviewed and disposable-Node-pending state.
+
+## Review disposition — Ubuntu 26.04/PostgreSQL 18 R2 repository/disposable remediation closed — 2026-11-08
+
+Independent Codex re-review found no remaining Blocking or Important repository
+or disposable-host finding. The exact-tree full-suite evidence remains bot 7,566
+passed/337 skipped twice, web 2,892 passed/80 skipped and Foundry 171 passed;
+the reviewer independently ran the affected focused set, 940 passed with the two
+documented hard-`RLIMIT_NOFILE` skips. The transitive `soupsieve` 4.0.1 lock is
+accepted under Peter's explicit pre-production currency instruction. R2 is
+closed for repository and disposable-host remediation only. The 15:27 authority
+deviation, privileged production journal/backup evidence, disabled source paths,
+conffile review and every Route 3 gate remain open as stated
+in the handback. No production or staging state was changed by the re-review.
+
+## Decision — pre-production currency policy and Ubuntu 26.04/PostgreSQL 18 remediation — 2026-11-07
+
+Peter requires the supported operating system, database, runtimes,
+dependencies and related infrastructure to be up to date before the platform
+begins production use. He approves the completed PostgreSQL 16-to-18 migration
+and retirement of the old cluster. Backup, restore, compatibility, observation
+and independent-review controls remain required; the 15:27 early write remains
+undispositioned.
+
+Peter assigns the bounded Ubuntu 26.04/PostgreSQL 18 R2 remediation (the SSH
+route needed no repair: the apparent `nobody:nogroup` ownership was an
+agent-sandbox user-namespace artifact, verified `root:root` unsandboxed on
+2026-11-07): close the classified Python 3.14/PG18 suite defects
+and result variations, reconcile dependency locks, collect the named read-only
+production evidence and return for independent review. The assignment does not
+authorize production application/schema mutation, `freedom-web` activation or
+any Route 3 stage.
+
+Route 3 remains a hard NO-GO with block F `UNSET`. Its former S0.0 assumes
+Python 3.14 is absent and must not run; a separate release-record/package
+redesign and independent review are required before Route 3 release preparation
+resumes. See change-log
+`C-PREPROD-CURRENCY-AND-UPGRADE-R2-20261107` and the
+[R2 prompt](../review/production-ubuntu-26-04-upgrade-review-remediation-r2-claude-prompt.md).
+
+## Decision — Route 3 provisioning plan accepted; release fields remain a hard NO-GO — 2026-11-03 (current gate retained; next action superseded above)
 
 Peter accepts runbook part P after Codex's independent R6/R7 re-review found no
 remaining issue. This closes the provisioning-plan review gate and accepts the
 attended status-28 package/hold recovery boundary. It does **not** authorize a
 production operation.
 
-Every block-F release field remains `UNSET`. The next work is to establish the
-committed release revision and off-production artifact identities, then obtain
-separate authority for the read-only production S0.0 package-closure/origin
-observation. S1 inert provisioning requires a later written decision after the
-complete release record is supplied and reviewed; S3 arming/install and S4
-activation remain still-later independent decisions. Production provisioning,
-installation, activation, migration/cutover and RB-1 remain unauthorized.
+Every block-F release field remains `UNSET`. The release-preparation sequence
+recorded on 2026-11-03 is superseded by the decision above because S0.0 assumed
+Python 3.14 was absent. S1 inert provisioning still requires a later written
+decision after a redesigned complete release record is supplied and reviewed;
+S3 arming/install and S4 activation remain still-later independent decisions.
+Production provisioning, installation, activation, migration/cutover and RB-1
+remain unauthorized.
 
 The accepted deployment remains `/opt/freedom-route3/{code,venv}` and the
 production checklist remains v2. The completed prompt chain is preserved in the

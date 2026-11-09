@@ -38,7 +38,18 @@ First-image controls (H-FI, RH-1 … RH-3) run before anything else when the
 file is executed: descriptors 0–2 must be open (else 71); every descriptor ≥ 3
 is closed, found by listing ``/proc/self/fd`` rather than up to any limit, and
 the closing is verified by a second listing (else 71); every resettable signal disposition is reset and the mask cleared;
-``umask`` is ``022`` and the working directory ``/``. The inherited environment
+``umask`` is ``022`` and the working directory ``/``.
+
+The artifact's own imports can open a descriptor too, and that is not an inherited
+one: on Python 3.14, ``import ctypes`` (the ``renameat2`` binding of ``adapters.rp11.
+holdfs``) makes libffi (>= 3.4, static trampolines) open ``libffi.so`` and keep it
+open for the life of the process. So the same close-and-verify pass runs a second
+time, in ``main``, after the up-front imports and before any role starts (else 71,
+no role runs). The role therefore starts with nothing at or above descriptor 3,
+whichever of the two sources opened it. Closing libffi's descriptor leaves plain
+foreign calls working (``ffi_call`` does not use it); the roles create no ctypes
+callbacks, which is the only thing that would need a new trampoline table, and
+``tests/test_rp11_h1_artifact.py`` asserts that no artifact source does. The inherited environment
 is untrusted: the only fact taken from it, by the unit-started roles (``hold``,
 ``deact``, ``backstop`` and ``consume``), is systemd's
 ``INVOCATION_ID`` (as provenance, diagnostic only), read from the process's own initial environment,
@@ -47,7 +58,8 @@ environment is then emptied. The ``start``, ``stop`` and ``attest`` roles read n
 variable at all (H-FI.1) and record no provenance. Nothing else here starts a process.
 
 Exit status: 64 malformed arguments or environment selection, 70 import
-failure, 71 a closed standard descriptor or a descriptor ≥ 3 not proved closed, 77 unsafe artifact ownership, mode or
+failure, 71 a closed standard descriptor or a descriptor ≥ 3 not proved closed
+(before or after the imports), 77 unsafe artifact ownership, mode or
 type, otherwise the role's own status.
 """
 
@@ -331,6 +343,11 @@ def main(argv: list[str], provenance=None) -> int:
     except ImportError as exc:
         print(f"rp11_h1: import failed: {exc}", file=sys.stderr)
         return EX_SOFTWARE
+    # The imports above may have opened a descriptor of their own (Python 3.14
+    # ctypes -> libffi). Close and verify again so none reaches a role; fail closed.
+    if not close_descriptors_from_3():
+        print("rp11_h1: descriptors opened by the artifact's imports could not be closed", file=sys.stderr)
+        return EX_OSERR
     parsed = parse_role_argv(argv)
     if parsed is None:
         print("rp11_h1: not an accepted role vector", file=sys.stderr)

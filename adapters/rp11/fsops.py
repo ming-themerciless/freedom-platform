@@ -439,8 +439,13 @@ class JournalAppender:
         return self._hash.hexdigest(), self._length
 
     def close(self) -> None:
+        # Idempotent: a descriptor number is reused at once, so a second
+        # ``os.close`` could close somebody else's descriptor.
+        fd, self._fd = self._fd, -1
+        if fd < 0:
+            return
         try:
-            os.close(self._fd)
+            os.close(fd)
         except OSError:
             pass
 

@@ -40,6 +40,7 @@ from sqlalchemy import (
     text,
     update,
 )
+from sqlalchemy.dialects.postgresql import distinct_on as pg_distinct_on
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from application.audit import ActorCapability
@@ -3486,7 +3487,7 @@ class ReconciliationJobRepository:
                         reconciliation_jobs.c.queued_at,
                     ).label("updated_at"),
                 )
-                .distinct(reconciliation_jobs.c.snapshot_id)
+                .ext(pg_distinct_on(reconciliation_jobs.c.snapshot_id))
                 .where(reconciliation_jobs.c.snapshot_id.in_(wanted))
                 .order_by(
                     reconciliation_jobs.c.snapshot_id,

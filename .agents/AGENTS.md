@@ -583,22 +583,44 @@ broken suite.
 `postgresql+psycopg:///freedom_test`. Without it every database-marked test
 skips, the web suite reports roughly *1141 passed, 1362 skipped* in about
 twelve seconds, and **it still exits 0**. Check the skip count before believing
-a pass: the correct figure is **80**, and `-rs` prints the reason for each.
+a pass: the database-enabled web figure is **80 skips**, and `-rs` prints the
+reason for each. The bot suite skips **337** as user `ubuntu` at the default
+descriptor limit (soft 1024, hard 524288), identically in two complete runs on
+Python 3.14 / PostgreSQL 18; every skip prints a reason (root-only provisioning
+and ownership tests, the unprovisioned `RP11_LAUNCH_BUILD_ROOT` toolchain, a
+`RLIMIT_NOFILE` case, a role-grant check). If a count moves, compare the printed
+reasons and the limit and user it was taken under; do not choose the preferred
+number. `ulimit -n 4096` lowers the **hard** limit too, which adds four skips
+(341), so it is not a neutral way to "raise the limit".
 
 Run the two suites **serially**. They share one disposable database (finding
 F-6), so a parallel run is not a faster verification — it is a different one.
+Run every database-marked suite only on the dedicated `oracle-test` host. The
+fixtures require its documented hostname `Test` and refuse every other host
+before connecting. Production also has a local database named `freedom_test`,
+so a matching database name and Unix socket are not sufficient safety evidence.
 
 After synchronizing the current workspace using that document's secret-excluding
 procedure, run the following **on `oracle-test`**, from the repository directory:
 
 ```bash
 cd /opt/freedom-blades/platform
-export PATH='/usr/lib/postgresql/16/bin:/usr/bin:/bin'
+export PATH='/usr/lib/postgresql/18/bin:/usr/bin:/bin'
 export TEST_DATABASE_URL='postgresql+psycopg:///freedom_test'
-/opt/freedom-blades/runtime/venv-web/bin/python -m pytest -q -rs tests/test_*.py
-/opt/freedom-blades/runtime/venv-web/bin/python -m pytest -q -rs tests/web
+/opt/freedom-blades/runtime/venv-web/bin/python -m pytest -q -rs -o tmp_path_retention_policy=failed tests/test_*.py
+/opt/freedom-blades/runtime/venv-web/bin/python -m pytest -q -rs -o tmp_path_retention_policy=failed tests/web
 node --test "foundry-module/tests/"*.test.mjs
 ```
+
+`oracle-test` runs Ubuntu Python 3.14.4 and PostgreSQL 18.6 and has a 2 GiB
+swapfile. Failed-only temporary-path retention and the swapfile are small-host
+accommodations for its 951 MiB memory profile. No raised descriptor limit is
+needed or accepted: the descriptors the RP-11 roles used to leak are closed. The
+2026-11-08 exact-tree result after the dependency currency refresh is green:
+bot 7,571 passed, 0 failed, 0 errors, 337 skipped (two complete runs with
+identical skip lines); web 2,893 passed, 0 failed, 80 skipped; Foundry 171 passed
+on Node 24.22.2. Quote a figure only from a run of the tree being
+submitted, and report the actual result and skips of every new run.
 
 Baseline v1.9 authorizes every level of testing on `oracle-test`, including
 SSH, host inspection, dependency installation, root/systemd operations,

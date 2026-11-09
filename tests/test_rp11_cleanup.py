@@ -275,6 +275,10 @@ class RecordingAttempts(LocalAttemptStore):
         self.events.mark("attempt-dir")
         sink = super().create(k)
         if self.crash == "after-attempt-dir":
+            # A real crash ends the process and so releases the journal's
+            # descriptor; here the process lives on and the role never receives
+            # the sink, so the double closes it (R2, 2026-11-07).
+            sink.close()
             raise Crash("after-attempt-dir")
         return sink
 

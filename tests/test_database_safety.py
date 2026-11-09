@@ -30,6 +30,12 @@ from adapters.database.safety import (
     verify_connected_unix_socket_target,
 )
 
+
+@pytest.fixture(autouse=True)
+def _this_unit_module_models_the_disposable_host(monkeypatch):
+    """Unit tests exercise URL policy locally; integration suites do not mock it."""
+    monkeypatch.setattr("tests.conftest.socket.gethostname", lambda: "Test")
+
 TEST_DATABASE = "freedom_test"
 
 NO_LIBPQ_ENVIRONMENT: dict[str, str] = {}
@@ -677,6 +683,71 @@ def test_the_destructive_pytest_guard_refuses_an_inherited_host_address(
 
     with pytest.raises(pytest.fail.Exception, match="Refusing to run destructive"):
         resolve_test_database_url()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        pytest.param(
+            "postgresql+psycopg:///freedom_test?host=/tmp/scratch-cluster",
+            id="private-socket-directory",
+        ),
+        pytest.param(
+            "postgresql+psycopg:///freedom_test?host=/var/run/postgresql&port=54329",
+            id="private-port",
+        ),
+    ],
+)
+def test_a_target_the_bare_libpq_children_cannot_follow_is_refused(
+    monkeypatch, url
+):
+    """2026-11-08: the destructive children reach the libpq default, not the URL.
+
+    `psql`/`pg_dump`/`pg_restore` are run with only `--dbname=freedom_test` and
+    no `PG*` variable, so a URL that points the engine at a private cluster left
+    them on the host's default server, whose `freedom_test` they dropped and
+    restored. The URL is refused before any fixture runs; the default socket,
+    with or without its explicit spelling, still resolves.
+    """
+    from tests.conftest import resolve_test_database_url
+
+    monkeypatch.delenv("PGHOST", raising=False)
+    monkeypatch.delenv("PGHOSTADDR", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("TEST_DATABASE_URL", url)
+
+    with pytest.raises(pytest.fail.Exception, match="not the libpq default"):
+        resolve_test_database_url()
+
+
+def test_the_production_hostname_is_refused_before_database_resolution(monkeypatch):
+    """The URL alone cannot distinguish the two local ``freedom_test`` databases."""
+    from tests.conftest import resolve_test_database_url
+
+    monkeypatch.setattr("tests.conftest.socket.gethostname", lambda: "ubuntu")
+    monkeypatch.setenv("TEST_DATABASE_URL", "postgresql+psycopg:///freedom_test")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    with pytest.raises(pytest.fail.Exception, match="not the dedicated disposable host"):
+        resolve_test_database_url()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+psycopg:///freedom_test",
+        "postgresql+psycopg:///freedom_test?host=/var/run/postgresql",
+    ],
+)
+def test_the_default_socket_spellings_still_resolve(monkeypatch, url):
+    from tests.conftest import resolve_test_database_url
+
+    monkeypatch.delenv("PGHOST", raising=False)
+    monkeypatch.delenv("PGHOSTADDR", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("TEST_DATABASE_URL", url)
+
+    assert resolve_test_database_url() == url
 
 
 def test_a_service_parameter_in_the_url_is_refused():

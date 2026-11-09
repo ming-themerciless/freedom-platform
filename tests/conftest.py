@@ -34,6 +34,7 @@ Unix-domain socket is a file on this machine, which a TCP tunnel cannot present.
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -41,6 +42,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.engine import make_url
 
 from adapters.database.config import EXPECTED_DATABASES
 from adapters.database.metadata import metadata
@@ -90,6 +92,7 @@ def pytest_ignore_collect(collection_path, config):  # noqa: ARG001 - pytest hoo
 TEST_ENVIRONMENT = "test"
 TEST_URL_VARIABLE = "TEST_DATABASE_URL"
 EXPECTED_TEST_DATABASE = EXPECTED_DATABASES[TEST_ENVIRONMENT]
+EXPECTED_DISPOSABLE_HOSTNAME = "Test"
 
 #: Passed to Alembic unchanged, minus anything that could redirect the child to
 #: a target the parent did not validate.
@@ -136,6 +139,7 @@ def resolve_test_database_url() -> str:
         pytest.skip(
             f"{TEST_URL_VARIABLE} is not configured for a disposable PostgreSQL database."
         )
+    _refuse_a_non_disposable_host()
     try:
         assert_disposable_target(
             url,
@@ -146,7 +150,61 @@ def resolve_test_database_url() -> str:
         )
     except UnsafeDatabaseTargetError as error:
         pytest.fail(f"Refusing to run destructive database tests: {error}")
+    _refuse_a_target_the_bare_libpq_children_cannot_follow(url)
     return url
+
+
+def _refuse_a_non_disposable_host() -> None:
+    """Bind destructive fixtures to the dedicated disposable server.
+
+    Database name and socket checks cannot distinguish production's local
+    ``freedom_test`` from the disposable host's database: both deliberately use
+    the same name and default Unix socket.  The dedicated server's canonical
+    hostname is part of its documented identity.  Changing it needs a reviewed
+    update here; running on any other host fails before a connection or child
+    process exists.
+    """
+    hostname = socket.gethostname()
+    if hostname != EXPECTED_DISPOSABLE_HOSTNAME:
+        pytest.fail(
+            "Refusing to run destructive database tests: this is not the "
+            f"dedicated disposable host {EXPECTED_DISPOSABLE_HOSTNAME!r} "
+            f"(observed hostname {hostname!r}). Run the database suites only "
+            "on oracle-test."
+        )
+
+
+#: The socket directories a bare libpq client reaches when no host is given.
+LIBPQ_DEFAULT_SOCKET_DIRECTORIES = ("/var/run/postgresql", "/run/postgresql")
+
+
+def _refuse_a_target_the_bare_libpq_children_cannot_follow(url: str) -> None:
+    """Fail when `url` names a server a bare `psql`/`pg_dump` child would not reach.
+
+    Several destructive cases run `psql`, `pg_dump` and `pg_restore` with only
+    `--dbname=freedom_test`, and strip every `PG*` variable from the child so that
+    nothing can redirect it. That child therefore connects to the libpq *default*
+    socket and port, whatever `TEST_DATABASE_URL` names. With a private cluster
+    (`?host=<other directory>` or `?port=<other port>`) the in-process engine and
+    the children disagree: on a host whose default server is something else, the
+    children drop and restore **that** server's `freedom_test`. That happened on
+    2026-11-08, on the production host, with a scratch cluster. Refusing the URL
+    is the whole fix; following it would need every child to be rewritten.
+    """
+    target = make_url(url)
+    host = target.query.get("host", target.host)
+    port = target.query.get("port", target.port)
+    hosts = (host,) if isinstance(host, str) or host is None else tuple(host)
+    ports = (port,) if isinstance(port, (str, int)) or port is None else tuple(port)
+    if any(h not in (None, "", *LIBPQ_DEFAULT_SOCKET_DIRECTORIES) for h in hosts) or any(
+        p not in (None, "", 5432, "5432") for p in ports
+    ):
+        pytest.fail(
+            "Refusing to run destructive database tests: TEST_DATABASE_URL names a "
+            "socket directory or port that is not the libpq default, so the bare "
+            "psql/pg_dump/pg_restore children would reach a different server than "
+            "the engine. Use the default socket and port."
+        )
 
 
 def alembic_environment(url: str) -> dict[str, str]:

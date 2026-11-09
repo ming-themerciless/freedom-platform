@@ -816,6 +816,29 @@ PERMITTED_PHASE_5_0_EVIDENCE_HARNESS = frozenset({
     # systemd identity change. Planning tier: it reads no file, runs no
     # `systemctl` and inspects no unit — every input is supplied and untrusted.
     "tools/phase_5_0_evidence/unit_sandbox.py",
+    # --- RP-11 capture and launch, 2026-09-27 to 2026-10-04 (commits c9ee66d,
+    # 61c5b8d, 9cad3de, 4cbdf0b). Five sources that were committed without a
+    # declaration here and went unnoticed until the Python 3.14/PostgreSQL 18
+    # exact-tree run (R2 remediation, 2026-11-07). They are live, not dead:
+    # each is imported by an accepted RP-11 module or by
+    # `review_manifest.py`, and by the RP-11 suites. They are declared, one
+    # exact name each, and no directory entry is added: the guard still refuses
+    # every unknown sibling.
+    #
+    # RP-11's fixed contract (names, byte-safe name representation, canonical
+    # record and index encodings). Planning tier: opens no file, starts no
+    # process and imports nothing from `execution/`.
+    "tools/phase_5_0_evidence/capture_contract.py",
+    # The `rp11-launch/1` static first-image contract as reviewed data. It reads
+    # no file and starts no process; `infra/rp11-launch/` holds the image source.
+    "tools/phase_5_0_evidence/rp11_launch.py",
+    # The execution tier of RP-11: the capture mechanism (one pass's acts, stop
+    # transition and finalization), its durable storage, and the read-only
+    # retention check (X-4 and B0-RA). `test_no_execution.py` enumerates both
+    # tiers and holds each to its process and import rules.
+    "tools/phase_5_0_evidence/execution/capture_mechanism.py",
+    "tools/phase_5_0_evidence/execution/capture_store.py",
+    "tools/phase_5_0_evidence/execution/retention_check.py",
 })
 
 
@@ -839,6 +862,29 @@ PERMITTED_LIVE_BOT_DEFECT_FIXES = frozenset({
 #: (DS-R2-1) to preserve standard PostgreSQL 16 schema ownership and ACL semantics.
 PERMITTED_DISPOSABLE_SERVER_REMEDIATION = frozenset({
     "infra/postgresql/backup-restore-drill.sh",
+})
+
+
+#: Restoration of the accepted R5 runner command content, authorized by the
+#: Ubuntu 26.04/PostgreSQL 18 remediation R2 (2026-11-07). Commit `bc73738`
+#: removed `--exclude=yt-cookies.txt` from `tools/r5_runner/blocks/s04b-sync.argv`
+#: as a side effect of a repository-wide sweep, which broke the hash-pinned R3
+#: contract and its tests; the line is restored byte for byte (313 bytes). One
+#: file, not a prefix.
+PERMITTED_R5_RUNNER_RESTORATION = frozenset({
+    "tools/r5_runner/blocks/s04b-sync.argv",
+})
+
+
+#: The snapshot-import idempotency correction authorized by the Ubuntu 26.04/
+#: PostgreSQL 18 remediation R2 (2026-11-07). A loaded stress run showed that a
+#: retry with the same request key that overlapped its original could be refused
+#: as stale or blocked instead of receiving the original result, because the key
+#: is looked up before the database is reconciled. `apply` now looks the key up
+#: once more before refusing (`_committed_retry`). One file, not a prefix; its
+#: regression tests are in `tests/test_snapshot_database.py`.
+PERMITTED_R2_SNAPSHOT_IDEMPOTENCY = frozenset({
+    "application/foundry/import_service.py",
 })
 
 
@@ -1078,6 +1124,10 @@ def scope_violation(path: str) -> str | None:
         return None
     if path in PERMITTED_ROUTE_3_ADAPTER:
         return None
+    if path in PERMITTED_R5_RUNNER_RESTORATION:
+        return None
+    if path in PERMITTED_R2_SNAPSHOT_IDEMPOTENCY:
+        return None
     if path.startswith("adapters/web/templates/"):
         if path in PERMITTED_TEMPLATES:
             return None
@@ -1267,6 +1317,8 @@ PRODUCTION_ALLOWLISTS = {
     "PERMITTED_PHASE_5_0_EVIDENCE_HARNESS": PERMITTED_PHASE_5_0_EVIDENCE_HARNESS,
     "PERMITTED_LIVE_BOT_DEFECT_FIXES": PERMITTED_LIVE_BOT_DEFECT_FIXES,
     "PERMITTED_DISPOSABLE_SERVER_REMEDIATION": PERMITTED_DISPOSABLE_SERVER_REMEDIATION,
+    "PERMITTED_R5_RUNNER_RESTORATION": PERMITTED_R5_RUNNER_RESTORATION,
+    "PERMITTED_R2_SNAPSHOT_IDEMPOTENCY": PERMITTED_R2_SNAPSHOT_IDEMPOTENCY,
 }
 
 
@@ -1282,12 +1334,18 @@ def test_no_production_allowlist_entry_is_a_directory() -> None:
         assert not directories, (name, directories)
 
 
-def test_the_discovery_enumerates_untracked_files_rather_than_directories() -> None:
-    """The discovery reads files, asserted against this repository's own tree.
+def test_the_discovery_enumerates_untracked_files_rather_than_directories(
+    tmp_path: Path,
+) -> None:
+    """The discovery reads files, never the directory git collapses them into.
 
-    `tools/phase_5_0_evidence/` is untracked here, so the default status form
-    collapses it. This test does not care which files are present — only that the
-    directory itself is never what the guard is handed.
+    Two halves. The first is asserted against this repository's own tree: whatever
+    is untracked here, the guard is never handed a directory. The second proves the
+    collapse is real and the switch is not a no-op, and it does so in a throwaway
+    repository that holds a wholly untracked directory by construction. It used to
+    depend on this checkout happening to contain one (`tools/phase_5_0_evidence/`
+    was untracked in September 2026), so it failed in any tree that did not — a
+    tree-state dependency, not a defect (R2 remediation, 2026-11-07).
     """
     paths = working_tree_paths(ROOT)
 
@@ -1295,12 +1353,18 @@ def test_the_discovery_enumerates_untracked_files_rather_than_directories() -> N
         "the discovery handed the guard a directory: "
         f"{sorted(p for p in paths if p.endswith('/'))}"
     )
-    # And the collapse really is what the default form does, so the switch is
-    # not a no-op on this tree. Read through the same machine-readable parser, so
-    # the comparison is between the two *untracked-file* settings and not between
-    # two different parsers.
+
+    probe = tmp_path / "probe"
+    (probe / "untracked_dir" / "nested").mkdir(parents=True)
+    (probe / "untracked_dir" / "one.py").write_text("")
+    (probe / "untracked_dir" / "nested" / "two.py").write_text("")
+    init = subprocess.run(["git", "init", "-q", str(probe)], capture_output=True)
+    assert init.returncode == 0, init.stderr
+
+    # Read through the same machine-readable parser, so the comparison is between
+    # the two *untracked-file* settings and not between two different parsers.
     default = subprocess.run(
-        ["git", "status", "--porcelain=v1", "-z"], cwd=ROOT, capture_output=True
+        ["git", "status", "--porcelain=v1", "-z"], cwd=probe, capture_output=True
     )
     assert default.returncode == 0
     collapsed = [
@@ -1310,7 +1374,12 @@ def test_the_discovery_enumerates_untracked_files_rather_than_directories() -> N
         )
         if path.endswith("/")
     ]
-    assert collapsed, "no untracked directory in this tree; this test proves nothing"
+    assert collapsed == ["untracked_dir/"], collapsed
+
+    assert sorted(working_tree_paths(probe)) == [
+        "untracked_dir/nested/two.py",
+        "untracked_dir/one.py",
+    ]
 
 
 def test_every_evidence_harness_source_in_the_tree_is_declared() -> None:

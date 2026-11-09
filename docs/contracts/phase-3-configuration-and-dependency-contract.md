@@ -297,14 +297,14 @@ the portal's). The Discord bot's `requirements.txt` is not touched.
 
 | Package | Exact purpose | Pin | Why not something else |
 |---|---|---|---|
-| `fastapi` | HTTP application, routing, dependency injection, request validation | `>=0.115,<0.116` | ADR 0002. Starlette alone would mean hand-rolling validation and dependency wiring that FastAPI already does |
-| `uvicorn[standard]` | ASGI server behind Caddy | `>=0.32,<0.33` | ADR 0002. `[standard]` brings `httptools` and `uvloop`, which are the reason the process can hold its N-51/N-52 timeouts |
+| `fastapi` | HTTP application, routing, dependency injection, request validation | `>=0.162,<0.163` | ADR 0002. Starlette alone would mean hand-rolling validation and dependency wiring that FastAPI already does |
+| `uvicorn[standard]` | ASGI server behind Caddy | `>=0.54,<0.55` | ADR 0002. `[standard]` brings `httptools` and `uvloop`, which are the reason the process can hold its N-51/N-52 timeouts |
 | `jinja2` | Server-rendered templates | `>=3.1.4,<3.2` | ADR 0002; `3.1.4` is the floor because earlier versions carry known sandbox/XSS advisories |
 | `itsdangerous` | Signing the pagination cursor (N-64) and the CSRF derivation helper | `>=2.2,<3` | ~40 lines of HMAC would otherwise be hand-written; this is the standard, audited implementation and is already a transitive Starlette optional |
 | `httpx` | Outbound HTTP to Discord (token exchange, membership) with timeouts and connection limits | `>=0.27,<0.29` | `requests` is synchronous and blocks the event loop, which `.agents/AGENTS.md` forbids. `aiohttp` is a larger surface for the same two calls |
-| `webauthn` (`py_webauthn`) | WebAuthn registration/assertion verification (N-13, N-60) | `>=2.2,<3` | Implementing FIDO2 assertion verification by hand is exactly the cryptographic own-goal a dependency exists to avoid |
-| `cryptography` | AES-256-GCM for OAuth-token and PKCE-verifier encryption (schema §9.5) | `>=43,<45` | Already a transitive dependency of `py_webauthn`; naming it directly makes the pin explicit |
-| `sqlalchemy` | Existing | inherit `>=2.0.36,<2.1` | Already the project's mapper (ADR 0003) |
+| `webauthn` (`py_webauthn`) | WebAuthn registration/assertion verification (N-13, N-60) | `>=3.0.1,<4` | Implementing FIDO2 assertion verification by hand is exactly the cryptographic own-goal a dependency exists to avoid |
+| `cryptography` | AES-256-GCM for OAuth-token and PKCE-verifier encryption (schema §9.5) | `>=50,<51` | Already a transitive dependency of `py_webauthn`; naming it directly makes the pin explicit |
+| `sqlalchemy` | Existing | inherit `>=2.1.8,<2.2` | Already the project's mapper (ADR 0003) |
 | `alembic` | Existing | inherit `>=1.14.0,<2` | Already the project's migration tool |
 | `psycopg[binary]` | Existing | inherit `>=3.2.3,<4` | Already the project's driver |
 | `python-dotenv` | Existing | inherit `>=1.0.1` | Configuration loading, matching the bot's convention |
@@ -325,12 +325,24 @@ temporary operator environment described in
 The consequence — C-04 cannot be run from `venv-web` — is the design rather than
 a gap. Adding them here later is a change-controlled decision, not a convenience.
 
+**Pre-production currency revision, 2026-11-08.** Peter's pre-production currency
+policy (active handover) supersedes the Phase 3 snapshot of the bounds above: the
+tables now record the current compatible releases at that date. Each bound is still
+an upper bound on the next incompatible series (FastAPI and uvicorn are 0.x, so the
+next minor), the deliberate exclusions in §1.4 are unchanged, and the floors of the
+changed rows are the tested releases. `python-multipart` was raised to `>=0.0.33`
+for the same reason. `requirements-web.lock` was regenerated from a clean install
+of `requirements-web-dev.txt`; Starlette 1.10 is a transitive result of FastAPI
+0.162 and is not named here. SQLAlchemy 2.1 no longer pulls `greenlet`, which the
+code does not use (no async engine). The bot's `requirements.txt` takes the same
+SQLAlchemy bound.
+
 ### 1.3 Proposed test set — `requirements-web-dev.txt`
 
 | Package | Purpose | Pin |
 |---|---|---|
-| `pytest` | Existing | inherit `>=8.2,<9` |
-| `pytest-asyncio` | Async application-service and adapter tests | `>=0.24,<0.25` |
+| `pytest` | Existing | inherit `>=9.2,<10` |
+| `pytest-asyncio` | Async application-service and adapter tests | `>=1.4,<2` |
 | `httpx` | Doubles as the in-process ASGI test client (`ASGITransport`) | already listed |
 | `beautifulsoup4` | Asserting rendered HTML structure and the absence of controls, without regex over markup | `>=4.12,<5` |
 
@@ -354,7 +366,7 @@ tests only.
 ### 1.5 Pinning and update strategy
 
 - Upper bounds on every direct dependency, matching the existing
-  `requirements.txt` style (`SQLAlchemy>=2.0.36,<2.1`).
+  `requirements.txt` style (`SQLAlchemy>=2.1.8,<2.2`).
 - `pip freeze` output committed as `requirements-web.lock` at each P3 package
   gate, so a deployment is reproducible and a review can see exactly what changed.
 - Vendored HTMX is committed with its version, upstream URL and SHA-256 recorded

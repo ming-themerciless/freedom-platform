@@ -325,6 +325,8 @@ class CleanupProcedure:
             return self._cl_7()
         finally:
             self._p.lock.release()
+            if s.sink is not None:
+                s.sink.close()  # the attempt's journal: its last line is written
 
     # ------------------------------------------------------------------
     # CL-G — grant removal by grant.id, before anything slower

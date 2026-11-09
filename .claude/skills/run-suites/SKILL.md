@@ -32,8 +32,10 @@ Both are load-bearing. State them in any evidence that cites a figure.
   test skips, the web suite finishes in about twelve seconds reporting roughly
   **1362 skipped**, and **it still exits 0**. With it, the correct web skip count
   is **80**. Check the skip count before believing a pass, and use `-rs` so each
-  reason prints. The **skip** count is the check; the pass count moves as tests
-  are added and is not a target to match.
+  reason prints. The bot suite skips 337 as user `ubuntu` at the default descriptor
+  limit (reasons printed; identical in two complete runs). `ulimit -n 4096` also
+  lowers the hard limit, so four tests that need 70,001 descriptors skip as well
+  (341), and some tests skip unless root. Report the count with its limit and user.
 
 ## Order of execution
 
@@ -53,12 +55,23 @@ Synchronize first with the secret-excluding procedure in
 
 ```bash
 cd /opt/freedom-blades/platform
-export PATH='/usr/lib/postgresql/16/bin:/usr/bin:/bin'
+export PATH='/usr/lib/postgresql/18/bin:/usr/bin:/bin'
 export TEST_DATABASE_URL='postgresql+psycopg:///freedom_test'
-/opt/freedom-blades/runtime/venv-web/bin/python -m pytest -q -rs tests/test_*.py
-/opt/freedom-blades/runtime/venv-web/bin/python -m pytest -q -rs tests/web
+/opt/freedom-blades/runtime/venv-web/bin/python -m pytest -q -rs -o tmp_path_retention_policy=failed tests/test_*.py
+/opt/freedom-blades/runtime/venv-web/bin/python -m pytest -q -rs -o tmp_path_retention_policy=failed tests/web
 node --test "foundry-module/tests/"*.test.mjs
 ```
+
+The disposable lane is Ubuntu Python 3.14/PostgreSQL 18 with a 2 GiB swapfile.
+Failed-only temporary-path retention and the swapfile accommodate the 951 MiB
+host. **Do not raise the descriptor limit**: `ulimit -n 4096` lowers the hard
+limit too, which changes the skip count (337 becomes 341), and the descriptor
+leak it used to hide is fixed. The 2026-11-08 exact-tree result, on the
+refreshed dependency set (FastAPI 0.162, SQLAlchemy 2.1, pytest 9, pytest-asyncio
+1.x), is green (bot: 7,571 passed, 0 failed, 0 errors, 337 skipped, the same skip
+reasons as 2026-11-07; web: 2,893 passed, 80 skipped; Foundry: 171 passed). Skip counts: web 80, bot 337
+as user `ubuntu`; each prints a reason, so compare the reasons if a count moves.
+Always report a fresh result rather than citing those figures for a later tree.
 
 ## Reporting
 

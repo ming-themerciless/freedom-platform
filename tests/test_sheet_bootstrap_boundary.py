@@ -49,11 +49,40 @@ def test_the_read_only_scope_is_the_narrowest_that_serves_the_reader():
 # -- the legacy bot connector is untouched -------------------------------------
 
 
-def test_the_legacy_sheets_connector_still_exposes_read_and_write():
-    from connectors import sheets
+def test_the_legacy_sheets_connector_still_exposes_read_and_write(monkeypatch):
+    # `connectors.sheets` imports `config`, which exits unless the bot's
+    # variables are set. The test used to pass only where a developer's
+    # dotenv file sat beside `config.py` -- the repository host -- and failed on
+    # the disposable server, which never receives one. It now supplies inert
+    # placeholders itself: nothing is read from a real file, and the import
+    # builds no client (`_get_service` is lazy). `load_dotenv()` does not
+    # override variables that are already set. Both modules are imported fresh
+    # and put back as they were, so no later test sees this placeholder `config`.
+    import importlib
+    import sys
 
-    assert hasattr(sheets, "get_values")
-    assert hasattr(sheets, "batch_update")
+    for name in ("DISCORD_TOKEN", "GUILD_SHEET_ID"):
+        monkeypatch.setenv(name, "placeholder")
+    for name in (
+        "GUILD_ID",
+        "ROLL_CHANNEL_ID",
+        "TRADE_CHANNEL_ID",
+        "DT_CHANNEL_ID",
+        "BASTION_CHANNEL_ID",
+    ):
+        monkeypatch.setenv(name, "1")
+    monkeypatch.setenv("SERVICE_ACCOUNT_JSON", "{}")
+
+    saved = {n: sys.modules.pop(n, None) for n in ("config", "connectors.sheets")}
+    try:
+        sheets = importlib.import_module("connectors.sheets")
+        assert hasattr(sheets, "get_values")
+        assert hasattr(sheets, "batch_update")
+    finally:
+        for name, module in saved.items():
+            sys.modules.pop(name, None)
+            if module is not None:
+                sys.modules[name] = module
 
 
 def test_no_phase_2_module_imports_the_legacy_connector_except_the_fallback():

@@ -2230,6 +2230,17 @@ transaction boundary, role permission or concurrent outcome.
 - Staging: production-like topology with separate credentials and database.
 - Production: live services with restricted access.
 
+**Pre-production currency policy (Peter Duscha, 2026-11-07).** Before the
+platform begins production use, bring its supported operating system, database,
+runtimes, dependencies and related infrastructure up to date rather than
+starting service on a knowingly superseded baseline. A major migration or
+retirement of the superseded version still requires verified backups,
+recovery/restore evidence, compatibility tests, bounded observation and an
+honest handback; "not live yet" removes the reason to defer the upgrade, not
+those controls. This policy approved the completed PostgreSQL 16-to-18
+migration and removal of the old cluster. It does not authorize Route 3 or a
+future production activation.
+
 ### 14.2 Deployment gate
 
 Before each production deployment:
@@ -2720,14 +2731,27 @@ documentation correction. Codex's independent R6/R7 re-review found no
 remaining issue, and Peter accepted the plan on 2026-11-03. The completed
 prompt chain is historical in the November 2026 review archive.
 
-The plan review gate is closed, but every block-F release identity remains
-`UNSET`. The immediate next actions are to commit/publish the exact accepted
-candidate, produce the off-production artifact identities, separately authorize
-read-only production S0.0 for the exact Python closure/origins, and review the
-complete supplied release record. Production S1 inert provisioning, S3
-arming/install and S4 activation remain separate later decisions. Production
-provisioning, installation and activation remain prohibited without the
-applicable explicit authority.
+Production now runs Ubuntu 26.04.1, Ubuntu Python 3.14.4 and Ubuntu PostgreSQL
+18.6. The disposable host matches that runtime/database baseline and, after the
+2026-11-07 Ubuntu 26.04/PostgreSQL 18 R2 remediation, its exact-tree suites are
+green at the default descriptor limit (bot 7,566 passed and 337 skipped, web 2,892
+passed and 80 skipped, Foundry 171; after the 2026-11-08 dependency currency refresh
+bot 7,571 passed and 337 skipped, web 2,893 passed and 80 skipped, Foundry 171). The canonical SSH route needed no repair: the
+`nobody:nogroup` ownership first reported for the production host's OpenSSH client
+configuration was an agent-sandbox user-namespace artifact, and unsandboxed the
+paths are `root:root` and `ssh oracle-test` works. Independent Codex re-review
+of the R2 return found no remaining repository or disposable-host finding;
+production journal counts, the final backup hashes
+and sizes, and Peter's decision on the 15:27 write remain open.
+
+The Route 3 plan review gate is closed, but every block-F release identity
+remains `UNSET`. The old S0.0 procedure assumed Python 3.14 was absent and must
+not run. Its release-record/package procedure requires a separate redesign and
+independent review for the pre-installed Python 3.14 baseline before release
+preparation resumes. Production S1 inert provisioning, S3 arming/install and
+S4 activation remain separate later decisions. Production provisioning,
+installation and activation remain prohibited without the applicable explicit
+authority.
 
 All testing levels are authorized on `oracle-test`, including root/systemd,
 network, packages, PostgreSQL and destructive recovery drills. Production and

@@ -1187,6 +1187,100 @@ def test_a_refused_close_runs_no_role(artifact, tmp_path):
     assert "inherited descriptors could not be closed" in proc.stderr
 
 
+# --- descriptors opened by the artifact's own imports (R2 remediation, 2026-11-07) ------
+#
+# On Python 3.14, ``import ctypes`` (adapters.rp11.holdfs' ``renameat2`` binding) makes
+# libffi open ``libffi.so`` and keep it open. It is not inherited, so the pass at
+# start cannot see it; the entry therefore closes and verifies again after the
+# up-front imports. These tests cover the three things that could regress: a
+# descriptor opened by an import never reaches the role; a second pass that cannot
+# list or cannot close refuses with 71 and runs no role; and the role image does not
+# create ctypes callbacks (the one libffi use that needs the closed descriptor).
+
+
+OPEN_AN_FD_ON_IMPORT = (
+    "\nimport os as _os\n_LEAKED = _os.open('/dev/null', _os.O_RDONLY)  # an import's own descriptor\n"
+)
+
+
+def _artifact_with_import_side_effect(artifact: Path, source: str) -> None:
+    target = artifact / "lib/adapters/systemd/polkit.py"
+    target.write_text(target.read_text() + source)
+
+
+def test_a_descriptor_opened_by_an_artifact_import_never_reaches_the_role(artifact, tmp_path):
+    _artifact_with_import_side_effect(artifact, OPEN_AN_FD_ON_IMPORT)
+    proc, state = _probe(artifact, tmp_path, env={})
+    assert proc.returncode == 0, proc.stderr
+    assert state["fds"] == []
+
+
+def test_the_python_3_14_ctypes_descriptor_never_reaches_the_role(artifact, tmp_path):
+    """The real cause, not a stand-in: whatever ``import ctypes`` opens in this
+    interpreter (libffi's descriptor on 3.14) is gone when the role starts."""
+    _artifact_with_import_side_effect(artifact, "\nimport ctypes as _ctypes\n")
+    proc, state = _probe(artifact, tmp_path, env={})
+    assert proc.returncode == 0, proc.stderr
+    assert state["fds"] == []
+
+
+PRODUCTION_INTERPRETER = Path("/usr/bin/python3.14")
+
+
+@pytest.mark.skipif(
+    not PRODUCTION_INTERPRETER.exists(),
+    reason="/usr/bin/python3.14 (the production interpreter) is not installed on this host",
+)
+def test_the_production_invocation_shape_starts_the_role_with_no_descriptor(artifact, tmp_path):
+    """``/usr/bin/python3.14 -I -S <artifact>/rp11_h1.py …`` exactly, with the
+    descriptor-opening imports the real artifact performs."""
+    out = tmp_path / "probe.json"
+    (artifact / "lib/rp11_roles.py").write_text(PROBE % str(out))
+    proc = subprocess.run(
+        [str(PRODUCTION_INTERPRETER), "-I", "-S", str(artifact / "rp11_h1.py"), "deact", ACT, A2, "stop-post"],
+        capture_output=True, text=True, env={}, cwd="/",
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(out.read_text())["fds"] == []
+
+
+def test_a_second_pass_that_cannot_list_the_descriptors_runs_no_role(artifact, tmp_path):
+    """Fail closed after the imports too: an import that makes the listing unavailable
+    (only after the pass at start succeeded) is refused with 71 and no role runs."""
+    _artifact_with_import_side_effect(
+        artifact, "\nimport __main__ as _main\n_main._OWN_FDS = '/proc/self/no-such-directory'\n"
+    )
+    proc, state = _probe(artifact, tmp_path, env={})
+    assert proc.returncode == 71 and state is None
+    assert "descriptors opened by the artifact's imports could not be closed" in proc.stderr
+
+
+def test_a_descriptor_opened_by_an_import_that_survives_closing_runs_no_role(artifact, tmp_path):
+    """The verifying listing of the second pass: a close that does not take effect is 71."""
+    _artifact_with_import_side_effect(
+        artifact, OPEN_AN_FD_ON_IMPORT + "_os.close = lambda fd: None\n"
+    )
+    proc, state = _probe(artifact, tmp_path, env={})
+    assert proc.returncode == 71 and state is None
+    assert "descriptors opened by the artifact's imports could not be closed" in proc.stderr
+
+
+def test_no_artifact_source_creates_a_ctypes_callback():
+    """Closing libffi's descriptor leaves ``ffi_call`` (plain foreign calls) working but
+    would break allocating a *new* closure trampoline table. The role image makes no
+    callback, and this keeps it so: adding one is a decision to revisit the second
+    close in ``rp11_h1.main``, not an incidental change."""
+    forbidden = ("CFUNCTYPE", "PYFUNCTYPE", "WINFUNCTYPE", "ffi_closure")
+    sources = [ROOT / relative for relative in build.SOURCES] + [HERE / "rp11_h1.py", HERE / "rp11_roles.py"]
+    offenders = [
+        f"{path.relative_to(ROOT)}: {name}"
+        for path in sources
+        for name in forbidden
+        if name in path.read_text()
+    ]
+    assert offenders == []
+
+
 def test_the_role_vector_is_validated_before_the_role(artifact, tmp_path):
     out = tmp_path / "probe.json"
     (artifact / "lib/rp11_roles.py").write_text(PROBE % str(out))

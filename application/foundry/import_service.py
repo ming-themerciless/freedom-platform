@@ -641,6 +641,11 @@ class SnapshotImportService:
                 snapshot, folder, report, versions, preview.binding.request_key
             )
             if current.token() != preview.binding.token():
+                retry = self._committed_retry(
+                    unit_of_work, snapshot, folder, digest, preview
+                )
+                if retry is not None:
+                    return retry
                 changes = ", ".join(preview.binding.differences(current)) or "an input"
                 raise ImportRefused(
                     "stale_preview",
@@ -651,6 +656,11 @@ class SnapshotImportService:
                 )
 
             if report.blocked:
+                retry = self._committed_retry(
+                    unit_of_work, snapshot, folder, digest, preview
+                )
+                if retry is not None:
+                    return retry
                 raise ImportRefused(
                     "blocked",
                     f"The import has {report.error_count} blocking issue(s) and "
@@ -771,6 +781,37 @@ class SnapshotImportService:
             warning_count=report.warning_count,
             report=report,
         )
+
+    def _committed_retry(
+        self,
+        unit_of_work,
+        snapshot: ParsedSnapshot,
+        folder: str,
+        digest: str,
+        preview: SnapshotPreview,
+    ) -> ImportOutcome | None:
+        """The original result, when this key was committed *after* the first look.
+
+        The request key is looked up first, and the database is reconciled after
+        it. A retry that overlaps its own original can therefore find the key
+        absent, and then find the database already changed by that original: its
+        preview looks stale, or its report blocked, only because the operation it
+        belongs to has just committed. Refusing it would hand a client that
+        retried with the same key a refusal where idempotency promises the
+        original result. So before refusing, look the key up once more (a new
+        statement under READ COMMITTED sees the commit). Nothing is invented: an
+        absent key still refuses, and a present one is checked to be the same
+        operation exactly as the first lookup does (R2 remediation, 2026-11-07).
+        """
+        existing = unit_of_work.snapshot_imports.find_by_request_key(
+            preview.binding.request_key
+        )
+        if existing is None:
+            return None
+        self._require_same_operation(
+            existing, unit_of_work, snapshot, folder, digest, preview
+        )
+        return self._duplicate_of(existing, unit_of_work)
 
     # -- request-key binding (B-1) --------------------------------------------
 

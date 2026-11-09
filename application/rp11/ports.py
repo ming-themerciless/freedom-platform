@@ -30,6 +30,16 @@ class EvidenceSink(Protocol):
         """SHA-256 and length of everything durably appended so far."""
         ...
 
+    def close(self) -> None:
+        """Release the journal's descriptor; safe to call more than once.
+
+        A role calls it once, after its last append. The process then ends, so in
+        production this only makes the end explicit; it matters where a role runs
+        in-process more than once, which would otherwise leave one open descriptor
+        per run.
+        """
+        ...
+
 
 class RemovalOutcome(str, Enum):
     REMOVED = "removed"

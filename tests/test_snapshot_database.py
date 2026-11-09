@@ -397,7 +397,19 @@ def test_two_concurrent_applies_of_the_same_input_produce_one_effect(
     losers = [r for r in results if not getattr(r, "applied", False)]
     assert len(winners) == 1, results
     assert len(losers) == 1
-    assert_typed_and_consistent(losers[0], winners[0])
+    # The barrier aligns the threads' *start*, not their work. On a loaded host one
+    # apply can finish before the other has read the database. The loser's preview,
+    # made before the winner existed, is then genuinely stale, and a stale preview
+    # is refused (see `test_a_stale_preview_with_a_new_key_is_still_refused`); only
+    # when the two really overlap does it reach the uniqueness conflict and come
+    # back as the winner's duplicate. Both are typed outcomes with one durable
+    # effect. What is never acceptable is a raw driver error or a second effect.
+    # The same-*key* race below stays strict: a retry is owed the original result.
+    loser = losers[0]
+    if isinstance(loser, ImportRefused):
+        assert loser.code in {"stale_preview", "blocked"}, loser
+    else:
+        assert_typed_and_consistent(loser, winners[0])
     assert_one_durable_effect(services["engine"])
 
 
@@ -423,6 +435,63 @@ def test_two_concurrent_applies_of_the_same_key_produce_one_effect(
     assert_typed_and_consistent(losers[0], winners[0])
     assert_one_durable_effect(services["engine"])
     assert count(services["engine"], "snapshot_imports") == 1
+
+
+def test_a_retry_that_overlaps_its_original_gets_the_original_result(
+    services, monkeypatch
+):
+    """R2 (2026-11-07): the window between the key lookup and the reconciliation.
+
+    `apply` looks the request key up and only then reconciles. If the original
+    commits between the two, the retry finds no key, then finds a database the
+    original has changed, and used to be refused as stale or blocked: a client that
+    retried with the same key got a refusal where it is owed the original result.
+    A loaded stress run showed it (24 of 120 repetitions). The window is forced
+    here by hiding the committed row from the retry's first lookup only, which is
+    exactly what the real interleaving looks like to it.
+    """
+    from adapters.database.repositories import SqlAlchemySnapshotImportRepository
+
+    source = artifact()
+    preview = services["imports"].preview(source, request_key="req-overlap")
+    winner = services["imports"].apply(source, preview, discord_user_id=COUNCIL_USER)
+    assert winner.applied is True
+
+    real = SqlAlchemySnapshotImportRepository.find_by_request_key
+    calls: list[str] = []
+
+    def blind_first_lookup(self, request_key):
+        calls.append(request_key)
+        return None if len(calls) == 1 else real(self, request_key)
+
+    monkeypatch.setattr(
+        SqlAlchemySnapshotImportRepository, "find_by_request_key", blind_first_lookup
+    )
+    retry = services["imports"].apply(source, preview, discord_user_id=COUNCIL_USER)
+
+    assert len(calls) == 2, "the retry did not look the key up again before refusing"
+    assert_typed_and_consistent(retry, winner)
+    assert_one_durable_effect(services["engine"])
+
+
+def test_a_stale_preview_with_a_new_key_is_still_refused(services):
+    """The re-check invents nothing: an absent key still refuses.
+
+    Two previews made before anything was applied, under two keys. After the first
+    is applied the second describes a database that no longer exists. That is a
+    stale preview and is refused, not turned into a duplicate, and it is exactly the
+    serial outcome a loaded concurrent run can legitimately produce.
+    """
+    source = artifact()
+    first = services["imports"].preview(source, request_key="req-first")
+    second = services["imports"].preview(source, request_key="req-second")
+    services["imports"].apply(source, first, discord_user_id=COUNCIL_USER)
+
+    with pytest.raises(ImportRefused) as refusal:
+        services["imports"].apply(source, second, discord_user_id=COUNCIL_USER)
+
+    assert refusal.value.code in {"stale_preview", "blocked"}
+    assert_one_durable_effect(services["engine"])
 
 
 def test_a_concurrent_loser_never_escapes_as_a_driver_exception(

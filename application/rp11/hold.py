@@ -282,6 +282,7 @@ class HoldProcedure:
         finally:
             self._igr()
             self._run_end(outcome.end.value if outcome is not None else INTERNAL_ERROR)
+            self._close_sink()
             self._release_k()
         outcome.igr = self._s.igr
         outcome.act_pass = self._s.act_pass
@@ -916,6 +917,11 @@ class HoldProcedure:
             self._s.sink.append("run-end", {"outcome": outcome})
         except EvidenceWriteError:
             pass  # the end class and the grant are already decided
+
+    def _close_sink(self) -> None:
+        """The ACT journal's descriptor, released after its last line (``run-end``)."""
+        if self._s.sink is not None:
+            self._s.sink.close()
 
     # helpers ----------------------------------------------------------------
 

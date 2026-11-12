@@ -1,7 +1,8 @@
 # Active delivery plan — implementation-first baseline v1.9
 
-Status: approved and active; Ubuntu 26.04/PostgreSQL 18 remediation assigned,
-Route 3 release fields no-go 2026-11-07
+Status: approved and active; Ubuntu 26.04/PostgreSQL 18 production remediation
+and Lavalink residue removal complete (2026-11-11); Route 3 release fields
+no-go
 
 Owner and acceptance authority: Peter Duscha
 
@@ -20,6 +21,18 @@ Owner and acceptance authority: Peter Duscha
   records are evidence, not current authority.
 
 ## Current delivery position
+
+The attended production Ubuntu continuation completed the previously open
+root-only work, backup/journal evidence and clean 31-sample/30-minute
+observation. Its temporary sudo grant was removed. Apt exposed one new current
+finding: an active, enabled production `lavalink.service` under `/opt/lavalink`.
+Music is removed under OD-40, and Peter authorized complete removal of that
+live residue on 2026-11-11. The removal is **complete and verified absent**
+(service, unit, `/opt/lavalink`, account/group, OpenJDK 17 packages; platform
+services healthy). This was host cleanup, not a platform feature or a Route 3
+action. The maintainer removed the final stale Lavalink reference from the
+repository-local `.env` on 2026-11-11 without exposing its contents. The
+production continuation has no open item.
 
 The cumulative inactive Route 3 production-readiness candidate is accepted for
 continued non-production development. Peter has selected production as the
@@ -67,6 +80,12 @@ platform enters production use. It approves the completed PostgreSQL 16-to-18
 migration and retirement of the superseded cluster; it does not waive backup,
 restore, compatibility, observation or independent-review evidence.
 
+*The next three paragraphs (R2 return, dependency currency, currency
+continuation) are dated 2026-11-07/08 snapshots, historical and superseded by
+the 2026-11-11 position above wherever they describe production work or
+evidence as open, blocked or pending; the disposable-host facts and suite
+figures in them stand as stated.*
+
 The Ubuntu 26.04/PostgreSQL 18 R2 remediation returned on 2026-11-07 and passed
 independent Codex re-review on 2026-11-08 with no remaining repository or
 disposable-host finding: the disposable exact-tree suites are green
@@ -74,32 +93,48 @@ at the default descriptor limit (2026-11-07: bot 7,566 passed, 337 skipped; web 
 passed, 80 skipped; Foundry 171; superseded by the 2026-11-08 dependency-currency
 figures below), and the SSH route needed no repair, because the apparent
 `nobody:nogroup` ownership was an agent-sandbox user-namespace artifact
-(unsandboxed, the paths are `root:root` and `ssh oracle-test` works). Still open:
-production journal warning/error counts and the final backup hashes and sizes,
-which the remediation account cannot read, and Peter's decision on the 15:27
-write. Production application or schema mutation, `freedom-web` activation and
-Route 3 execution remain out of scope. See the handback's R2 section.
+(unsandboxed, the paths are `root:root` and `ssh oracle-test` works). At that
+date production journal warning/error counts and the final backup hashes and
+sizes were open because the remediation account could not read them; they were
+collected in the 2026-11-09–11 attended continuation. Peter accepted the 15:27
+pre-window write as a documented process deviation on 2026-11-09, selected
+`PermitRootLogin prohibit-password`, and authorized removal of obsolete
+`/opt/discord-bots/venv*` paths after unused verification. Those two production
+actions were then pending an attended privileged session (their disposable-host
+checks were complete) and have since been performed there. Production
+application or schema mutation, `freedom-web` activation and Route 3 execution
+remain out of scope (still in force). See the handback's R2 section.
 
 Dependency currency, 2026-11-08: the stale direct Python bounds were raised (FastAPI
 0.162, uvicorn 0.54, cryptography 50, SQLAlchemy 2.1, py_webauthn 3, pytest 9,
 pytest-asyncio 1.x) and the web lock regenerated; the exact-tree `oracle-test` suites are
 green on it (bot 7,571 passed, 337 skipped; web 2,893 passed, 80 skipped; Foundry 171 on
-Node 24.22.2). Production's virtualenvs still hold the older sets and need an attended,
-privileged rebuild. See the handback's "Dependency currency return".
+Node 24.22.2). At that date production's virtualenvs still held the older sets; they
+were rebuilt from this tested set in the attended continuation. See the handback's
+"Dependency currency return".
 
 The Route 3 plan review gate remains closed, but every block-F release identity
-is `UNSET`. Its release-record/package procedure must be redesigned for the
-pre-installed Python 3.14 baseline and independently reviewed before release
-preparation resumes. Only then may Peter separately decide whether to authorize
-S1 inert provisioning; S3 arming/install and S4 activation remain later
-independent decisions. Account-dependent inspection repeats after any
+is `UNSET`. Its release-record/package procedure was redesigned on 2026-11-11 for
+the pre-installed Python 3.14 baseline (read-only attestation tool, withdrawn
+S0.0, new S0.A/S0.3; still uncommitted). Two Codex review rounds were
+remediated, and on 2026-11-12 the exact reviewed tree's `oracle-test` evidence
+was recorded (handback §13.1): release-record module 269 passed; full
+`tests/test_provisioning_plan.py` as root 234 passed; bot suite 7,853 passed,
+250 skipped; web 2,893 passed, 80 skipped; Foundry 171 passed. That validates
+the uncommitted candidate, not production. The next controlled step is
+publication/commit of that exact candidate, then a separately authorized
+production read-only S0.A attestation to populate the release identities. Only
+after all release fields are supplied and reviewed may Peter separately decide
+whether to authorize S1 inert provisioning; S3 arming/install and S4 activation
+remain later independent decisions. Account-dependent inspection repeats after any
 separately authorized provisioning. The coordinator, start orchestration,
 automatic attestation, migration/cutover and RB-1 remain unassigned.
 
-Currency continuation, 2026-11-08: the unprivileged items are closed or
+Currency continuation, 2026-11-08: the unprivileged items were closed or
 classified in the production-upgrade handback; root-only production work and
-the journal/backup evidence need a privileged production session. `oracle-test`
-now runs Node 24.22.2 and current Ubuntu packages. Database suites run there, never on the
+the journal/backup evidence then needed a privileged production session, which
+was completed on 2026-11-09–11. `oracle-test` runs Node 24.22.2 and current
+Ubuntu packages. Database suites run there, never on the
 production host (a scratch-cluster run reached production's `freedom_test` and was
 repaired; `tests/conftest.py` now requires the dedicated host identity as well as
 the default socket).

@@ -3207,6 +3207,28 @@ Repository removal is **not** authorization to stop or reconfigure any live
 Lavalink process. That is live-service administration and belongs to a
 maintainer.
 
+**Production residue correction, 2026-11-11.** During the privileged Ubuntu
+26.04 remediation, apt's restart scan exposed an active, enabled
+`lavalink.service` running `/opt/lavalink/Lavalink.jar` under the dedicated
+`lavalink` account. This is prohibited residue, not a platform component or a
+reversal of OD-40. Peter Duscha explicitly authorizes stopping and disabling
+the service and removing its unit, enablement link, runtime/configuration/log
+paths and dedicated account/group. No music credential or configuration
+content is to be read. Historical documentation references remain as evidence.
+This paragraph supplies the live-host authority that the 2026-10-06 residue
+record explicitly lacked.
+
+**Completed, 2026-11-11.** The authorized removal was executed and verified:
+service stopped and disabled; unit and enablement link, `/opt/lavalink` and the
+service's private temporary directories deleted; `lavalink` account and group
+deleted; `openjdk-17-jre-headless` and its Java-only dependency chain purged
+after a simulation showed no unrelated removal. No process, port, unit, path or
+account remains, and platform services stayed healthy. No music configuration
+or credential was read. The maintainer removed the final stale
+repository-local `.env` reference on 2026-11-11 without exposing its contents;
+no live music residue remains. Evidence:
+[production-upgrade handback](../review/production-ubuntu-26-04-upgrade-handback.md).
+
 ---
 
 ## Summary by urgency

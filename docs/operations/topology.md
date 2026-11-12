@@ -11,6 +11,16 @@ This document records the **observed** production topology and proposes the
 development and staging ones. Nothing here was changed; no service was restarted
 or reconfigured.
 
+**Current correction, 2026-11-11.** The 2026-07-30 observation omitted an
+active, enabled `lavalink.service` under `/opt/lavalink`; live Lavalink was not
+inspected under the authority then available. Music had already been removed
+from the product under OD-40, so this is prohibited host residue rather than a
+topology component. Peter authorized its complete removal, which was executed
+and verified on 2026-11-11: no `lavalink` service, unit, process, port 2333,
+`/opt/lavalink` or account/group remains, and OpenJDK 17 was purged. It was
+never a dependency of Discord, the Freedom bot, Foundry or the platform, and the
+topology below is unchanged by its removal.
+
 ## 1. Observed production topology
 
 Gathered from process/socket inspection, systemd unit templates, the Caddy

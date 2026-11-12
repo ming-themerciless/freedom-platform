@@ -50,8 +50,8 @@ below is for a **future** operator under that future written authority; none has
 
 | Stage | What it does | Changes the host? | Authority needed | Ends at |
 |---|---|---|---|---|
-| **S0** | S0.0 proposes the apt closure (solver simulation); S0.1 fields are all set; S0.2 read-only host preflight | S0.0 and S0.2 read only; S0.1 no | Peter's authorization of a read-only production preflight | `[S0.* rc=0]` or **NO-GO** |
-| **S1** | **Inert** prerequisites: evidence/pre-state (staged, then published by one rename), the reviewed Python package closure, the verified deployment `/opt/freedom-route3/{code,venv}`, the dormant `freedom-executor` account (no linger), the `tmpfiles.d` fragment | yes | Peter's written **provisioning** authorization | **STOP-A** (below) |
+| **S0** | S0.0 is **withdrawn** and refuses to run (it assumed Python 3.14 absent); S0.A attests the already-installed Python 3.14 closure; S0.1 fields are all set; S0.2 read-only host preflight; S0.3 runs the trusted gate (`route3_gate`): the installed baseline against the reviewed record **and** every member's installed payload and metadata against the signed-archive reference | S0.A, S0.2 and S0.3 read only; S0.0 and S0.1 do nothing | Peter's authorization of a read-only production preflight | `[S0.* rc=0]` or **NO-GO** |
+| **S1** | **Inert** prerequisites: evidence/pre-state (staged, then published by one rename), a **hold** on the attested pinned Python packages (nothing is installed), the verified deployment `/opt/freedom-route3/{code,venv}`, the dormant `freedom-executor` account (no linger), the `tmpfiles.d` fragment | yes | Peter's written **provisioning** authorization | **STOP-A** (below) |
 | **S2** | Read-only verification of the STOP-A state, and the v2 checklist | no | same authorization as S1 | `[S2.* rc=0]` |
 | **S3** | **Arming + install**: lingering user manager, SA-2 artifact, the one-command sudoers drop-in, installer `verify` and `install` (which **enables** the unit) | yes | a **separate** written authorization, after S2 and one post-S1 boot | **STOP-B** |
 | **S4** | **Activation**: start, `verify-ready`, acceptance probes, later removal | yes | a third, separate decision, with the attending operator and window of the handover | outside this plan |
@@ -82,37 +82,69 @@ manifest copy). At STOP-A:
 ### P.3 Controlled artifact set — every identity is a field or a named blocker
 
 Nothing is fetched during production execution. The operator receives the artifacts below in a root-only directory `/root/route3-artifacts/<ROUTE3_RELEASE_REV>/` (root-owned `0700`, files root-owned, not
-group/other-writable) and S0.2/S1.2 refuse anything whose SHA-256 differs from the field. The workspace is **uncommitted**, so no release revision exists yet: the first four fields below
-are **hard blockers** that return NO-GO until the supplier fills them. Nothing here is promoted from an `oracle-test` observation into a production decision.
+group/other-writable) and S0.2/S0.3/S1.2 refuse anything whose SHA-256 differs from the field. Until the supplier enters a reviewed, published revision and the attested baseline, every field below is
+**`UNSET`**, a hard blocker that returns NO-GO. Nothing here is promoted from an `oracle-test` observation into a production decision.
 
 | Artifact | Identity | State |
 |---|---|---|
 | Reviewed release | `ROUTE3_RELEASE_REV` (40-hex commit id of the independently reviewed, committed candidate) | **BLOCKER — supplier: Peter** (commit and publication are his) |
 | Deployable code | `code.tar` = `git archive --format=tar <REV> -- adapters application tools infra/executor infra/tmpfiles.d infra/rp11-h1` built on the maintainer workstation (never on production), plus `MANIFEST.sha256` (`<sha256>␣␣<path>` per file, sorted, LF). `ROUTE3_ARCHIVE_SHA256`, `ROUTE3_MANIFEST_SHA256` | **BLOCKER — supplier: Peter / maintainer workstation**, after the commit. The manifest, not the tar, is the content identity: the tree must equal it exactly (set and digests). Includes the service fragment and every repository file executed as root or by the executor |
-| Python 3.14 | **The complete closure** of Ubuntu archive packages the solver installs for `python3.14`, `python3.14-minimal` (owns `/usr/bin/python3.14`) and `python3.14-venv`, each **exact `name=version`**: `ROUTE3_APT_PACKAGES`. Accepted archive sources: `ROUTE3_APT_ORIGIN`, a comma-separated list of `<url> <suite>/<component>` entries, exactly as `apt-cache madison` prints them. Interpreter identity: `ROUTE3_PY_SHA256` (see "Reference identity" below) | **BLOCKER — supplier: Peter**, from S0.0 (read-only solver simulation on the production host's own configured source; no third-party repository, no `deadsnakes`, no build from source). `oracle-test` observation only, not a production value: Ubuntu 26.04.1 `resolute`, `python3.14-minimal 3.14.4-1ubuntu0.2` (`amd64v3`), offered by `resolute-updates` and `resolute-security` |
+| Python 3.14 (installed host baseline) | **The attested dependency closure of the three installed roots** `python3.14`, `python3.14-minimal` (owns `/usr/bin/python3.14`) and `python3.14-venv`, split in two: the **pinned set** `ROUTE3_APT_PACKAGES` (members built from source package `python3.14`; exact `name=version`; later held) and the **base set** `ROUTE3_APT_BASE` (every other closure member; exact `name=version`; re-checked, never held). Accepted archive sources: `ROUTE3_APT_ORIGIN`, a sorted, comma-separated list of `<url> <suite>/<component>` entries. Interpreter identity: `ROUTE3_PY_SHA256` (independent reference, below). Binding: `ROUTE3_BASELINE_SHA256`, the SHA-256 of the reviewed baseline record file | **BLOCKER — supplier: Peter**, from the S0.A attestation of the production host's own installed packages (no install, no simulation; no third-party repository, no `deadsnakes`, no build from source). `oracle-test` has the same Ubuntu 26.04.1 baseline but is **not** a production value |
+| Signed-archive payload reference | `reference.record`: for every closure member the SHA-256 the archive's **signed index** states for exactly that package file, a digest of the package's own metadata (control fields, conffile list with packaged md5s, maintainer scripts, `md5sums`) and a digest of its non-conffile payload (content, mode and owner of every file, every symlink target). Identity: `ROUTE3_REFERENCE_SHA256`. Delivered as `<ART>/<REV>/reference.record`; committed as `docs/operations/route3-payload-reference.txt` | **BLOCKER — supplier: Peter**, derived by `reference-payload` on a non-production host from the committed baseline record (no production download, no production mutation). This is the only thing that binds the installed bytes to the archive: `dpkg --verify` and `apt-cache madison` compare the host with itself and with what an archive *offers* |
 | Jeepney wheel | `jeepney-0.9.0-py3-none-any.whl`, SHA-256 `97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683` (the accepted pin, `infra/rp11-h1/requirements.lock`; the same wheel builds SA-2 and the venv) | **fixed**. Custody: obtained once, off production, by `pip download --no-deps --only-binary=:all: --require-hashes -r infra/rp11-h1/requirements.lock` and delivered to `<ART>/<REV>/wheelhouse/`. Installed only with `--no-index --no-deps --require-hashes` (S1.2) |
 | SA-2 artifact | built **from the deployed, verified code and the same wheel** by `infra/rp11-h1/build.py` into `/usr/local/libexec/freedom-blades-rp11` (root-owned, directories `0755`, files `0644`); identity `ROUTE3_SA2_TREE_SHA256` = SHA-256 of the sorted `sha256␣␣path` listing of that tree (S3.2 computes it) | **BLOCKER — supplier: Peter**, from a reference build of the release revision on a non-production host; built only in S3 |
 | `tmpfiles.d` prerequisite | `infra/tmpfiles.d/freedom-blades-rp11-polkit-rules.conf` from the manifest, installed by the reviewed tool to `/usr/lib/tmpfiles.d/` root-owned `0644`; S2.1 compares it byte-for-byte with the manifest copy | covered by the manifest |
 | Service fragment | `infra/executor/freedom-blades-executor-supervisor.service`, from the manifest; placed only by installer `install` in S3 | covered by the manifest |
 
-Release-record recipe (maintainer workstation, after the commit; **not** a production step and not part of any block here): `git archive --format=tar --output=code.tar <REV> -- adapters application tools infra/executor infra/tmpfiles.d infra/rp11-h1`;
-extract it into an empty directory and run `find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sed 's#  ./#  #' > MANIFEST.sha256` inside it; `sha256sum code.tar MANIFEST.sha256` are the two fields. S1.2 refuses an archive that is not exactly that
-manifest (no other file, no link, no directory-only surprise), so a mutable checkout, a stray cache or an extra file cannot ride along. The SA-2 identity is computed on a non-production host by building the release as S3.2 does and hashing the listing defined there.
+**Release-record procedure (2026-11-11 redesign; replaces the former S0.0 closure proposal).** Production already runs Ubuntu 26.04.1 with Ubuntu Python 3.14.4 as part of its host baseline, so there is
+nothing to simulate and nothing to install: the closure is **attested from what is installed**. The old S0.0 assumed the interpreter was absent, would have proposed an install set from a solver run and
+**must never run** (it now refuses). Every step below is read-only on the host it inspects; the tool is [`tools/route3_release_record.py`](../../tools/route3_release_record.py), standard library only, run as
+`/usr/bin/python3.14 -I -S -B <tool> <command>` so no ambient module, environment or bytecode takes part. Status 0 = ok, 1 = `NO-GO:` findings (each printed), 2 = usage, 3 = the environment could not be read.
 
-**Apt closure — how it is obtained, bound and checked.** (1) *Obtain:* S0.0 runs `apt-get --simulate --no-install-recommends install python3.14 python3.14-minimal python3.14-venv` on the production host against its own already-downloaded
-package lists and prints every `Inst` result as `name=version`, plus each version's archive sources from `apt-cache madison`. Nothing is installed and no list is refreshed. Any proposed upgrade, downgrade or removal is "NOT ACCEPTABLE" (S0.0 fails): the plan installs
-only packages that are new to the host, so a rollback never has to undo a change to an existing one. (2) *Review:* Peter reviews the printed set and sources and enters it as `ROUTE3_APT_PACKAGES` and `ROUTE3_APT_ORIGIN`. (3) *Bind:* `route3_apt_origin_ok` accepts a member
-only if every configured source that offers exactly that `name=version` is a listed origin, and at least one does; a listed origin line for a different version, or an unlisted source for the same version, fails. (4) *Check before installing (S0.2 and again S1.1):* the solver,
-asked to install exactly the members not yet installed (pinned `=version`), must propose exactly those members at exactly those versions — a missing dependency, an additional one, another version, an upgrade, a downgrade or a removal each fail before anything is installed. A member
-installed at another version fails. (5) *Verify after (S1.1, S2.1, S3):* every member at its exact version, `dpkg --verify` over every member, the real interpreter's SHA-256, and — S1.1 only — nothing was removed or changed and nothing outside the recorded intent was added (exit 4).
+1. **Reviewed revision (Peter, workstation).** Commit and publish the candidate. `ROUTE3_RELEASE_REV` is that full 40-hex commit. A later release-record commit that changes only block F, the baseline record and documents is
+   not a new deployable revision; `verify-release` proves no path of the archive pathspec changed.
+2. **Archive and manifest (non-production host).** `build-archive --repo <checkout> --rev <REV> --out <new directory>` runs P.3's literal `git archive` (user and system git configuration neutralised, tar umask pinned),
+   validates every member exactly as block D's `archive` check does (regular files and directories only, no link, device, special mode bit, secret-named, cache or non-plain name), writes `code.tar` and a
+   `MANIFEST.sha256` byte-identical to P.3's recipe, and prints the two digests. It refuses an existing directory.
+3. **Production attestation (S0.A, read-only, unprivileged).** Run `attest-host` and keep its output as the **baseline record**. The record is canonical text — operating system, interpreter path/real file/SHA-256, the three
+   roots and, per member, class (`pin`/`base`), name, version, architecture, source package and every archive source that offers exactly that version — so an unchanged host always renders the same bytes.
+   *Closure:* the transitive `Depends`/`Pre-Depends` closure of the three roots over the **installed** packages (first installed alternative, then `Provides`; `Recommends`/`Suggests` are not followed). *Pinned set:* members whose
+   source package is `python3.14` — the interpreter family — exact, held at S1.1, `dpkg --verify` clean. *Base set:* every other member (libc6, OpenSSL, …) — attested exactly and re-checked at every stage, but **not held**, because
+   holding shared libraries would stop their security updates; a change to any of them is NO-GO until the record is re-attested and re-reviewed, never an in-place upgrade. The attestation refuses (status 1): a package that is not cleanly installed,
+   a dependency nothing installed satisfies, a package installed for more than one architecture, a member that no configured **archive** source offers at exactly its installed version (a locally built or orphaned package; dpkg's own
+   status file listed by `apt-cache madison` is only the installed-state marker, never an origin), an origin shape it does not understand, and an interpreter that is not a file of `python3.14-minimal`.
+   Archive origins are compared at every later stage as **exact per-member sets** (a member offered by one source more, or one less, than reviewed is drift; a member with no reviewed or live origin is refused, never accepted). But an archive *offering* a name and version
+   says nothing about the bytes installed on the host: that is what the payload reference of step 4 binds.
+4. **Independent references (non-production host).**
+   *Interpreter:* `reference-interpreter --version <python3.14-minimal version of the record> --workdir <empty directory>` downloads that exact `python3.14-minimal`, requires its SHA-256 to equal the one the archive's **signed index**
+   states, and prints the digest of `./usr/bin/python3.14` inside the package. That digest is `ROUTE3_PY_SHA256`; it must equal the **installed** file's digest in the baseline record.
+   *Payload reference:* `reference-payload --record <baseline record> --workdir <empty directory>` does the same for **every** closure member: the index SHA-256 of exactly `name=version` is read first, the package is downloaded, its SHA-256 must
+   equal it before it is opened, the archive source must be one the record reviewed, and the tool then reads the `.deb` in memory (never extracting it) and prints the **payload reference**: per member the index SHA-256, a metadata digest
+   and a payload digest as defined in P.3. `ROUTE3_REFERENCE_SHA256` is its SHA-256. The trust anchor is the archive's signed index as verified by `apt` on that host; the reference contains nothing taken from any installed system.
+   `payload-rows --package <name>` and `payload-rows --deb <file>` print the canonical rows on each side for diagnosis (a read-only command; production is not asked for them).
+5. **SA-2 tree (non-production host).** `sa2-reference --archive <code.tar> --wheel <pinned wheel>` extracts the validated archive, builds the SA-2 artifact twice into fresh destinations exactly as S3.2 does and prints the
+   digest only if both agree. `sa2-digest <tree>` computes S3.2's identity for any tree and refuses links, special files, group/other-writable entries, plain-name violations and an empty tree.
+6. **Fill the record.** `propose --record <baseline record> --reference <payload reference>` prints the package values for review. Peter enters block F **in the reviewed repository** and commits the baseline record as
+   `docs/operations/route3-baseline-record.txt` and the payload reference as `docs/operations/route3-payload-reference.txt` (package names, versions and digests only; no secret). `check-fields --runbook <this file> --record <record> --reference <reference>`
+   must print `ok`: it refuses any `UNSET`, any malformed value, a baseline or reference digest that is not the file's SHA-256, a reference derived for another record or whose members differ from the record's, and tokens/origins/interpreter digest
+   that differ from the record.
+7. **Prove the artifacts.** `verify-release --repo <checkout> --runbook <this file> --artifacts <directory> --published-ref <ref> [--sa2-dir <tree>]` reproduces the archive from `ROUTE3_RELEASE_REV` and requires: the commit is an ancestor of
+   the published reference; the working tree equals the revision and has no uncommitted or untracked file inside the archive pathspec (**no mutable or unreviewed tree**); `ROUTE3_ARCHIVE_SHA256`/`ROUTE3_MANIFEST_SHA256` equal the
+   reproduced artifacts; `code.tar`, `MANIFEST.sha256` and the pinned wheel in the directory are byte-identical to them; and the SA-2 tree, when given, has the field digest.
+8. **Deliver, then S0.1–S0.3 on production.** The root-only directory `/root/route3-artifacts/<REV>/` holds `code.tar`, `MANIFEST.sha256`, `baseline.record` and `reference.record` (the committed files, byte for byte) and `wheelhouse/<wheel>`.
+   S0.2 verifies the first, second and fourth against their fields; S0.3 runs `route3_gate`. Independent review of the completed record precedes any S1 decision.
 
-**Reference identity for `ROUTE3_PY_SHA256`** (the file does not exist on production before S1.1, so S0.2 cannot hash it). The reference is the `/usr/bin/python3.14` member of the **`python3.14-minimal` package file itself**, obtained off production: on a non-production host with the same
-Ubuntu archive configuration, in an empty directory as an unprivileged user, `apt-get download python3.14-minimal=<ROUTE3 version>`; confirm the downloaded `.deb`'s SHA-256 equals the `SHA256:` that `apt-cache show python3.14-minimal=<version>` prints for that exact version (the archive's signed
-index); then `dpkg-deb --fsys-tarfile python3.14-minimal_*.deb | tar -xO ./usr/bin/python3.14 | sha256sum`. That digest is the field. S1.1 proves the installed file equals it (exit 4 → rollback otherwise); nothing in S0 claims to hash a production file. On `oracle-test` this
-procedure was run and its digest equals the digest of the installed `/usr/bin/python3.14` (R2 return); the value is an observation of that host and is not promoted to a production field.
+**What each stage re-checks, mechanically.** `route3_gate` (block D) is the single attestation: it verifies the three reviewed artifacts against block F, refuses an interpreter that is not the signed-archive package's file *before running it*, runs the tool **from the
+digest-verified `code.tar`**, and requires the host to equal the baseline record **and** every member's installed package metadata and non-conffile payload to equal the signed-archive reference, then repeats the `dpkg --verify` and base-set checks
+(`route3_python_ok`). It runs in S0.3, S2.1 and **at every mutating boundary: S1.0, S1.1 (before and after the hold), S1.2, S1.3, S1.4, S3.1, S3.2, S3.3, S3.5 and the activation S4.1 (before `systemctl start`)** — so invoking any of those blocks directly, without S0.3, a missing, changed or extra closure member or payload fails
+**before the block mutates anything**. **Any difference is NO-GO**: stop, do not upgrade or install anything, return to Peter for a re-attested and re-reviewed record. `apt-mark hold` (S1.1) freezes only the pinned set. The
+`/usr/bin/python3.14` path is the one the accepted contract names (sudoers vector, `-I -S` entries); no other interpreter is substituted. *No install path exists:* the apt-transaction machinery of the earlier plan (solver preflight, in-transaction hooks,
+`apt-get install`) was removed; a missing member is a hard NO-GO, never an installation.
 
-Drift: `apt-mark hold` freezes the pinned packages from S1.1 on. At every later stage S2.1/S3.x re-check version, `dpkg --verify` and the SHA-256 of the real interpreter; **any difference is NO-GO**: stop,
-do not upgrade in place, return to Peter for a re-reviewed set of fields. The `/usr/bin/python3.14` path is the one the accepted contract names (sudoers vector, `-I -S` entries); no other interpreter is substituted.
+*What the payload comparison does and does not establish.* Compared exactly: the control fields the closure is computed from, the conffile list with the packaged md5s, every maintainer script and `md5sums` dpkg keeps, and for every file of the package's own
+file list that is not a conffile its type, mode, owner and content (symlinks: target); merged-`/usr` aliases are resolved on both sides. A local edit of a **conffile** is host policy and is not compared (its list and packaged md5 are). Refused outright: a dpkg
+`path-exclude`/`path-include` configuration (it changes what is legitimately unpacked). A diversion or statoverride needs no rule of its own: the file at a diverted or re-owned path is compared as installed, so the other package's file (or a changed mode or owner) is a payload difference. **Not covered:** files that no package owns (for example Python bytecode caches under a package directory), and
+the circularity that the host's own interpreter and libraries run the check (mitigated by refusing a non-reference interpreter before it runs and by the independent `sha256sum`; an adversary who already controls root on the host can defeat any self-attestation).
 
 ### D. Definitions — no effect on the host; paste first
 
@@ -270,14 +302,17 @@ route3_cp() { printf '%s\n' "$1" >> "$ROUTE3_EVID/checkpoints" && sync -- "$ROUT
 route3_fields_ok() {
   local bad=0 v re='^[0-9a-f]{64}$' pk o ol
   [[ $ROUTE3_RELEASE_REV =~ ^[0-9a-f]{40}$ ]] || { echo "NO-GO: ROUTE3_RELEASE_REV is unset or not a 40-hex commit id (supplier: Peter)"; bad=1; }
-  for v in ROUTE3_ARCHIVE_SHA256 ROUTE3_MANIFEST_SHA256 ROUTE3_PY_SHA256 ROUTE3_SA2_TREE_SHA256 ROUTE3_WHEEL_SHA256; do
+  for v in ROUTE3_ARCHIVE_SHA256 ROUTE3_MANIFEST_SHA256 ROUTE3_PY_SHA256 ROUTE3_BASELINE_SHA256 ROUTE3_REFERENCE_SHA256 ROUTE3_SA2_TREE_SHA256 ROUTE3_WHEEL_SHA256; do
     [[ ${!v} =~ $re ]] || { echo "NO-GO: $v is unset or not a SHA-256 (supplier: Peter)"; bad=1; }
   done
-  # the apt field is the COMPLETE reviewed closure: every package the solver will install, each exact name=version, no name twice
+  # ROUTE3_APT_PACKAGES is the PINNED set of the attested closure (the members built from source package python3.14, held at S1.1): exact name=version for python3.14, python3.14-minimal and python3.14-venv, no name twice
   re='^[a-z0-9][a-z0-9.+-]*=[A-Za-z0-9.+~:-]+( [a-z0-9][a-z0-9.+-]*=[A-Za-z0-9.+~:-]+)*$'
   pk=" $ROUTE3_APT_PACKAGES "
   if [[ $ROUTE3_APT_PACKAGES =~ $re && $pk == *" python3.14="* && $pk == *" python3.14-minimal="* && $pk == *" python3.14-venv="* ]] && [ -z "$(route3_tokens | cut -d= -f1 | LC_ALL=C sort | uniq -d)" ]; then :; else
-    echo "NO-GO: ROUTE3_APT_PACKAGES must be the complete closure: exact name=version for python3.14, python3.14-minimal, python3.14-venv and every other package the solver installs, no name twice (supplier: Peter)"; bad=1; fi
+    echo "NO-GO: ROUTE3_APT_PACKAGES must be the attested pinned set: exact name=version for python3.14, python3.14-minimal, python3.14-venv and every other member built from source package python3.14, no name twice (supplier: Peter)"; bad=1; fi
+  # ROUTE3_APT_BASE is the rest of the attested closure (re-checked, never held): exact name=version, no name twice, and no name that is also pinned
+  if [[ $ROUTE3_APT_BASE =~ $re ]] && [ -z "$(for t in $ROUTE3_APT_BASE $ROUTE3_APT_PACKAGES; do printf '%s\n' "${t%%=*}"; done | LC_ALL=C sort | uniq -d)" ]; then :; else
+    echo "NO-GO: ROUTE3_APT_BASE must be the attested base set: exact name=version, no name twice and none that is also in ROUTE3_APT_PACKAGES (supplier: Peter)"; bad=1; fi
   # the origin field is a comma-separated list of "<archive url> <suite>/<component>" entries, each the exact source text of apt-cache madison
   if [[ $ROUTE3_APT_ORIGIN =~ ^[A-Za-z0-9\ ,=./:_-]+$ ]]; then
     IFS=, read -ra ol <<< "$ROUTE3_APT_ORIGIN"
@@ -348,24 +383,6 @@ route3_apt_idle() {
   done
   return "$bad"
 }
-# stdin: apt-get --simulate output. stdout: "new name=version" | "change name old>new" | "remove name" | "malformed ..." (Conf, headings and the rest are ignored)
-route3_apt_parse() {
-  awk '
-    $1 == "Inst" { name = $2; old = ""
-      if ($3 ~ /^\[/) { old = $3; sub(/^\[/, "", old); sub(/\]$/, "", old) }
-      i = index($0, "("); if (i == 0) { print "malformed " $0; next }
-      split(substr($0, i + 1), a, " ")
-      if (old != "") print "change " name " " old ">" a[1]; else print "new " name "=" a[1]
-      next }
-    $1 == "Remv" || $1 == "Purg" { print "remove " $2 }'
-}
-# read-only solver result for the given arguments; sets ROUTE3_SIM
-route3_apt_sim() {
-  local out rc
-  out=$(/usr/bin/env -i PATH="$ROUTE3_PATH" LC_ALL=C apt-get --simulate --no-install-recommends install -- "$@" 2>&1); rc=$?
-  [ "$rc" -eq 0 ] || { echo "NO-GO: the apt-get simulation failed (status $rc)"; return 1; }
-  ROUTE3_SIM=$(printf '%s\n' "$out" | route3_apt_parse)
-}
 # EVERY archive source that offers exactly name=version must be a listed origin, and at least one must offer it. apt-cache madison prints "name | version | url suite/component arch Packages".
 route3_apt_origin_ok() {
   local n=$1 v=$2 out a b c src seen=0 bad=0 o hit allowed
@@ -374,231 +391,30 @@ route3_apt_origin_ok() {
   while IFS='|' read -r a b c; do
     a=${a//[[:space:]]/}; b=${b//[[:space:]]/}
     [ "$a" = "$n" ] && [ "$b" = "$v" ] || continue
-    c=${c#"${c%%[![:space:]]*}"}; c=${c%"${c##*[![:space:]]}"}; src=${c% Packages}; src=${src% *}; seen=1; hit=0
+    c=${c#"${c%%[![:space:]]*}"}; c=${c%"${c##*[![:space:]]}"}
+    # dpkg's own status file is listed for an INSTALLED version as the installed-state marker; it is not an archive source and never an origin
+    case $c in /var/lib/dpkg/status|"/var/lib/dpkg/status "*) continue;; esac
+    src=${c% Packages}; src=${src% *}; seen=1; hit=0
     for o in "${allowed[@]}"; do o=${o#"${o%%[![:space:]]*}"}; o=${o%"${o##*[![:space:]]}"}; [ "$src" = "$o" ] && hit=1; done
     [ "$hit" -eq 1 ] || { echo "NO-GO: $n=$v is also offered by an origin that is not listed: $src"; bad=1; }
   done <<< "$out"
   [ "$seen" -eq 1 ] || { echo "NO-GO: $n=$v is offered by no configured archive source"; bad=1; }
   return "$bad"
 }
-# The reviewed closure against the host, read-only. Sets ROUTE3_TODO (the members not yet installed, one name=version per line, sorted) only when ALL of these hold:
-# every member is offered by a listed origin only; no member is installed at another version; the solver, asked to install exactly the missing members, proposes exactly those
-# members at exactly those versions and nothing else (no extra package, no upgrade, no downgrade, no removal).
+# The reviewed PINNED closure against the host, read-only. This plan has NO install path: a member that is absent, installed at another version or offered by an unlisted origin is a hard NO-GO before any mutation.
 route3_apt_check() {
-  local t n v inst bad=0 got other
-  ROUTE3_TODO=
+  local t n v inst bad=0
   for t in $ROUTE3_APT_PACKAGES; do
     n=${t%%=*}; v=${t#*=}
-    route3_apt_origin_ok "$n" "$v" || bad=1
     inst=$(dpkg-query -W -f='${Version}' "$n" 2>/dev/null)
-    if [ -z "$inst" ]; then ROUTE3_TODO+="$t"$'\n'
-    elif [ "$inst" != "$v" ]; then echo "NO-GO: $n is installed at $inst, not $v"; bad=1; fi
+    if [ -z "$inst" ]; then echo "NO-GO: $n is not installed; this plan never installs a package, so the host is not the reviewed baseline"; bad=1
+    elif [ "$inst" != "$v" ]; then echo "NO-GO: $n is installed at $inst, not $v"; bad=1
+    else route3_apt_origin_ok "$n" "$v" || bad=1; fi
   done
-  [ "$bad" -eq 0 ] || return 1
-  ROUTE3_TODO=$(printf '%s' "$ROUTE3_TODO" | LC_ALL=C sort)
-  [ -n "$ROUTE3_TODO" ] || return 0
-  route3_apt_sim $ROUTE3_TODO || return 1
-  other=$(printf '%s\n' "$ROUTE3_SIM" | awk '$1 != "new" && NF')
-  [ -z "$other" ] || { echo "NO-GO: the solver proposes a change, removal or something unparsed:"; printf '%s\n' "$other"; return 1; }
-  got=$(printf '%s\n' "$ROUTE3_SIM" | awk '$1 == "new" { print $2 }' | LC_ALL=C sort)
-  [ "$got" = "$ROUTE3_TODO" ] || { echo "NO-GO: the solver result is not exactly the reviewed closure"; echo "solver would install:"; printf '%s\n' "$got"; echo "reviewed, not yet installed:"; printf '%s\n' "$ROUTE3_TODO"; return 1; }
+  return "$bad"
 }
-# ---- apt DIAGNOSTIC evidence recorded INSIDE the Route 3 apt transaction (never ownership, never authority to remove or unhold) -------
-# NO package or hold is ever removed, purged, downgraded or unheld by this plan after S1.1 has installed it. An idle check, a snapshot, a package delta, a PID, a timestamp, a lock observation or the records below cannot say
-# WHICH action created a package effect: apt runs the configured DPkg::Post-Invoke list in order under the same frontend lock, so an EARLIER configured hook can run a separate dpkg operation before the Route 3 hook queries package state
-# and the Route 3 hook would then observe that effect as if it were its own. The records are kept ONLY so that an attending operator can see the reviewed intent, what the invocation submitted and what dpkg reported afterwards.
-# The one S1.1 apt-get carries TWO per-invocation hooks (-o on that command only; no global apt configuration is read or changed):
-#  1. DPkg::Pre-Install-Pkgs runs after apt holds the dpkg frontend lock and BEFORE dpkg unpacks anything (protocol Version 3 on the descriptor named by InfoFD). It proves the lock is held by one of its own
-#     ancestors, refuses anything but a plain new installation and durably writes /root/route3-evidence/apt.txn (write, fsync, rename, fsync): what this invocation SUBMITTED. That is a record of intent to
-#     install. It is NOT proof that anything was installed.
-#  2. DPkg::Post-Invoke runs after dpkg finished (also after a failed dpkg run, verified on the real apt) and BEFORE apt releases the frontend lock, in the same process tree. It proves that lock is held by one of its
-#     own ancestors, reads apt.txn, asks dpkg for the state of exactly those packages and durably writes /root/route3-evidence/apt.effects (write, fsync, rename, fsync): the packages of apt.txn that dpkg reported as
-#     installed at exactly the recorded version. This is an OBSERVATION of package state. It can include an effect produced by ANOTHER configured hook that ran earlier in the same list (a separate dpkg
-#     operation of the same name and version), so it is NOT proof that this invocation's submitted action created the effect and it is NOT ownership.
-# S1.1 uses the records only as FAIL-CLOSED success checks (a missing, malformed or contradictory record fails S1.1). R never reads them to decide a package or hold mutation: R mutates no package and no hold at all.
-# apt.txn format (tab separated): line 1 "route3-apt-txn 1"; then one "pkg<TAB>name<TAB>version" line per package this invocation submits; last line "end<TAB>N" with N equal to the number of pkg lines.
-# apt.effects format (tab separated, a diagnostic observation): line 1 "route3-apt-effects 1"; line 2 "txn<TAB>SHA-256 of apt.txn"; then one "eff<TAB>name<TAB>version" line per observed package; last line "end<TAB>N" with N equal to the number of eff lines.
-route3_hook_text() {
-  cat <<'HOOK'
-#!/bin/sh
-# Route 3 apt transaction record: DPkg::Pre-Install-Pkgs, protocol Version 3. Writes only below the evidence directory.
-E=/root/route3-evidence
-umask 077
-set -C
-PATH=/usr/bin:/bin; export PATH
-fail() { echo "route3 apt hook: $1" >&2; exit "$2"; }
-case ${APT_HOOK_INFO_FD:-} in ''|*[!0-9]*) fail "no protocol descriptor" 70;; esac
-[ "$APT_HOOK_INFO_FD" -ge 3 ] || fail "unusable protocol descriptor" 70
-[ -d "$E" ] && [ ! -L "$E" ] && [ "$(stat -c %u:%a -- "$E")" = 0:700 ] || fail "the evidence directory is not a root-0700 directory" 70
-ino=$(stat -c %i -- /var/lib/dpkg/lock-frontend) || fail "no dpkg frontend lock file" 74
-p=$$; held=
-while [ "$p" -gt 1 ]; do
-  if awk -v p="$p" -v i="$ino" '$4 == "WRITE" && $5 == p { n = split($6, a, ":"); if (a[n] == i) f = 1 } END { exit f ? 0 : 1 }' /proc/locks; then held=1; break; fi
-  p=$(awk '{ sub(/^.*\) /, ""); print $2 }' /proc/"$p"/stat) || break
-  case $p in ''|*[!0-9]*) break;; esac
-done
-[ -n "$held" ] || fail "no ancestor holds the dpkg frontend lock: this is not inside an apt transaction" 74
-{ [ ! -e "$E/apt.txn" ] && [ ! -L "$E/apt.txn" ] && [ ! -e "$E/apt.txn.tmp" ] && [ ! -L "$E/apt.txn.tmp" ]; } || fail "a transaction record already exists" 71
-eval "exec 9<&$APT_HOOK_INFO_FD" || fail "cannot read the protocol descriptor" 70
-awk '
-  BEGIN { print "route3-apt-txn 1" }
-  NR == 1 { if ($0 != "VERSION 3") bad = "header"; next }
-  st == 0 { if ($0 == "") st = 1; next }
-  { if (NF != 9) { bad = "row"; next }
-    if ($9 == "**CONFIGURE**") next
-    if ($9 == "**REMOVE**" || $2 != "-" || $5 != "<" || $9 !~ /^\//) { bad = "effect"; next }
-    if ($1 !~ /^[a-z0-9][a-z0-9.+-]*$/ || $6 !~ /^[A-Za-z0-9.+~:-]+$/) { bad = "name"; next }
-    print "pkg\t" $1 "\t" $6; n++ }
-  END { if (bad != "" || st != 1) { print "route3 apt hook: unsupported protocol (" bad ")" > "/dev/stderr"; exit 1 }; print "end\t" n + 0 }' <&9 > "$E/apt.txn.tmp" || { rm -f -- "$E/apt.txn.tmp"; fail "unsupported or malformed protocol: nothing recorded" 72; }
-sync -- "$E/apt.txn.tmp" && mv --no-target-directory --no-clobber -- "$E/apt.txn.tmp" "$E/apt.txn" && sync -- "$E" || fail "the record could not be made durable" 73
-HOOK
-}
-route3_effects_hook_text() {
-  cat <<'HOOK'
-#!/bin/sh
-# Route 3 apt package-state observation (diagnostic only, not ownership): DPkg::Post-Invoke, inside the apt process tree that still holds the dpkg frontend lock. Writes only below the evidence directory.
-E=/root/route3-evidence
-DQ=/usr/bin/dpkg-query
-umask 077
-set -C
-PATH=/usr/bin:/bin; export PATH
-fail() { echo "route3 apt effects hook: $1" >&2; exit "$2"; }
-[ -d "$E" ] && [ ! -L "$E" ] && [ "$(stat -c %u:%a -- "$E")" = 0:700 ] || fail "the evidence directory is not a root-0700 directory" 80
-[ ! -e "$E/apt.txn" ] && [ ! -L "$E/apt.txn" ] && exit 0
-{ [ -f "$E/apt.txn" ] && [ ! -L "$E/apt.txn" ] && [ "$(stat -c %u:%a -- "$E/apt.txn")" = 0:600 ]; } || fail "the transaction record is not a plain root-0600 file" 81
-ino=$(stat -c %i -- /var/lib/dpkg/lock-frontend) || fail "no dpkg frontend lock file" 84
-p=$$; held=
-while [ "$p" -gt 1 ]; do
-  if awk -v p="$p" -v i="$ino" '$4 == "WRITE" && $5 == p { n = split($6, a, ":"); if (a[n] == i) f = 1 } END { exit f ? 0 : 1 }' /proc/locks; then held=1; break; fi
-  p=$(awk '{ sub(/^.*\) /, ""); print $2 }' /proc/"$p"/stat) || break
-  case $p in ''|*[!0-9]*) break;; esac
-done
-[ -n "$held" ] || fail "no ancestor holds the dpkg frontend lock: this is not inside an apt transaction" 84
-{ [ ! -e "$E/apt.effects" ] && [ ! -L "$E/apt.effects" ] && [ ! -e "$E/apt.effects.tmp" ] && [ ! -L "$E/apt.effects.tmp" ]; } || fail "an effect record already exists" 85
-sum=$(sha256sum -- "$E/apt.txn" | cut -d' ' -f1); [ "${#sum}" -eq 64 ] || fail "the transaction record cannot be digested" 81
-rows=$(awk -F'\t' '
-  NR == 1 { if ($0 != "route3-apt-txn 1") bad = 1; next }
-  $1 == "pkg" && NF == 3 && !seen && $2 ~ /^[a-z0-9][a-z0-9.+-]*$/ && $3 ~ /^[A-Za-z0-9.+~:-]+$/ { n++; print $2 "\t" $3; next }
-  $1 == "end" && NF == 2 && !seen && $2 ~ /^[0-9]+$/ { seen = 1; want = $2; next }
-  { bad = 1 }
-  END { if (NR < 2 || bad || !seen || want + 0 != n + 0) exit 1 }' "$E/apt.txn") || fail "the transaction record is malformed" 81
-T=$(printf '\t'); NL='
-'
-out=; n=0; IFS=$NL
-for r in $rows; do
-  name=${r%%"$T"*}; ver=${r#*"$T"}
-  st=$("$DQ" -W -f='${db:Status-Abbrev}\t${Version}\n' -- "$name" 2>/dev/null); rc=$?
-  [ "$rc" -ne 1 ] || continue
-  [ "$rc" -eq 0 ] || fail "dpkg cannot be queried for $name" 86
-  abbrev=${st%%"$T"*}; have=${st#*"$T"}
-  case $abbrev in ?[HUFWti]*) [ "$have" = "$ver" ] || continue;; *) continue;; esac
-  out="$out$name$T$ver$NL"; n=$((n + 1))
-done
-{ printf 'route3-apt-effects 1\ntxn\t%s\n' "$sum"; printf '%s' "$out" | awk -F'\t' 'NF == 2 { print "eff\t" $1 "\t" $2 }'; printf 'end\t%s\n' "$n"; } > "$E/apt.effects.tmp" || { rm -f -- "$E/apt.effects.tmp"; fail "the effect record could not be written" 87; }
-sync -- "$E/apt.effects.tmp" || fail "the effect record could not be made durable" 88
-mv --no-target-directory --no-clobber -- "$E/apt.effects.tmp" "$E/apt.effects" || fail "the effect record could not be published" 89
-sync -- "$E" || fail "the effect record directory could not be made durable" 89
-HOOK
-}
-# writes both hooks into the verified evidence directory (root 0700) before apt runs
-route3_apt_hook_write() {
-  route3_hook_text > "$ROUTE3_EVID/apt-hook.sh.tmp" && chmod 0700 -- "$ROUTE3_EVID/apt-hook.sh.tmp" && sync -- "$ROUTE3_EVID/apt-hook.sh.tmp" \
-    && mv -- "$ROUTE3_EVID/apt-hook.sh.tmp" "$ROUTE3_EVID/apt-hook.sh" \
-    && route3_effects_hook_text > "$ROUTE3_EVID/apt-effects-hook.sh.tmp" && chmod 0700 -- "$ROUTE3_EVID/apt-effects-hook.sh.tmp" && sync -- "$ROUTE3_EVID/apt-effects-hook.sh.tmp" \
-    && mv -- "$ROUTE3_EVID/apt-effects-hook.sh.tmp" "$ROUTE3_EVID/apt-effects-hook.sh" && sync -- "$ROUTE3_EVID"
-}
-# the ONE S1.1 apt-get: $@ = the exact name=version members to install. Both hooks are configured with -o on this command only.
-route3_apt_install() {
-  local h="$ROUTE3_EVID/apt-hook.sh" e="$ROUTE3_EVID/apt-effects-hook.sh"
-  /usr/bin/env -i PATH="$ROUTE3_PATH" DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get install --yes --no-install-recommends \
-    -o "DPkg::Pre-Install-Pkgs::=$h" -o "DPkg::Tools::Options::$h::Version=3" -o "DPkg::Tools::Options::$h::InfoFD=3" -o "DPkg::Post-Invoke::=$e" -- "$@"
-}
-# $1 = the record. Sets ROUTE3_TXN (sorted "name<TAB>version" rows, one per line) and returns 0 ONLY for a complete, well-formed record that is consistent with the reviewed intent and the pre-install snapshot.
-# A missing, truncated, malformed, duplicated, out-of-closure or contradictory record is an AMBIGUITY (status 1): ownership is never derived from the package delta instead.
-route3_txn_rows() {
-  local f=$1 r
-  ROUTE3_TXN=
-  { [ -f "$f" ] && [ ! -L "$f" ] && [ "$(stat -c %u:%a -- "$f")" = 0:600 ]; } || { echo "AMBIGUOUS: the transaction record is not a plain root-0600 file"; return 1; }
-  r=$(awk -F'\t' '
-    NR == 1 { if ($0 != "route3-apt-txn 1") bad = 1; next }
-    $1 == "pkg" && NF == 3 && !seen && $2 ~ /^[a-z0-9][a-z0-9.+-]*$/ && $3 ~ /^[A-Za-z0-9.+~:-]+$/ { rows++; print $2 "\t" $3; next }
-    $1 == "end" && NF == 2 && !seen && $2 ~ /^[0-9]+$/ { seen = 1; want = $2; next }
-    { bad = 1 }
-    END { if (NR < 2 || bad || !seen || want + 0 != rows + 0) exit 1 }' "$f") || { echo "AMBIGUOUS: the transaction record is malformed, truncated or inconsistent"; return 1; }
-  r=$(printf '%s\n' "$r" | awk NF | LC_ALL=C sort)
-  printf '%s\n' "$r" | awk -F'\t' 'NF && seen[$1]++ { d = 1 } END { exit d ? 1 : 0 }' || { echo "AMBIGUOUS: the transaction record names a package twice"; return 1; }
-  [ -z "$(LC_ALL=C comm -13 "$ROUTE3_EVID/apt.intent" <(printf '%s\n' "$r" | awk NF))" ] || { echo "AMBIGUOUS: the transaction record names a package outside the reviewed intent"; return 1; }
-  awk -F'\t' 'NR == FNR { b[$1]; next } ($1 in b) { bad = 1 } END { exit bad ? 1 : 0 }' "$ROUTE3_EVID/beforeC1.dpkg" <(printf '%s\n' "$r" | awk NF) \
-    || { echo "AMBIGUOUS: the transaction record names a package that was already installed before the transaction"; return 1; }
-  ROUTE3_TXN=$r
-}
-# $1 = the observation record. Needs ROUTE3_TXN (route3_txn_rows). Sets ROUTE3_EFF (sorted "name<TAB>version" rows) and returns 0 ONLY for a complete, well-formed record bound to THIS apt.txn (its SHA-256), whose every row is a
-# row of the validated transaction record, is in the reviewed intent and was neither installed in the pre-install snapshot nor in the recorded pre-state. Anything else is an AMBIGUITY (status 1).
-# A fail-closed S1.1 success check and a diagnostic: the rows are an OBSERVATION that may include an effect produced by another configured hook, never ownership.
-route3_effects_rows() {
-  local f=$1 r want
-  ROUTE3_EFF=
-  { [ -f "$f" ] && [ ! -L "$f" ] && [ "$(stat -c %u:%a -- "$f")" = 0:600 ]; } || { echo "AMBIGUOUS: the observation record is missing or not a plain root-0600 file"; return 1; }
-  want=$(sha256sum -- "$ROUTE3_EVID/apt.txn" | cut -d' ' -f1)
-  [ "${#want}" -eq 64 ] || { echo "AMBIGUOUS: the transaction record cannot be digested"; return 1; }
-  r=$(awk -F'\t' -v want="$want" '
-    NR == 1 { if ($0 != "route3-apt-effects 1") bad = 1; next }
-    NR == 2 { if ($1 != "txn" || NF != 2 || $2 != want) bad = 1; next }
-    $1 == "eff" && NF == 3 && !seen && $2 ~ /^[a-z0-9][a-z0-9.+-]*$/ && $3 ~ /^[A-Za-z0-9.+~:-]+$/ { rows++; print $2 "\t" $3; next }
-    $1 == "end" && NF == 2 && !seen && $2 ~ /^[0-9]+$/ { seen = 1; n = $2; next }
-    { bad = 1 }
-    END { if (NR < 3 || bad || !seen || n + 0 != rows + 0) exit 1 }' "$f") || { echo "AMBIGUOUS: the observation record is malformed, truncated, inconsistent or bound to another transaction record"; return 1; }
-  r=$(printf '%s\n' "$r" | awk NF | LC_ALL=C sort)
-  printf '%s\n' "$r" | awk -F'\t' 'NF && seen[$1]++ { d = 1 } END { exit d ? 1 : 0 }' || { echo "AMBIGUOUS: the observation record names a package twice"; return 1; }
-  [ -z "$(LC_ALL=C comm -13 <(printf '%s\n' "$ROUTE3_TXN" | awk NF) <(printf '%s\n' "$r" | awk NF))" ] || { echo "AMBIGUOUS: the observation record names a package the transaction record does not"; return 1; }
-  [ -z "$(LC_ALL=C comm -13 "$ROUTE3_EVID/apt.intent" <(printf '%s\n' "$r" | awk NF))" ] || { echo "AMBIGUOUS: the observation record names a package outside the reviewed intent"; return 1; }
-  awk -F'\t' 'NR == FNR { b[$1]; next } ($1 in b) { bad = 1 } END { exit bad ? 1 : 0 }' "$ROUTE3_EVID/beforeC1.dpkg" <(printf '%s\n' "$r" | awk NF) \
-    && awk -F'\t' 'NR == FNR { b[$1]; next } ($1 in b) { bad = 1 } END { exit bad ? 1 : 0 }' "$ROUTE3_EVID/prestate.dpkg" <(printf '%s\n' "$r" | awk NF) \
-    || { echo "AMBIGUOUS: the observation record names a package that was already installed before the transaction"; return 1; }
-  ROUTE3_EFF=$r
-}
-# Sets ROUTE3_TXN (what this apt transaction SUBMITTED) and ROUTE3_EFF (what dpkg was OBSERVED to report afterwards). Used by S1.1 ONLY, as a fail-closed success check and to write the diagnostic observed.pkgs. R never calls it.
-# Returns 0, or 1 = AMBIGUITY (S1.1 then fails):
-#  * the reviewed intent is empty: no apt run happened, nothing was observed;
-#  * a transaction record exists: it must be valid AND a valid observation record bound to it must exist;
-#  * no transaction record: an observation record is a contradiction; and if an intent member appeared since the snapshot some action installed it and this one proved nothing: AMBIGUITY.
-route3_observe_resolve() {
-  local appeared
-  ROUTE3_TXN=; ROUTE3_EFF=
-  if [ ! -s "$ROUTE3_EVID/apt.intent" ]; then :
-  elif [ -e "$ROUTE3_EVID/apt.txn" ] || [ -L "$ROUTE3_EVID/apt.txn" ]; then
-    route3_txn_rows "$ROUTE3_EVID/apt.txn" || return 1
-    route3_effects_rows "$ROUTE3_EVID/apt.effects" || return 1
-  else
-    { [ ! -e "$ROUTE3_EVID/apt.effects" ] && [ ! -L "$ROUTE3_EVID/apt.effects" ]; } || { echo "AMBIGUOUS: an observation record exists without a transaction record"; return 1; }
-    appeared=$(LC_ALL=C comm -12 "$ROUTE3_EVID/apt.intent" <(LC_ALL=C comm -13 "$ROUTE3_EVID/beforeC1.dpkg" "$1"))
-    [ -z "$appeared" ] || { echo "AMBIGUOUS: reviewed packages appeared but no transaction record exists:"; printf '%s\n' "$appeared"; return 1; }
-  fi
-  return 0
-}
-# $1 = snapshot before apt-get, $2 = snapshot after (apt returned 0). Nothing was removed or changed, nothing outside the recorded intent was added, and every package the record says this transaction installed is installed.
-# A reviewed member that is installed but NOT in the record was installed by another action: it is reported only.
-route3_delta_ok() {
-  local gone extra lost other short
-  gone=$(LC_ALL=C comm -23 "$1" "$2")
-  short=$(LC_ALL=C comm -23 <(printf '%s\n' "$ROUTE3_TXN" | awk NF) <(printf '%s\n' "$ROUTE3_EFF" | awk NF))
-  extra=$(LC_ALL=C comm -13 "$ROUTE3_EVID/apt.intent" <(LC_ALL=C comm -13 "$1" "$2"))
-  lost=$(LC_ALL=C comm -23 <(printf '%s\n' "$ROUTE3_TXN" | awk NF) "$2")
-  other=$(LC_ALL=C comm -23 <(LC_ALL=C comm -12 "$ROUTE3_EVID/apt.intent" <(LC_ALL=C comm -13 "$1" "$2")) <(printf '%s\n' "$ROUTE3_TXN" | awk NF))
-  [ -z "$gone" ] || { echo "NO-GO: the install removed or changed an existing package:"; printf '%s\n' "$gone"; }
-  [ -z "$extra" ] || { echo "NO-GO: the install added a package outside the reviewed closure:"; printf '%s\n' "$extra"; }
-  [ -z "$lost" ] || { echo "NO-GO: a package the transaction record says was installed is not installed:"; printf '%s\n' "$lost"; }
-  [ -z "$short" ] || { echo "NO-GO: apt returned 0 but the observation record does not cover a package the transaction submitted:"; printf '%s\n' "$short"; }
-  [ -z "$other" ] || { echo "NOTE: installed by ANOTHER transaction before this one took its lock; reported only, and no rollback ever removes a package:"; printf '%s\n' "$other"; }
-  [ -z "$gone" ] && [ -z "$extra" ] && [ -z "$lost" ] && [ -z "$short" ]
-}
-# $1 = snapshot after apt-get (any status): writes the DIAGNOSTIC observed.pkgs (the observed rows of apt.effects that dpkg reports at exactly the recorded version). Durable (write, fsync, rename, fsync) before S1.1 may succeed. NOT ownership; R never reads it.
-route3_observed_write() {
-  route3_observe_resolve "$1" || return 1
-  LC_ALL=C comm -12 <(printf '%s\n' "$ROUTE3_EFF" | awk NF) "$1" > "$ROUTE3_EVID/observed.tmp" \
-    && sync -- "$ROUTE3_EVID/observed.tmp" && mv -- "$ROUTE3_EVID/observed.tmp" "$ROUTE3_EVID/observed.pkgs" && sync -- "$ROUTE3_EVID"
-}
-# the pinned interpreter packages, unchanged since S1.1: every closure member at its exact version, no changed packaged file, and the real interpreter is the reviewed file
+# the pinned interpreter packages: every pinned member at its exact version, no changed packaged file (dpkg --verify: LOCAL metadata only), the real interpreter is the reviewed file (sha256sum, independent of Python), and the base set unchanged.
+# This is a supplement. The independent proof against the signed archive is route3_gate below.
 route3_python_ok() {
   local t n real h bad=0 out
   for t in $ROUTE3_APT_PACKAGES; do
@@ -607,8 +423,48 @@ route3_python_ok() {
   done
   out=$(dpkg --verify $(for t in $ROUTE3_APT_PACKAGES; do printf '%s ' "${t%%=*}"; done)); [ $? -eq 0 ] && [ -z "$out" ] || { echo "NO-GO: dpkg --verify reports a changed packaged file"; bad=1; }
   real=$(readlink -f -- "$ROUTE3_PY"); read -r h _ < <(sha256sum -- "$real") ; [ "$h" = "$ROUTE3_PY_SHA256" ] || { echo "NO-GO: the real interpreter differs from ROUTE3_PY_SHA256"; bad=1; }
+  route3_base_ok || bad=1
   return "$bad"
 }
+# the BASE set of the attested closure: every member installed at exactly its reviewed version and offered only by listed archive origins. Read-only: base packages are never installed, held or changed by this plan,
+# so a difference means the host moved since the baseline record was reviewed: re-attest and re-review, never upgrade in place
+route3_base_ok() {
+  local t n v inst bad=0
+  for t in $ROUTE3_APT_BASE; do
+    n=${t%%=*}; v=${t#*=}
+    inst=$(dpkg-query -W -f='${Version}' "$n" 2>/dev/null)
+    [ "$inst" = "$v" ] || { echo "NO-GO: base package $n is at ${inst:-<absent>}, not the attested $v (re-attest and re-review; never upgrade in place)"; bad=1; continue; }
+    route3_apt_origin_ok "$n" "$v" || bad=1
+  done
+  return "$bad"
+}
+# THE TRUSTED ATTESTATION, run mechanically at EVERY mutating boundary (S1.0, S1.1, S1.2, S1.3, S1.4, S3.1, S3.2, S3.3, S3.5, and S4.1 before it starts anything) and by S0.3 and S2.1: nothing relies on an operator having run S0.3 earlier, and nothing runs from a checkout.
+# It (1) requires fields, the three reviewed artifacts (code.tar, baseline.record, reference.record) to be root-owned, non-writable and equal to their field digests; (2) refuses the interpreter unless its SHA-256 (sha256sum, not Python)
+# equals ROUTE3_PY_SHA256, the digest taken from the signed-archive package, BEFORE that interpreter runs anything; (3) runs the tool FROM the digest-verified code.tar, which re-attests the whole closure against the baseline record
+# (members, versions, architectures, source packages, exact per-member archive origins, interpreter) AND recomputes every member's package metadata and non-conffile payload from the installed files and compares them with the
+# signed-archive reference (a same-name, same-version package from a removed or untrusted repository, or crafted locally with matching metadata, fails here); and (4) repeats the dpkg and base-set checks. Any member missing,
+# changed or extra is NO-GO. It installs, upgrades, holds and writes nothing. Status 0 ok, 1 NO-GO, 2 untrusted or mismatching artifact.
+route3_gate() (
+  set -o pipefail; export PATH="$ROUTE3_PATH"
+  local d f real h A="$ROUTE3_ART/$ROUTE3_RELEASE_REV" bad=0
+  route3_fields_ok || return 1
+  for d in "$ROUTE3_ART" "$A"; do
+    [ -d "$d" ] && [ ! -L "$d" ] && [ "$(stat -c %u "$d")" = 0 ] && [ $(( 0$(stat -c %a "$d") & 022 )) -eq 0 ] || { echo "NO-GO: artifact directory is not a real root-owned non-writable directory: $d"; return 2; }
+  done
+  for f in "$A/code.tar" "$A/baseline.record" "$A/reference.record"; do
+    [ -f "$f" ] && [ ! -L "$f" ] && [ "$(stat -c %u:%h "$f")" = 0:1 ] && [ $(( 0$(stat -c %a "$f") & 022 )) -eq 0 ] || { echo "NO-GO: artifact is not a real root-owned non-writable file: $f"; return 2; }
+  done
+  sha256sum --check --status <(printf '%s  %s\n' "$ROUTE3_ARCHIVE_SHA256" "$A/code.tar" "$ROUTE3_BASELINE_SHA256" "$A/baseline.record" "$ROUTE3_REFERENCE_SHA256" "$A/reference.record") \
+    || { echo "NO-GO: code.tar, baseline.record or reference.record differs from its field digest"; return 2; }
+  real=$(readlink -f -- "$ROUTE3_PY") && [ -n "$real" ] && read -r h _ < <(sha256sum -- "$real") && [ "$h" = "$ROUTE3_PY_SHA256" ] \
+    || { echo "NO-GO: the interpreter differs from ROUTE3_PY_SHA256 (the signed-archive package's file); it is not run"; return 1; }
+  tar --extract --to-stdout --file "$A/code.tar" tools/route3_release_record.py \
+    | /usr/bin/env -i PATH=/usr/bin:/bin "$ROUTE3_PY" -I -S -B - verify-host --record "$A/baseline.record" --reference "$A/reference.record" \
+        --field "APT_PACKAGES=$ROUTE3_APT_PACKAGES" --field "APT_BASE=$ROUTE3_APT_BASE" --field "APT_ORIGIN=$ROUTE3_APT_ORIGIN" --field "PY_SHA256=$ROUTE3_PY_SHA256" \
+        --field "BASELINE_SHA256=$ROUTE3_BASELINE_SHA256" --field "REFERENCE_SHA256=$ROUTE3_REFERENCE_SHA256" || bad=1
+  route3_python_ok || bad=1
+  return "$bad"
+)
 ```
 
 ### F. Release fields — every `UNSET` is a hard NO-GO (the supplier edits this block in the reviewed release record, never on the host ad hoc)
@@ -618,8 +474,11 @@ ROUTE3_RELEASE_REV=UNSET
 ROUTE3_ARCHIVE_SHA256=UNSET
 ROUTE3_MANIFEST_SHA256=UNSET
 ROUTE3_APT_PACKAGES="UNSET"
+ROUTE3_APT_BASE="UNSET"
 ROUTE3_APT_ORIGIN="UNSET"
 ROUTE3_PY_SHA256=UNSET
+ROUTE3_BASELINE_SHA256=UNSET
+ROUTE3_REFERENCE_SHA256=UNSET
 ROUTE3_SA2_TREE_SHA256=UNSET
 ROUTE3_WHEEL=jeepney-0.9.0-py3-none-any.whl
 ROUTE3_WHEEL_SHA256=97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683
@@ -628,18 +487,21 @@ ROUTE3_WHEEL_SHA256=97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb18
 ### S0 — read-only production preflight
 
 ```bash
-# S0.0 — AUTHORITY: Peter's authorization of a read-only production preflight. Reads only; writes nothing. Needs block D only (no field): it PROPOSES the closure and its sources so the supplier can review them.
-# It is how the closure for ROUTE3_APT_PACKAGES is established without installing anything: the solver is run with --simulate against the host's own configured, already-downloaded package lists.
-( export PATH="$ROUTE3_PATH"; bad=0
-  route3_apt_sim python3.14 python3.14-minimal python3.14-venv || exit 1
-  printf '%s\n' "$ROUTE3_SIM" | awk '$1 != "new" && NF { print "NOT ACCEPTABLE: " $0 }'
-  echo "proposed ROUTE3_APT_PACKAGES (review every entry; add the top-level three if they are already installed):"
-  printf '%s\n' "$ROUTE3_SIM" | awk '$1 == "new" { print "  " $2 }' | LC_ALL=C sort
-  echo "archive sources offering each proposed version (apt-cache madison; ROUTE3_APT_ORIGIN lists the accepted <url> <suite>/<component> entries):"
-  for t in $(printf '%s\n' "$ROUTE3_SIM" | awk '$1 == "new" { print $2 }'); do LC_ALL=C apt-cache madison "${t%%=*}" | awk -F'|' -v v="${t#*=}" '{ x = $2; gsub(/ /, "", x); if (x == v) print "  " $0 }'; done
-  printf '%s\n' "$ROUTE3_SIM" | awk '$1 != "new" && NF { f = 1 } END { exit f ? 1 : 0 }' || bad=1
-  exit "$bad"
-); rc=$?; echo "[S0.0 rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: the solver proposes a change or removal, or failed — nothing was changed; return to Peter"; (exit "$rc")
+# S0.0 — AUTHORITY: NONE. WITHDRAWN on 2026-11-11 and never to be run. It assumed python3.14 was absent and proposed an apt INSTALL closure from a solver simulation; production already has Ubuntu Python 3.14 installed.
+# The block only refuses: it reads nothing, writes nothing and proposes nothing. It is superseded by S0.A (read-only attestation of the installed closure).
+( echo "NO-GO: S0.0 is withdrawn (it assumed Python 3.14 absent); use S0.A, the read-only attestation of the installed baseline"; exit 64 ); rc=$?; echo "[S0.0 rc=$rc]"; echo "STOP: nothing was read or changed"; (exit "$rc")
+```
+
+```bash
+# S0.A — AUTHORITY: Peter's authorization of a read-only production preflight. Reads only and writes nothing; UNPRIVILEGED (refuses to run as root). Needs block D only (no field).
+# Prints the baseline record of the INSTALLED Python 3.14 closure (release-record procedure, step 3). ROUTE3_TOOL names a regular copy of tools/route3_release_record.py from ROUTE3_RELEASE_REV; its digest is printed
+# on the error stream first and must equal `git show <REV>:tools/route3_release_record.py | sha256sum` computed on the workstation. Copy the printed record off the host; the block creates no file there.
+( export PATH="$ROUTE3_PATH"
+  [ "$(id -u)" -ne 0 ] || { echo "NO-GO: S0.A is unprivileged; do not run it as root"; exit 2; }
+  [ -f "${ROUTE3_TOOL:-}" ] && [ ! -L "$ROUTE3_TOOL" ] || { echo "NO-GO: set ROUTE3_TOOL to a regular copy of tools/route3_release_record.py"; exit 2; }
+  sha256sum -- "$ROUTE3_TOOL" >&2 || exit 2
+  /usr/bin/env -i PATH=/usr/bin:/bin "$ROUTE3_PY" -I -S -B "$ROUTE3_TOOL" attest-host
+); rc=$?; echo "[S0.A rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: nothing was changed; return the findings to Peter"; (exit "$rc")
 ```
 
 ```bash
@@ -666,6 +528,17 @@ route3_fields_ok; rc=$?; echo "[S0.1 rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: NO
 ); rc=$?; echo "[S0.2 rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: NO-GO — nothing was changed"; (exit "$rc")
 ```
 
+```bash
+# S0.3 — AUTHORITY: Peter's authorization of a read-only production preflight. Reads only; writes nothing. Run as root after S0.1 and S0.2.
+# The installed-baseline gate (block D, route3_gate). It requires the reviewed baseline record (<ART>/<REV>/baseline.record) and the signed-archive payload reference (<ART>/<REV>/reference.record) to be the ones block F names, runs the
+# tool FROM THE DIGEST-VERIFIED code.tar (never from a checkout) and requires the host to still be exactly that baseline: same closure, versions, architectures, source packages, exact per-member archive origins and interpreter, no
+# changed packaged file, AND every member's installed package metadata and non-conffile payload equal to the signed-archive package. A missing, changed or additional member, an unreviewed origin, a payload or metadata difference or any drift is
+# NO-GO: nothing here installs, upgrades or holds anything. S0.3 is NOT the control that protects S1 or S3: those blocks run the same gate themselves, so skipping S0.3 skips nothing.
+( export PATH="$ROUTE3_PATH"
+  route3_gate || exit "$?"
+); rc=$?; echo "[S0.3 rc=$rc]"; if [ "$rc" -eq 0 ]; then echo "ok: the host still is the reviewed baseline"; else echo "STOP: NO-GO — the host is not the reviewed baseline; nothing was changed"; fi; (exit "$rc")
+```
+
 ### S1 — inert provisioning (ends at STOP-A)
 
 ```bash
@@ -673,6 +546,7 @@ route3_fields_ok; rc=$?; echo "[S0.1 rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: NO
 # /root/route3-evidence by a single rename(2) only after every file is written and synced. Nothing but evidence is created. A status other than 0 leaves either nothing published (run block R0) or a complete published pre-state (run block R).
 ( set -o pipefail; umask 077; export PATH="$ROUTE3_PATH"; cd / || exit 1; S=$ROUTE3_EVID_STAGE
   route3_fields_ok || exit 1
+  route3_gate || { echo "NO-GO: the trusted baseline attestation failed; nothing was written"; exit 9; }
   route3_absent_ok || exit 2
   { [ ! -e "$ROUTE3_EVID" ] && [ ! -L "$ROUTE3_EVID" ]; } || { echo "NO-GO: an evidence directory already exists; a previous attempt needs rollback R first"; exit 3; }
   { [ ! -e "$S" ] && [ ! -L "$S" ]; } || { echo "NO-GO: an unpublished S1.0 stage exists; run block R0 first"; exit 3; }
@@ -691,30 +565,22 @@ route3_fields_ok; rc=$?; echo "[S0.1 rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: NO
 ```
 
 ```bash
-# S1.1 — AUTHORITY: Peter's written provisioning authorization (stage S1). Installs and holds the reviewed Python package closure from the host's own Ubuntu archive. Network: the host's configured mirror only.
-# NOTHING S1.1 installs or holds is ever removed or unheld by this plan: rollback of the package set is an ATTENDED boundary (block R, status 28), decided only by Peter from the evidence kept here.
-# The reviewed intent (apt.intent), a pre-snapshot (beforeC1.dpkg) and the Route 3 hold list (held.new) are recorded first. The one apt-get then carries two diagnostic in-transaction hooks (block D): apt.txn is what the
-# invocation SUBMITTED, apt.effects is what dpkg was OBSERVED to report afterwards (it can include an effect another configured hook produced; it is not ownership). Success stays fail-closed on them.
-# Right after apt-get returns (any status) the validated observation is copied durably to observed.pkgs and afterC1.dpkg records the package set. If the block, or apt, dies, the evidence on disk is what the attending operator has.
+# S1.1 — AUTHORITY: Peter's written provisioning authorization (stage S1). Holds the reviewed PINNED Python packages (ROUTE3_APT_PACKAGES; the base set is never held). THIS PLAN INSTALLS NO PACKAGE: there is no install path, no solver run
+# and no apt transaction. Before anything is recorded or held it reruns the full trusted attestation (route3_gate: baseline record, signed-archive payload reference, installed payload and metadata, from the digest-verified artifacts);
+# a missing, changed or extra closure member or payload is NO-GO with nothing mutated, whether or not S0.3 was ever run. Network: none is needed.
+# NOTHING S1.1 holds is ever unheld by this plan: rollback of the package set is an ATTENDED boundary (block R, status 28), decided only by Peter from the evidence kept here.
+# A pre-snapshot (beforeC1.dpkg) and the Route 3 hold list (held.new) are recorded first; afterC1.dpkg records the package set afterwards. If the block dies, the evidence on disk is what the attending operator has.
 ( set -o pipefail; umask 022; export PATH="$ROUTE3_PATH"; cd / || exit 1; E=$ROUTE3_EVID
   route3_fields_ok || exit 1
   route3_evid_ok || { echo "NO-GO: S1.0 has not completed (no published, verified evidence)"; exit 2; }
   ! grep -qx begin-C1 "$E/checkpoints" || { echo "NO-GO: S1.1 was already begun; run block R, never retry in place"; exit 2; }
   route3_apt_idle || exit 2
   a=$(dpkg --audit 2>&1); [ $? -eq 0 ] && [ -z "$a" ] || { echo "NO-GO: dpkg --audit reports a package in a partial state"; exit 2; }
+  route3_gate || { echo "NO-GO: the trusted baseline attestation failed; no package was held and nothing was recorded"; exit 2; }
   route3_apt_check || exit 2
-  { [ -z "$ROUTE3_TODO" ] || printf '%s\n' "$ROUTE3_TODO" | tr = '\t'; } | LC_ALL=C sort > "$E/apt.intent.tmp" || exit 3
   route3_pkgs > "$E/beforeC1.dpkg" || exit 3
-  sync -- "$E/apt.intent.tmp" "$E/beforeC1.dpkg" && mv -- "$E/apt.intent.tmp" "$E/apt.intent" && sync -- "$E" || exit 3
-  route3_apt_hook_write || exit 3
+  sync -- "$E/beforeC1.dpkg" && sync -- "$E" || exit 3
   route3_cp begin-C1 || exit 3
-  [ -z "$ROUTE3_TODO" ] || route3_apt_install $ROUTE3_TODO
-  arc=$?
-  route3_pkgs > "$E/afterC1.dpkg" || exit 5
-  route3_observed_write "$E/afterC1.dpkg" || { echo "ESCALATE: the package observation of this attempt is missing or contradictory; run block R, which changes no package and no hold"; exit 5; }
-  [ "$arc" -eq 0 ] || { echo "apt-get install status $arc"; exit 3; }
-  route3_delta_ok "$E/beforeC1.dpkg" "$E/afterC1.dpkg" || exit 4
-  route3_python_ok || exit 4
   : > "$E/held.new"
   for t in $ROUTE3_APT_PACKAGES; do
     n=${t%%=*}
@@ -722,6 +588,8 @@ route3_fields_ok; rc=$?; echo "[S0.1 rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: NO
   done
   sync -- "$E/held.new" || exit 6
   if [ -s "$E/held.new" ]; then apt-mark hold -- $(cat "$E/held.new") || exit 6; fi
+  route3_pkgs > "$E/afterC1.dpkg" || exit 5
+  route3_gate || { echo "NO-GO: the trusted baseline attestation failed after the hold"; exit 4; }
   route3_cp done-C1 || exit 7
 ); rc=$?; echo "[S1.1 rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: run block R; do not retry in place"; (exit "$rc")
 ```
@@ -733,6 +601,7 @@ route3_fields_ok; rc=$?; echo "[S0.1 rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: NO
 ( umask 022; export PATH="$ROUTE3_PATH"; cd / || exit 1; A="$ROUTE3_ART/$ROUTE3_RELEASE_REV"
   route3_fields_ok || exit 1
   route3_evid_ok && grep -qx done-C1 "$ROUTE3_EVID/checkpoints" || { echo "NO-GO: S1.0/S1.1 have not completed"; exit 2; }
+  route3_gate || { echo "NO-GO: the trusted baseline attestation failed; nothing was built"; exit 2; }
   route3_cp begin-C2 || exit 2
   for d in "$ROUTE3_ART" "$A" "$A/wheelhouse"; do
     [ -d "$d" ] && [ ! -L "$d" ] && [ "$(stat -c %u "$d")" = 0 ] && [ $(( 0$(stat -c %a "$d") & 022 )) -eq 0 ] || { echo "NO-GO: untrusted artifact directory: $d"; exit 3; }
@@ -772,6 +641,7 @@ route3_fields_ok; rc=$?; echo "[S0.1 rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: NO
 # S1.3 — AUTHORITY: Peter's written provisioning authorization (stage S1). Creates the dormant account, its same-named group and its home. It does NOT enable linger.
 ( umask 022; export PATH="$ROUTE3_PATH"; cd / || exit 1
   grep -qx done-C2 "$ROUTE3_EVID/checkpoints" || { echo "NO-GO: S1.2 has not completed"; exit 2; }
+  route3_gate || { echo "NO-GO: the trusted baseline attestation failed; no account was created"; exit 2; }
   route3_cp begin-C3 || exit 2
   useradd --system --create-home --home-dir "$ROUTE3_HOME" --shell /usr/sbin/nologin "$ROUTE3_ACCOUNT" || exit 3
   ent=$(getent passwd "$ROUTE3_ACCOUNT") || exit 4
@@ -790,6 +660,7 @@ route3_fields_ok; rc=$?; echo "[S0.1 rc=$rc]"; [ "$rc" -eq 0 ] || echo "STOP: NO
 ( umask 022; export PATH="$ROUTE3_PATH"; cd / || exit 1
   grep -qx done-C3 "$ROUTE3_EVID/checkpoints" || { echo "NO-GO: S1.3 has not completed"; exit 2; }
   route3_tree_ok || exit 3
+  route3_gate || { echo "NO-GO: the trusted baseline attestation failed; the tmpfiles fragment was not installed"; exit 2; }
   route3_cp begin-C4 || exit 2
   /usr/bin/env -i PATH=/usr/bin:/bin "$ROUTE3_PY" -I -S -c "$ROUTE3_ENTRY" "$ROUTE3_TMPFILES" install; r=$?
   [ "$r" -eq 0 ] || { echo "tmpfiles install status $r"; exit 4; }
@@ -806,7 +677,7 @@ else echo "STOP: run block R; do not retry in place"; fi; (exit "$rc")
 ( export PATH="$ROUTE3_PATH"; bad=0; cd / || exit 1
   route3_fields_ok || exit 1
   route3_tree_ok || bad=1
-  route3_python_ok || bad=1
+  route3_gate || bad=1
   ent=$(getent passwd "$ROUTE3_ACCOUNT") || { echo "FAIL: account is absent or the query failed"; exit 1; }
   IFS=: read -r _ _ uid _ _ home shell <<< "$ent"
   [ "$home" = "$ROUTE3_HOME" ] && [ "$shell" = /usr/sbin/nologin ] || { echo "FAIL: account facts"; bad=1; }
@@ -863,11 +734,10 @@ therefore undone too). Every action is idempotent, targets one exact path, uses 
 and removed at the next boot after the fragment is gone. The evidence directory is kept.
 
 Packages and holds — **an attended boundary; R never mutates them.** R runs no `apt-get remove`, `apt remove`, `dpkg --remove`, `dpkg --purge`, `apt-get autoremove`, downgrade, `apt-mark hold` or `apt-mark unhold`, after success, after an ordinary or partial failure, after a signal or kill,
-after a hook failure, with malformed or missing evidence, and for a completed STOP-A withdrawal. No pre-install record, post-invoke observation, package delta, PID, timestamp, lock observation or combination of them is authorization to do so: apt runs the configured `DPkg::Post-Invoke` list in order
-under the same frontend lock, so an earlier configured hook can run a separate `dpkg` operation of the same name and version before the Route 3 hook queries package state, and the Route 3 observation then looks exactly like an effect of the submitted action. Attribution is therefore not decidable by the plan.
+with malformed or missing evidence, and for a completed STOP-A withdrawal. No package delta, PID, timestamp, lock observation or combination of them is authorization to do so, and attribution of a package effect to this plan is not decidable by it. **This plan installs no package at all** (the former S1.1 apt transaction, its
+in-transaction hooks and the solver preflight were removed on 2026-11-11 after independent review: an `apt-get install` path in a plan that only attests an installed baseline could have installed a missing member if the operator skipped the attestation).
 
-S1.1 keeps root-only durable evidence in `/root/route3-evidence` for the attending operator: the reviewed intent (`apt.intent`), the pre-state (`prestate.dpkg`, `prestate.holds`, `beforeC1.dpkg`), what the invocation submitted (`apt.txn`), what dpkg was observed to report afterwards
-(`apt.effects`, `observed.pkgs`: a diagnostic observation that can include effects produced by another configured hook, never ownership), the Route 3 hold list (`held.new`) and the later package and hold state (`afterC1.dpkg`, `now.dpkg`, `now.holds`).
+S1.1 keeps root-only durable evidence in `/root/route3-evidence` for the attending operator: the pre-state (`prestate.dpkg`, `prestate.holds`, `beforeC1.dpkg`), the Route 3 hold list (`held.new`) and the later package and hold state (`afterC1.dpkg`, `now.dpkg`, `now.holds`).
 
 When R reaches C1 it compares the current package set and hold list with the recorded pre-state:
 
@@ -935,7 +805,7 @@ Identity and manager queries are three-valued (`route3_id`, `route3_unit`): only
       hold_lost=$(LC_ALL=C comm -23 "$E/prestate.holds" "$E/now.holds"); hold_added=$(LC_ALL=C comm -13 "$E/prestate.holds" "$E/now.holds")
       if [ -n "$pkg_lost$pkg_added$hold_lost$hold_added" ]; then
         echo "ESCALATE: ATTENDED RECOVERY REQUIRED. The package or hold state differs from the state recorded before this operation. R changed NO package and NO hold and keeps all evidence"
-        echo "(apt.intent apt.txn apt.effects observed.pkgs held.new beforeC1.dpkg afterC1.dpkg now.dpkg now.holds prestate.dpkg prestate.holds in $E). apt.effects is a diagnostic observation, not proof of who installed a package."
+        echo "(held.new beforeC1.dpkg afterC1.dpkg now.dpkg now.holds prestate.dpkg prestate.holds in $E)."
         [ -z "$pkg_added" ] || { echo "installed since the recorded state (name<TAB>version):"; printf '%s\n' "$pkg_added"; }
         [ -z "$pkg_lost" ] || { echo "missing or changed since the recorded state (name<TAB>version):"; printf '%s\n' "$pkg_lost"; }
         [ -z "$hold_added" ] || { echo "held since the recorded state:"; printf '%s\n' "$hold_added"; }
@@ -975,7 +845,7 @@ Failure of a step, or success followed by a decision to withdraw, takes the same
 | Checkpoint | Created by | Rollback action (in R, reverse order) | Expected status | Verification | Escalate when | Reboot |
 |---|---|---|---|---|---|---|
 | C0 evidence | S1.0 (staged in `route3-evidence.new`, published by one rename) | published: **kept** (disposal is Peter's separate decision, P.6). Unpublished (S1.0 failed or was killed at any point before the rename): **R0** removes only the literal stage, after proving it holds no later marker and no later-stage object | R0: 0 | R refuses without a verified published pre-state (status 20); R0 refuses when `/root/route3-evidence` exists (31) | R0: stage not a real root-0700 directory (32), unexpected entry (33), later marker (34), later-stage object or unanswerable identity query (35) | none |
-| C1 packages | S1.1 (`apt-get install` with the two diagnostic in-transaction hooks, `apt-mark hold`) | **none: packages and holds are an attended boundary.** R compares the current set with `prestate.dpkg` / `prestate.holds`: equal = no recovery needed; any difference = no package or hold is changed, the differences are printed, all evidence is kept (no remove, purge, autoremove, downgrade, hold or unhold) | 0 only when equal; **28** when any package or hold difference remains (attended recovery, Peter decides) | `now.dpkg` equals `prestate.dpkg` and `now.holds` equals `prestate.holds` | an apt/dpkg run is active (24), the package or hold set cannot be read (24), a pre-state package is gone or changed (25), a non-recorded addition remains after an equal C1 comparison (26), the manager or identity cannot be queried (27), **any package or hold difference at C1 (28)** | none |
+| C1 packages | S1.1 (`apt-mark hold` of the pinned set after the trusted gate; **no install**) | **none: packages and holds are an attended boundary.** R compares the current set with `prestate.dpkg` / `prestate.holds`: equal = no recovery needed; any difference = no package or hold is changed, the differences are printed, all evidence is kept (no remove, purge, autoremove, downgrade, hold or unhold) | 0 only when equal; **28** when any package or hold difference remains (attended recovery, Peter decides) | `now.dpkg` equals `prestate.dpkg` and `now.holds` equals `prestate.holds` | an apt/dpkg run is active (24), the package or hold set cannot be read (24), a pre-state package is gone or changed (25), a non-recorded addition remains after an equal C1 comparison (26), the manager or identity cannot be queried (27), **any package or hold difference at C1 (28)** | none |
 | C2 deployment | S1.2 (staging dir, then `/opt/freedom-route3`) | remove the fixed stage path and the fixed base path only if both were absent in the pre-state, are real directories, not links and not mounts | 0 | both paths absent | a path pre-existed, is a link or a mount, or the supervisor fragment exists | none |
 | C3 account | S1.3 (`useradd --create-home`) | `userdel --remove`, `groupdel`, remove the fixed home — only if account, group and home were all absent before and no linger / user manager exists | 0 | `getent` status **2** for passwd and group (status 0 = exists; any other status = query failed) ; home absent | any of them pre-existed; linger or `user@<uid>` present (S3 begun: R3 first); **a failed identity/manager query (27)** — never read as absence | none |
 | C4 tmpfiles | S1.4 | reviewed tool `remove` (removes only a byte- and metadata-identical fragment) | 0 | fragment absent | tool absent while the fragment exists, or a shadowing file (the tool reports it) | none; an empty `/run/polkit-1/rules.d` created by a boot in between is harmless and gone at the next boot |
@@ -990,7 +860,7 @@ started, and a boot would start it. The interval from S3.5 to S4 (or to R3) ther
 ```bash
 # S3.1 — AUTHORITY: Peter's separate written S3 authorization (arming + install). Creates the account's lingering user manager. Needs S2 passed and one boot after S1.4 (tmpfiles verify must be ok).
 ( umask 022; export PATH="$ROUTE3_PATH"; cd / || exit 1
-  route3_fields_ok && route3_tree_ok && route3_python_ok || exit 1
+  route3_fields_ok && route3_tree_ok && route3_gate || exit 1
   grep -qx done-C4 "$ROUTE3_EVID/checkpoints" || { echo "NO-GO: S1 has not completed"; exit 2; }
   /usr/bin/env -i PATH=/usr/bin:/bin "$ROUTE3_PY" -I -S -c "$ROUTE3_ENTRY" "$ROUTE3_TMPFILES" verify || { echo "NO-GO: tmpfiles verify is not ok (the first boot after S1.4 has not happened?)"; exit 2; }
   uid=$(id -u "$ROUTE3_ACCOUNT") || exit 2
@@ -1006,7 +876,7 @@ started, and a boot would start it. The interval from S3.5 to S4 (or to R3) ther
 # S3.2 — AUTHORITY: Peter's separate written S3 authorization. Builds the SA-2 artifact from the verified deployed code and the pinned wheel into /usr/local/libexec/freedom-blades-rp11 (new, root-owned).
 # Identity: SHA-256 of `find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum` run inside the artifact directory must equal ROUTE3_SA2_TREE_SHA256.
 ( umask 022; set -o pipefail; export PATH="$ROUTE3_PATH"; cd / || exit 1; DEST=/usr/local/libexec/freedom-blades-rp11; W="$ROUTE3_ART/$ROUTE3_RELEASE_REV/wheelhouse/$ROUTE3_WHEEL"
-  route3_fields_ok && route3_tree_ok && route3_python_ok || exit 1
+  route3_fields_ok && route3_tree_ok && route3_gate || exit 1
   grep -qx done-C5 "$ROUTE3_EVID/checkpoints" || { echo "NO-GO: S3.1 has not completed"; exit 2; }
   sha256sum --check --status <(printf '%s  %s\n' "$ROUTE3_WHEEL_SHA256" "$W") || { echo "NO-GO: the wheel differs from the pin"; exit 2; }
   [ "$(stat -c %u "/usr/local/libexec")" = 0 ] && [ $(( 0$(stat -c %a /usr/local/libexec) & 022 )) -eq 0 ] && [ ! -e "$DEST" ] && [ ! -L "$DEST" ] || { echo "NO-GO: parent untrusted or destination exists"; exit 2; }
@@ -1023,6 +893,7 @@ started, and a boot would start it. The interval from S3.5 to S4 (or to R3) ther
 # S3.3 — AUTHORITY: Peter's separate written S3 authorization. Creates the one-command sudoers drop-in LAST, under a dot-name sudo ignores until it is validated and renamed. Have a second root session open.
 ( umask 077; export PATH="$ROUTE3_PATH"; cd / || exit 1; F=/etc/sudoers.d/freedom-executor-sa2; N=/etc/sudoers.d/.freedom-executor-sa2.new
   grep -qx done-C6 "$ROUTE3_EVID/checkpoints" || { echo "NO-GO: S3.2 has not completed"; exit 2; }
+  route3_gate || { echo "NO-GO: the trusted baseline attestation failed; no sudoers file was written"; exit 2; }
   [ ! -e "$F" ] && [ ! -L "$F" ] && [ ! -e "$N" ] && [ ! -L "$N" ] || { echo "NO-GO: a sudoers file already exists"; exit 2; }
   route3_cp begin-C7 || exit 2
   printf '%s\n' 'freedom-executor ALL=(root) NOPASSWD: /usr/bin/python3.14 -I -S /usr/local/libexec/freedom-blades-rp11/rp11_h1.py stop' > "$N" || exit 3
@@ -1046,6 +917,7 @@ started, and a boot would start it. The interval from S3.5 to S4 (or to R3) ther
 # S3.5 — AUTHORITY: Peter's separate written S3 authorization. Runs installer INSTALL, which writes the fragment and ENABLES the unit in the system manager. It does not start it.
 ( export PATH="$ROUTE3_PATH"; cd / || exit 1
   grep -qx done-C7 "$ROUTE3_EVID/checkpoints" || { echo "NO-GO: S3.3 has not completed"; exit 2; }
+  route3_gate || { echo "NO-GO: the trusted baseline attestation failed; the unit was not installed"; exit 2; }
   route3_cp begin-C8 || exit 2
   route3_installer install; v=$?; echo "installer install status $v"
   [ "$v" -eq 0 ] || exit "$v"
@@ -1064,8 +936,11 @@ adds no statuses of its own to the installer's, passes `sys.exit` through unchan
 
 ```bash
 # S4.1 — AUTHORITY: Peter's separate written ACTIVATION decision (attending operator, window, escalation contact). NOT authorized by anything in this plan.
+# Activation is the most consequential mutation of the plan, so it reruns the full trusted attestation itself (fields, deployed tree, route3_gate: artifacts, interpreter, baseline record, signed-archive payload reference) BEFORE
+# `systemctl start`: any drift is NO-GO with nothing started, whether or not S2.1 or S3.x ran earlier or recently.
 ( export PATH="$ROUTE3_PATH"; cd / || exit 1
   grep -qx done-C8 "$ROUTE3_EVID/checkpoints" || { echo "NO-GO: S3.5 has not completed"; exit 2; }
+  route3_fields_ok && route3_tree_ok && route3_gate || { echo "NO-GO: the trusted baseline attestation failed; the supervisor was not started"; exit 2; }
   systemctl start freedom-blades-executor-supervisor.service || exit 3
   route3_installer verify-ready; v=$?; echo "installer verify-ready status $v"
   exit "$v"

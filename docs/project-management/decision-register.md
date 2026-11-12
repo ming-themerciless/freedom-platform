@@ -716,6 +716,28 @@ response question is closed; R1 remains nonconforming history.
 
 [Decision](../review/project-review-2026-10-07-r1-f1-residual-risk-acceptance.md).
 
+## Decision — live production Lavalink residue must be removed — 2026-11-11
+
+The privileged Ubuntu 26.04 remediation exposed an active, enabled
+`lavalink.service` running `/opt/lavalink/Lavalink.jar`. Peter Duscha confirms
+that it is prohibited residue under OD-40 and authorizes its complete
+production-host removal: stop/disable and delete the unit and enablement link,
+remove `/opt/lavalink` without reading configuration or credential content,
+remove music-specific logs/runtime state, and remove the dedicated service
+account/group after verifying no remaining ownership or process dependency.
+Historical evidence is preserved. This authority supersedes only the
+2026-10-06 record's statement that no live-host operation was authorized; it
+does not restore music or broaden any other production authority.
+
+**Executed and verified complete, 2026-11-11.** Every authorized removal ran as
+specified, `openjdk-17-jre-headless` was purged only after a simulation showed
+no unrelated removal, and absence of process, port, unit, path and
+account/group was verified with the platform healthy. Configuration and
+credential content was not read. The maintainer removed the final stale
+Lavalink reference from the protected repository-local `.env` on 2026-11-11
+without exposing its contents; no live music residue remains.
+Evidence: [handback](../review/production-ubuntu-26-04-upgrade-handback.md).
+
 ## Decision — obsolete music residue removed; R1-F1 response closed — 2026-10-06
 
 Peter Duscha confirms that `yt-cookies.txt` belonged only to the music

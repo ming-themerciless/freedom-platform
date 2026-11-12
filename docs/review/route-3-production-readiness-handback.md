@@ -1640,3 +1640,158 @@ All five findings are corrected, and the accepted topology, SA-2 vector, role se
 * **Not done and not claimed:** no production or staging access, no commit or push, no acceptance, no risk decision, no activation.
 
 **Recommendation:** independent Codex re-review of this exact tree (installer, its tests, runbook §8b, handback §§0, 5, 6), then Peter's decision on the residual risk and monitoring condition. Open gates: the §6 read-only production inspection, F-1 to F-3, the sudo `Defaults` premise and a separate activation instruction. After the suites finished I edited only this handback (figures and conclusion) and the current-state records; no executable instruction or code changed.
+
+## 11. Release-record redesign return (2026-11-11) — implementation only, uncommitted, awaiting independent review
+
+Production already runs Ubuntu 26.04.1 with Ubuntu Python 3.14.4, so the former S0.0 (an apt **install** closure from a solver simulation, written for a host without `python3.14`) can never run. It is now a
+block that only refuses. The replacement attests what is installed. Route 3 stays **NO-GO**; every block-F value is still `UNSET`; no release value was produced, nothing was committed, pushed, provisioned, installed or
+activated, and no production or staging host was inspected.
+
+**Files.** New: `tools/route3_release_record.py` (stdlib only, read-only on the inspected host), `tests/test_route3_release_record.py` (87 tests). Changed: runbook part P (stage table, P.3 Python row, new "Release-record
+procedure", block D `route3_fields_ok`/`route3_apt_origin_ok`/`route3_python_ok`/new `route3_base_ok`, block F, S0.0 withdrawn, new S0.A and S0.3, S1.1 comment), `tests/test_provisioning_plan.py` (stage ids, two new
+fields in the fake world and the field matrix, the S0.0 solver test replaced by a withdrawn-block test, fake `apt-cache madison` offers an installed non-candidate package), and the current-authority text in the active handover,
+`status.md`, `active-delivery-plan.md` and implementation-plan §20.
+
+**Design decisions** (all reversible, all in code or tests).
+* *Attest, never simulate or install.* The closure is the transitive `Depends`/`Pre-Depends` closure of `python3.14`, `python3.14-minimal`, `python3.14-venv` over **installed** packages (first installed alternative, then `Provides`).
+* *Two classes.* **Pinned** = built from source package `python3.14` (`ROUTE3_APT_PACKAGES`; exact, held at S1.1, `dpkg --verify` clean). **Base** = every other member (`ROUTE3_APT_BASE`; exact and re-checked at S0.3/S1.1/S2.1/S3.x through
+  `route3_python_ok`, never held, because holding libc6/OpenSSL would stop their security updates). Any base drift is NO-GO: re-attest and re-review, never upgrade in place — the cost is that an ordinary security update to a shared library
+  forces a new read-only attestation.
+* *Provenance.* A member must be offered, at exactly its installed version, by a configured **archive** source; a locally built or orphaned package, an unknown source shape, an unreviewed origin or a missing/duplicated architecture
+  is refused. dpkg's own status file in `apt-cache madison` is treated as the installed-state marker, never an origin (also fixed in the shell `route3_apt_origin_ok`, which would otherwise have refused every already-installed member).
+* *Interpreter.* The installed file must belong to `python3.14-minimal`; `ROUTE3_PY_SHA256` must be the **independent** digest of `/usr/bin/python3.14` inside the archive's `.deb` (signed-index SHA-256 checked) and equal the installed file.
+* *Release record = block F, bound to a canonical, committed baseline record* (`ROUTE3_BASELINE_SHA256` = its SHA-256; new fields `ROUTE3_APT_BASE`, `ROUTE3_BASELINE_SHA256`). `check-fields` refuses any `UNSET`, malformed value, unbound or
+  differing package field. The shell gate `route3_fields_ok` and the tool accept and refuse the same matrix (tested against each other).
+* *Immutable, reviewed tree.* `build-archive`/`verify-release` reproduce `code.tar`/`MANIFEST.sha256` from the commit with git configuration neutralised, require the commit to be an ancestor of the published ref, require the working tree to
+  equal it with nothing uncommitted or untracked inside the archive pathspec, apply block D's archive name/type rules, compare the artifacts byte for byte, and check the SA-2 tree digest (S3.2's identity; links, special files,
+  writable or non-plain names refused). `sa2-reference` builds the tree twice and agrees only if both match.
+* *Production use.* S0.A (unprivileged, refuses root) prints the record. S0.3 (root, read-only) runs the tool **from the digest-verified `code.tar`** against the delivered `baseline.record`, binds block F, then runs `route3_python_ok`.
+
+**Verified.** Local (`foundry`, venv-web Python 3.14.4, synthetic dpkg/apt hosts and throw-away git repositories only): `tests/test_route3_release_record.py` **87 passed, 2 skipped**; `tests/test_provisioning_plan.py`
+**35 passed, 274 skipped**; with `test_storage_claim_vocabulary.py` **469 passed, 276 skipped**; `tests/test_p4_domain_isolation.py tests/test_executor_system_service.py tests/test_executor_supervisor_install.py
+tests/test_production_checklist_item_5b.py tests/test_production_checklist_item_8.py` pass; guard suite 40/40; all 24 runbook bash blocks pass `bash -n`; `git diff --check` clean. Nine mutations of the tool (provenance, UNSET,
+published/untracked checks, base drift, record binding, interpreter ownership, pseudo-source, …) were each caught except one equivalent mutant (a symlink is still refused as a special file). The skips: 2 in the new module are the
+real-host attestation and the real SA-2 build (gated on nodename `Test`, the pinned wheel and `/usr/bin/python3.14`); 274 are the pre-existing root/`oracle-test` cases (92 need root, `python3.14` and the wheel; 7 root and real apt; 1 systemd; the rest
+the same class).
+
+**Not done — blockers for the reviewer and Peter.**
+* **`oracle-test` was not reachable from the implementing session** (the sandbox's one-uid namespace makes the system SSH configuration `nobody:nogroup`, `Bad owner or permissions`), so that session produced no host run.
+  **That statement is limited to the implementing session.** Codex's independent review did reach `oracle-test`; its result is recorded in section 12, and the figures in this section
+  (87 tests, 35 passed/274 skipped) describe the first tree only and are superseded there.
+* **Real-host formats are unconfirmed**: how `apt-cache madison` prints the installed version's source (both the bare path and the path with trailing columns are handled), the architecture label of `python3.14-minimal` (the earlier `amd64v3`
+  note), whether `apt-cache show` states more than one SHA-256 for it (the tool then refuses), and whether `dpkg --verify` is clean for the base packages on a real host (only conffile changes are tolerated there).
+* This session ran on the repository host, which the project documents as the production host; the tool and the apt/dpkg helpers were exercised only against synthetic fixtures. No real package state was read.
+* *(Superseded.)* The dormant S1.1 apt-transaction machinery and the S0.3-only enforcement were review findings 1 and 2; both are remediated in section 12.
+* Multi-architecture installs are refused rather than modeled. The baseline record file and block F do not exist yet; they require the published revision, a separately authorized read-only production attestation (S0.A) and Peter's review.
+
+**Next action:** independent review of this tree; an unsandboxed session runs the `oracle-test` evidence above; only then may Peter decide on the read-only production attestation and, much later, S1.
+
+## 12. Independent review remediation (2026-11-11) — implementation only, uncommitted, awaiting Codex re-review
+
+Codex reviewed the §11 tree. Route 3 remains **NO-GO**; every block-F value is still `UNSET`; nothing was committed, pushed, provisioned, installed or activated; no production or staging host was touched, no environment file or
+secret was read, and no package was downloaded (the reference generator was only run against synthetic archives).
+
+**Codex's `oracle-test` evidence (recorded as reported; I did not reproduce it).** A focused full root run in a secret-free temporary committed review tree: **396 passed, 1 skipped, 1 failed** after 3085.20 s. Every root-only
+provisioning test passed. The one failure was a harness artifact: Git reported dubious ownership because root ran in a temporary repository owned by `ubuntu`; the intended unprivileged SA-2 reference test then passed
+separately (**1 passed in 2.12 s**). The real installed-closure attestation and verify passed. **Not claimed:** a fully green combined invocation (that needs the remediated exact tree to pass), and
+`reference-interpreter`/`reference-payload` against the real archive (not yet run).
+
+**Finding 1 (blocking) — installed payload was not independently bound to the archive.** `apt-cache madison` only says what an archive *offers*, and `dpkg --verify` compares the host with its own locally installed metadata, so a
+same-name, same-version package from a removed or untrusted repository, or one crafted locally with matching metadata, passed. *Redesign:* a **payload reference** (`reference.record`, canonical text, new field
+`ROUTE3_REFERENCE_SHA256`, delivered as `<ART>/<REV>/reference.record`) derived **off production** by `reference-payload --record <baseline> --workdir <empty dir>`. For every closure member it reads the SHA-256 the archive's
+signed index states for exactly `name=version`, downloads the package, requires the download to equal it before opening, requires an archive source the baseline reviewed, parses the `.deb` in memory (ar, xz/gz/zst/plain tar, no
+extraction) and records the index SHA-256, a **metadata digest** (control fields the closure is computed from, conffile list with packaged md5s, every maintainer script, `md5sums`) and a **payload digest** (type, mode, owner and
+content of every non-conffile file, every symlink target; merged-`/usr` aliases resolved on both sides). `verify-host` (now requiring `--reference`) recomputes both digests from the installed files and the status
+database and refuses any difference, a dpkg `path-exclude`/`path-include` configuration, and a reference derived for another record. `attest` additionally requires the **resolved** interpreter file (not just its packaged name)
+to be owned by `python3.14-minimal`. Local conffile edits stay host policy (excluded from the payload; their list and packaged md5 are bound); executable and library verification is not weakened. The reference carries nothing from any
+installed system, and no production download or mutation exists in the design. *Calibration on a real host (read-only, this repository host, Ubuntu 26.04):* the in-memory `.deb` reader parsed 13 cached zstd packages and, with owners
+mapped to `root` (the sandbox shows `nobody`), reproduced the installed files and metadata of all 13 exactly; the installed-side computation over the whole real 32-member Python closure (2,265 files) read every path with no
+missing file and no dpkg path filter. A real archive reference was **not** generated (no network use).
+
+**Finding 2 (blocking) — the attest-only design was bypassable.** *Removed:* the S1.1 `apt-get` transaction, its two in-transaction hooks, the solver preflight and all their record formats; `route3_apt_check` is now a hard NO-GO for any
+absent, wrong-version or wrongly-sourced member. *Added:* `route3_gate` (block D), the single trusted attestation: root-owned non-writable artifacts equal to their field digests (code.tar, baseline.record, reference.record),
+the interpreter refused by `sha256sum` against `ROUTE3_PY_SHA256` **before it runs**, the tool run **from the digest-verified code.tar**, then `route3_python_ok`. It runs in S0.3 and S2.1 and **mechanically at every mutating boundary:
+S1.0, S1.1 (before and after the hold), S1.2, S1.3, S1.4, S3.1, S3.2, S3.3, S3.5**, each before its first mutation, so S0.3 is no longer a control anyone must remember to run. Rollbacks R0/R/R3 are deliberately ungated.
+
+**Finding 3 (important) — origins.** `compare()` now requires the per-member origin **sets** to be equal (an extra source, a dropped source, and a member with no source on either side are all drift); the runbook's "same archive origins" is now true.
+
+**Tests (local, repository host, `venv-web` Python 3.14.4, `-o tmp_path_retention_policy=failed`).** `tests/test_route3_release_record.py`: **267 passed, 2 skipped** (the 2 skips are the real-host attestation/reference test and the real SA-2 build, gated
+on nodename `Test`). They include: 18 same-name/same-version malicious installs (replaced library, interpreter, setuid bit, retargeted symlink, extra listed file, file dropped from dpkg's list, missing file, directory or fifo in place of
+a file, changed/added maintainer script, changed `md5sums`/status field/conffile md5, a conffile declaration hiding a library, path filter, diverted file) that pass every pre-existing check (the archive offers that version, `dpkg --verify` clean)
+and are rejected by the payload comparison; reference-build refusals (index digest, origin, wrong package, non-empty directory); hostile `.deb` inputs; and, for each of the nine mutating blocks run **directly** with S0.3 never run,
+missing/changed/extra closure members, origin differences, interpreter and payload/metadata tampering, and untrusted or replaced artifacts, asserting a non-zero status, no mutator call (sentinel programs for `apt-mark`, `install`, `useradd`,
+`loginctl`, `mv`, ...) and no checkpoint or evidence written, plus positive controls. `tests/test_provisioning_plan.py`: **45 passed, 178 skipped** (the skips need root, the pinned wheel or the real apt/systemd on `oracle-test`); the fake world now
+starts with the baseline installed, its `apt-get` stub exits 98 for any call, and about 1,000 lines of tests of the removed apt-transaction machinery were deleted. Also: 694 passed, 42 skipped for the executor/installer/checklist modules;
+guard suite 40/40; all 24 runbook bash blocks pass `bash -n`; `git diff --check` clean.
+
+**Not run, and why.** `oracle-test` is not reachable from this session (the sandbox's SSH-configuration artifact; the sandbox was not bypassed). The root-only provisioning-plan cases I changed (the fake-world cases, the new
+direct-invocation case) have therefore **not been executed**; they are edits of tests that Codex ran green on the previous tree.
+
+**Remaining commands for an unsandboxed session** (sync per `docs/operations/disposable-test-server.md`; run the focused modules as **root with the repository owned by root or `safe.directory` set**, which avoids the Git dubious-ownership
+harness failure Codex saw, then the three canonical suites):
+`tests/test_route3_release_record.py` and `tests/test_provisioning_plan.py` (with `FREEDOM_JEEPNEY_WHEEL`/`FREEDOM_RP11_WHEEL`), the real-host test of the first module (attests the real closure, runs `reference-payload` against the
+real archive on the host and verifies), `tools/route3_release_record.py reference-interpreter --version <python3.14-minimal version> --workdir <new dir>`, then `tests/test_*.py`, `tests/web` and the Foundry tests.
+
+**Residual blockers.**
+* The reference for the real closure has not been generated: how `apt-cache show` prints multiple stanzas for the pinned versions, and whether every real package matches, are confirmed only by that run.
+* Not covered by the comparison: files no package owns (for example bytecode caches inside a package directory), and the circularity that the host's own interpreter and libraries run the check (mitigated by the pre-run `sha256sum` of the interpreter; an adversary
+  with root on the host defeats any self-attestation). The trust anchor for the reference is the archive signed index as verified by `apt` on the non-production host.
+* A dpkg `path-exclude` configuration on the production host is refused (NO-GO), not modeled.
+* The committed `baseline.record`, `reference.record` and block F do not exist; they need the published revision, the separately authorized read-only attestation (S0.A) and Peter's review.
+
+## 13. Second independent review remediation (2026-11-11) — implementation only, uncommitted, awaiting Codex re-run
+
+*Superseded on the pending points by §13.1 below (2026-11-12): the focused reruns, the full provisioning module and the three canonical suites have since passed on the exact reviewed tree. The text of this section is kept as written on 2026-11-11, including its "not claimed green" statement, which described that moment only.*
+
+**Codex's corrected-tree results on `oracle-test` (as reported to this session, not re-run by it).**
+* `tests/test_route3_release_record.py`: **269 passed in 400.13 s**.
+* The real reference-interpreter run passed, with digest `be9a2a5eada8c89c1c399fdfb8397179e877c20d8db0739c802f726d4d0e69fd`.
+* `tests/test_provisioning_plan.py` as root: **219 passed, 4 failed in 3186.80 s**. The four failures were stale test expectations, not a production-behavior regression (disposition below).
+The provisioning module is **not** claimed green: it is green only after the focused reruns below pass on `oracle-test`.
+
+**Blocking finding — S4.1 started the supervisor before any gate.** S4.1 ran `systemctl start` after checking only the `done-C8` marker. Fixed in the runbook: S4.1 now runs
+`route3_fields_ok && route3_tree_ok && route3_gate` before `systemctl start` and stops with status 2 and "the supervisor was not started" on any failure, so baseline, payload, artifact, interpreter, field and deployed-tree drift are all refused with nothing
+started. The runbook's gate-boundary enumerations (the "What each stage re-checks" paragraph and the `route3_gate` comment) now list S4.1. Production behavior is otherwise unchanged; the gate itself is not touched.
+Tests: `S4.1` joins `GATED_BLOCKS` and `systemctl start` joins the first-mutation pattern in the static ordering test; `test_s4_1_invoked_directly_refuses_drift_before_starting_or_changing_anything` (eight drifts: baseline, payload, tampered
+baseline record, tampered reference record, tampered archive, interpreter digest, unset release field, extra file in the deployed tree) asserts status 2, no `systemctl` call at all, no package/account/linger/sudoers mutator, no installer call, no
+object change and no checkpoint; `test_s4_1_runs_the_gate_and_then_starts_the_supervisor_when_the_host_is_the_reviewed_baseline` is the positive control (the gate reruns inside S4.1, exactly one `systemctl start`, the installer's status passes through).
+
+**Disposition of the four stale expectations** (each assertion was updated to the current behavior; no production behavior was weakened and the gate was not removed):
+1. `test_removing_the_artifact_digest_check_lets_a_wrong_archive_digest_through` → `test_a_wrong_archive_digest_is_refused_independently_by_the_gate_and_by_the_staged_copy_check`. A wrong `ROUTE3_ARCHIVE_SHA256` is now refused by `route3_gate` first
+   (status 2, before `begin-C2` and any staging). The test proves defense in depth: with only the old staged-copy check removed the gate still refuses (2); with only the gate removed the staged-copy check refuses (6); with both removed the
+   wrongly identified archive is published, which shows each mutation removes the layer it claims to.
+2. `test_an_s1_0_failure_inside_a_snapshot_command_is_recovered_the_same_way` → split in two. A failing `dpkg-query` now fails inside `route3_gate` (`route3_python_ok`) before S1.0 writes anything: status **9** (was 5), no stage, no evidence, object
+   state unchanged, nothing for R0 to recover. A second test keeps the original recovery property by failing the `prestate.dpkg` snapshot *after* the gate (status 5, unpublished stage, `R0` clears it, S1.0 reruns).
+3. `test_r0_refuses_published_evidence_with_or_without_later_markers_and_removes_nothing`: `observed.pkgs` belonged to the removed apt machinery. The test now asserts the current S1.1 evidence set (`beforeC1.dpkg`, `afterC1.dpkg`, `held.new`
+   beside the pre-state files, with `observed.pkgs` absent), the `s1-start`/`begin-C1`/`done-C1` markers, R0 status 31, and that R0 changes neither the evidence file list nor the markers.
+4. `test_real_apt_closure_and_origin_binding_accept_the_installed_set_and_reject_a_wrong_origin`: a wrong version (`python3.14-minimal=0.0-1`) is correctly NO-GO because the installed version differs, before any origin lookup. The assertion
+   keeps `rc=1` and now requires the precise diagnostic ("is installed at … not 0.0-1") instead of "offered by no configured archive source".
+
+**Run in this session (repository host, `venv-web` Python 3.14.4, not root, `-o tmp_path_retention_policy=failed`).** `git diff --check`: clean. `tests/test_provisioning_plan.py`: **46 passed, 188 skipped** (the skips need root,
+`/usr/bin/python3.14` with the pinned wheel, or the real apt/systemd, i.e. `oracle-test`; this includes every new and changed host-gated test). `tests/test_route3_release_record.py`: **267 passed, 2 skipped** (the real-host attestation and the
+real SA-2 build, gated on nodename `Test`). Additionally the literal S4.1 block was run in bash with stubbed gate, field, tree, `systemctl` and installer functions: it starts and verifies only when all three checks pass, and exits 2 with no start
+when any one fails. **Not run here:** every `@host` test, including the new S4.1 tests and the four rewritten tests; `oracle-test` was not used.
+
+**Focused reruns for Codex on `oracle-test` (as root):** `tests/test_provisioning_plan.py -k "s4_1 or wrong_archive_digest or s1_0_package_query or s1_0_failure_inside_a_snapshot or r0_refuses_published or real_apt_closure or every_mutating_block"`, then the full module. Route 3 remains **NO-GO**;
+no commit, push, provisioning, installation or activation was performed.
+
+### 13.1 Final exact-tree evidence on `oracle-test` (recorded 2026-11-12) — validates the uncommitted candidate, not production
+
+Codex reviewed the §13 tree and ran the results below on `oracle-test` against that exact uncommitted tree. They are recorded here as Codex reported them; this session did not re-run any suite, did not touch `tools/`, `tests/`, runtime code or the runbook, and made documentation edits only.
+
+| Suite | Run as | Result |
+|---|---|---|
+| `tests/test_route3_release_record.py` | unprivileged | **269 passed** in 400.13 s |
+| `tests/test_provisioning_plan.py`, focused rerun of the four rewritten tests and the new S4.1 tests | root | **24 passed, 210 deselected** in 296.66 s |
+| `tests/test_provisioning_plan.py`, full module | root | **234 passed** in 3381.14 s (56 min 21 s) |
+| canonical bot suite (`tests/test_*.py`), `TEST_DATABASE_URL` set, default descriptor limits | `ubuntu` | **7,853 passed, 250 skipped** in 1,194.78 s |
+| canonical database-enabled web suite (`tests/web`) | `ubuntu` | **2,893 passed, 80 skipped** in 606.21 s |
+| Foundry Node suite | `ubuntu` | **171 passed, 0 skipped** in 3.65 s |
+
+* **Disposition of §13's open points.** The four stale expectations are corrected and the full provisioning module is now green as root (234 passed), which closes §13's "not claimed green" limit. The focused rerun count (24 + 210 deselected) equals the full module's 234 tests.
+* **Skips.** The printed skip reasons were limited to the documented conditions: root-only provisioning and ownership tests, real `apt`, systemd, `RLIMIT_NOFILE` cases, the non-owner-role check and the unprovisioned RP-11 toolchain. The bot suite's 250 skips differ from the 337 recorded for the earlier tree in `.agents/AGENTS.md`; that figure is for a different tree, and this record does not choose between them. The web suite's 80 skips match the documented database-enabled figure.
+* **Post-documentation integrity review.** Codex reran `git diff --check`: clean. A focused rerun of the four test modules that consume the edited records reported **218 passed, 230 skipped, 1 failed**. The one failure was the working-tree scope guard: in the real, deliberately uncommitted repository, new `tools/route3_release_record.py` is still untracked. The same guard passed in the exact disposable review tree after that tree was committed locally for testing. This is the expected publication gate, not a reason to weaken the scope guard; it closes only when the exact reviewed candidate is committed.
+
+**What this does and does not establish.** It validates the **uncommitted candidate** on the disposable host. It is not production evidence. Route 3 remains **NO-GO**; every block-F release value (`ROUTE3_RELEASE_REV`, `ROUTE3_ARCHIVE_SHA256`, `ROUTE3_MANIFEST_SHA256`, `ROUTE3_APT_PACKAGES`, `ROUTE3_APT_BASE`, `ROUTE3_APT_ORIGIN`, `ROUTE3_PY_SHA256`, `ROUTE3_BASELINE_SHA256`, `ROUTE3_REFERENCE_SHA256`, `ROUTE3_SA2_TREE_SHA256`) remains `UNSET`. No production or staging host was inspected or mutated, and nothing was provisioned, installed, activated, committed or pushed.
+
+**Next controlled step.** Publish and commit the exact reviewed candidate (the maintainer publishes; the repository guards refuse commits and pushes on the default branch). Then, only on Peter's separate authorization, run the production **read-only S0.A attestation** to populate the release identities. S1 inert provisioning, S3 arming/install and S4 activation remain separate later gates, each needing its own explicit authority.

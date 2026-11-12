@@ -78,7 +78,7 @@ def stage_entry_code() -> str:
     return re.search(r"^ROUTE3_STAGE_ENTRY='(.*?)'$", definitions(), re.S | re.M)[1]
 
 
-IDS = ["S0.0", "S0.1", "S0.2", "S1.0", "S1.1", "S1.2", "S1.3", "S1.4", "S2.1", "S2.2", "R0", "R", "S3.1", "S3.2", "S3.3", "S3.4", "S3.5", "S4.1", "R3", "P.6"]
+IDS = ["S0.0", "S0.A", "S0.1", "S0.2", "S0.3", "S1.0", "S1.1", "S1.2", "S1.3", "S1.4", "S2.1", "S2.2", "R0", "R", "S3.1", "S3.2", "S3.3", "S3.4", "S3.5", "S4.1", "R3", "P.6"]
 S1_BLOCKS = ["S1.0", "S1.1", "S1.2", "S1.3", "S1.4", "R0"]
 
 
@@ -89,13 +89,13 @@ def test_every_block_declares_its_authority_and_ends_with_a_reliable_status_and_
         b = block(ident)
         assert b.splitlines()[0].startswith(f"# {ident} — AUTHORITY:"), ident
         assert re.search(r'(\(exit "\$rc"\)|exit "\$rc" \))\s*$', b), f"{ident}: the block's last command must return the captured status"
-        assert re.search(r"\[(S\d\.\d|R[03]?|P\.6)?\s?rc=\$rc\]", b) or "[rc=$rc]" in b, ident
+        assert re.search(r"\[(S\d\.[0-9A]|R[03]?|P\.6)?\s?rc=\$rc\]", b) or "[rc=$rc]" in b, ident
         if ident not in ("S0.1", "S2.2"):
             assert "STOP" in b or "ESCALATE" in b or ident in ("S2.2", "P.6"), ident
 
 
 def test_the_inert_provisioning_stage_cannot_install_enable_start_or_arm():
-    for ident in S1_BLOCKS + ["S0.0", "S0.1", "S0.2", "R"]:
+    for ident in S1_BLOCKS + ["S0.0", "S0.A", "S0.1", "S0.2", "S0.3", "R"]:
         b = block(ident)
         for word in FORBIDDEN_IN_S1:
             assert word not in b, f"{ident} contains {word}"
@@ -150,7 +150,7 @@ def test_the_pinned_wheel_in_the_fields_is_the_accepted_lock_pin():
 
 def test_the_returned_candidate_is_no_go_by_construction_with_every_unresolved_field_unset():
     f = fields_block()
-    for name in ("RELEASE_REV", "ARCHIVE_SHA256", "MANIFEST_SHA256", "APT_PACKAGES", "APT_ORIGIN", "PY_SHA256", "SA2_TREE_SHA256"):
+    for name in ("RELEASE_REV", "ARCHIVE_SHA256", "MANIFEST_SHA256", "APT_PACKAGES", "APT_BASE", "APT_ORIGIN", "PY_SHA256", "BASELINE_SHA256", "REFERENCE_SHA256", "SA2_TREE_SHA256"):
         assert re.search(rf'^ROUTE3_{name}=["]?UNSET["]?$', f, re.M), name
 
 
@@ -185,158 +185,16 @@ def done(rc=0):
 rest = [a for a in args if not a.startswith("-")]
 if cmd in ("reboot", "shutdown", "sudo", "su", "poweroff", "halt"):
     sys.exit(99)
-def resolve(tokens):
-    """The fake solver: requested name[=ver] plus dependencies at the candidate version; returns ordered (name, old, new) effects."""
-    out, seen, queue = [], set(), list(tokens)
-    while queue:
-        t = queue.pop(0)
-        n, _, v = t.partition("=")
-        if n in seen:
-            continue
-        seen.add(n)
-        v = v or w["cand"].get(n, "0")
-        v = w.get("sim_override", {}).get(n, v)
-        old = w["pkgs"].get(n)
-        if old != v:
-            out.append((n, old, v))
-        queue.extend(w["deps"].get(n, []))
-    return out
-def dependents(names):
-    gone, queue = [], list(names)
-    while queue:
-        n = queue.pop(0)
-        if n in gone or n not in w["pkgs"]:
-            continue
-        gone.append(n)
-        queue.extend(d for d in w["rdeps"].get(n, []) if d in w["pkgs"])
-    return gone
-def apt_split(argv):
-    """-o key=value pairs, flags, and the positional words (everything after ``--`` is positional)."""
-    opts, pos, i = {}, [], 0
-    while i < len(argv):
-        a = argv[i]
-        if a == "--":
-            pos += argv[i + 1:]; break
-        if a == "-o":
-            k, _, v = argv[i + 1].partition("="); opts[k] = v; i += 2; continue
-        if not a.startswith("-"):
-            pos.append(a)
-        i += 1
-    return opts, pos
-def run_hook(opts, plan, post=False):
-    """What apt does for DPkg::Pre-Install-Pkgs (the Version 3 protocol on the InfoFD descriptor) or, with ``post``, for DPkg::Post-Invoke (no protocol): the hook runs with the dpkg frontend lock held by this process."""
-    import fcntl, subprocess
-    hook = opts.get("DPkg::Post-Invoke::" if post else "DPkg::Pre-Install-Pkgs::")
-    if not hook:
-        return 0
-    env = dict(os.environ)
-    fd = None if post else opts.get(f"DPkg::Tools::Options::{hook}::InfoFD")
-    proto = "VERSION 3\nAPT::Architecture=amd64\nAPT::Get::Assume-Yes=1\nDPkg::Pre-Install-Pkgs::=" + hook + "\n\n"
-    for n, old, v in plan:
-        proto += f"{n} {old or '-'} {'amd64' if old else '-'} {'same' if old else 'none'} < {v} amd64 same /var/cache/apt/archives/{n}_{v}_amd64.deb\n"
-        proto += f"{n} {old or '-'} {'amd64' if old else '-'} {'same' if old else 'none'} < {v} amd64 same **CONFIGURE**\n"
-    for n in w.get("hook_remove", []):
-        proto += f"{n} 1 amd64 none > 0 amd64 none **REMOVE**\n"
-    r = None
-    if fd:                                   # the protocol pipe first, so the lock file cannot take its descriptor number
-        env["APT_HOOK_INFO_FD"] = fd
-        r, wr = os.pipe(); os.write(wr, proto.encode()); os.close(wr)
-        n = int(fd)
-        if r != n:
-            os.dup2(r, n); os.close(r); r = n
-        os.set_inheritable(n, True)
-    lockf = open(w["lock_frontend"], "a")
-    fcntl.lockf(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    rc = subprocess.run(["/bin/sh", "-c", hook], env=env, pass_fds=(int(fd),) if fd else ()).returncode
-    if r is not None:
-        os.close(r)
-    fcntl.lockf(lockf, fcntl.LOCK_UN)
-    return rc
 if cmd == "apt-get":
-    sim = "--simulate" in args or "-s" in args
-    opts, pos = apt_split(args)
-    rest = [a for a in pos]
-    sub = rest[0]
-    names = [a for a in rest[1:]]
-    if sub == "install":
-        if sim:
-            rc = failing("apt-get simulate")
-            if rc:
-                print("E: simulated failure"); done(rc)
-            print("Reading package lists...")
-            for n, old, v in resolve(names):
-                print(f"Inst {n} " + (f"[{old}] " if old else "") + f"({v} Fake:1/fake [amd64])")
-                print(f"Conf {n} ({v} Fake:1/fake [amd64])")
-            for line in w.get("sim_inject", []):
-                print(line)
-            done(0)
-        rc = failing("apt-get install", "apt-get")
-        for n, v in w.get("race_install", []):   # a SEPARATE transaction finished just before this one took its lock
-            w["pkgs"][n] = v
-        save()
-        if w.get("die_before_hook"):             # interrupted before this transaction owns the lock or runs its hook
-            if w.get("kill_parent"):
-                import signal
-                os.kill(os.getppid(), signal.SIGKILL)
-            sys.exit(w["die_before_hook"])
-        plan = resolve(names)
-        hrc = run_hook(opts, plan)
-        if hrc:
-            print(f"E: Sub-process {opts.get('DPkg::Pre-Install-Pkgs::')} returned an error code ({hrc})")
-            sys.exit(100)
-        for n, v in w.get("race_after_hook", []):  # a SEPARATE transaction installs a recorded package after the record was written and before this invocation unpacked it
-            w["pkgs"][n] = v
-        def post_hook():
-            """DPkg::Post-Invoke: runs after dpkg (also after a failed dpkg run) and before apt releases the lock; a failing hook fails apt.
-            ``early_hook_install``: an EARLIER entry of the configured Post-Invoke list ran a separate dpkg operation (same name and version) first."""
-            for n, v in w.get("early_hook_install", []):
-                w["pkgs"][n] = v
-            save()
-            prc = run_hook(opts, plan, post=True)
-            if prc:
-                print(f"E: Sub-process {opts.get('DPkg::Post-Invoke::')} returned an error code ({prc})")
-                sys.exit(100)
-        if rc:
-            for n, old, v in plan[: w.get("partial_n", 0)]:
-                w["pkgs"][n] = v
-            save()
-            if w.get("kill_parent"):             # interrupted before the post-effect hook could run
-                import signal
-                os.kill(os.getppid(), signal.SIGKILL)
-                sys.exit(rc)
-            post_hook()
-            sys.exit(rc)
-        for n, old, v in plan:
-            w["pkgs"][n] = w.get("install_wrong", {}).get(n, v)
-        for n, v in w.get("install_extra", []):
-            w["pkgs"][n] = v
-        save()
-        if w.get("kill_before_post"):            # every package unpacked, killed before the post-effect hook
-            import signal
-            os.kill(os.getppid(), signal.SIGKILL)
-            sys.exit(137)
-        post_hook()
-        done(0)
-    elif sub == "remove":
-        gone = dependents(names)
-        if sim:
-            for n in gone:
-                print(f"Remv {n} [{w['pkgs'][n]}]")
-            done(failing("apt-get simulate remove"))
-        rc = failing("apt-get remove", "apt-get")
-        if rc:
-            done(rc)
-        for n in gone:
-            w["pkgs"].pop(n, None)
-    done(0)
+    sys.exit(98)    # THE PLAN HAS NO APT-GET: any call, install or simulation, is a defect; the call is already in calls.log
 if cmd == "apt-cache":
     n = rest[-1]
     if rest[0] == "madison":
         if "madison" in w["fail"]:
             sys.exit(w["fail"]["madison"])
         rows = w["madison"].get(n)
-        if rows is None:
-            rows = [[w["cand"][n], w["origin"]]] if n in w["cand"] else []
+        if rows is None:   # an installed package that is not a candidate (the base set) is offered at its installed version by the mirror
+            rows = [[w["cand"][n], w["origin"]]] if n in w["cand"] else ([[w["pkgs"][n], w["origin"]]] if n in w["pkgs"] else [])
         for v, src in rows:
             print(f" {n} | {v:>12} | {src} amd64 Packages")
         done(0)
@@ -461,6 +319,14 @@ sys.exit(97)
 STUB_NAMES = ["apt-get", "apt-cache", "apt-mark", "dpkg-query", "dpkg", "useradd", "userdel", "groupdel", "getent", "id", "loginctl", "systemctl", "pgrep", "visudo",
               "reboot", "shutdown", "sudo", "su", "poweroff", "halt"]
 
+GATE_STUB = '''import json, sys
+w = json.load(open({state!r}))
+open({log!r}, "a").write(" ".join(sys.argv[1:]) + "\\n")
+if w.get("gate_rc"):
+    print("NO-GO: " + w.get("gate_msg", "the stub gate refuses")); sys.exit(w["gate_rc"])
+print("ok: stub gate"); sys.exit(0)
+'''
+
 TOOL_STUB = '''import os, sys
 FRAG = {frag!r}
 SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "infra/tmpfiles.d/{name}")
@@ -546,7 +412,8 @@ class World:
         self.fields: dict[str, str] = {}
         for f in (self.sys["dpkg"] / "lock-frontend", self.sys["dpkg"] / "lock", self.sys["aptlists"] / "lock", self.sys["aptarch"] / "lock"):
             f.write_text("")
-        self.state = {"pkgs": {"coreutils": "9.4"}, "cand": dict(FAKE_CAND), "deps": {k: list(v) for k, v in FAKE_DEPS.items()}, "rdeps": {}, "madison": {}, "holds": [], "users": {}, "groups": {},
+        # the pre-installed baseline: the reviewed closure is already installed (this plan installs nothing), beside an unrelated package
+        self.state = {"pkgs": {"coreutils": "9.4", **dict(t.split("=") for t in CLOSURE.split())}, "cand": dict(FAKE_CAND), "deps": {k: list(v) for k, v in FAKE_DEPS.items()}, "rdeps": {}, "madison": {}, "holds": [], "users": {}, "groups": {},
                       "fail": {}, "active": {}, "origin": "http://mirror.example.test/ubuntu fake-updates/main", "linger_file": str(self.sys["linger"] / "freedom-executor"),
                       "unit_fragment": str(self.sys["units"] / "freedom-blades-executor-supervisor.service"), "lock_frontend": str(self.sys["dpkg"] / "lock-frontend")}
         self.save_state()
@@ -586,6 +453,7 @@ class World:
                     for f in sorted(fn):
                         if not f.endswith((".pyc", ".pyo")):
                             files[str((Path(dp) / f).relative_to(REPO))] = (Path(dp) / f).read_bytes()
+        files["tools/route3_release_record.py"] = GATE_STUB.format(state=str(self.stubs / "state.json"), log=str(self.top / "gate.log")).encode()   # the gate's tool; its REAL behavior is tested in test_route3_release_record.py
         files.update(extra or {})
         for d in drop:
             files.pop(d)
@@ -603,14 +471,17 @@ class World:
         (art / "code.tar").write_bytes(archive)
         (art / "MANIFEST.sha256").write_text(manifest)
         shutil.copy(WHEEL_SRC, art / "wheelhouse" / WHEEL_SRC.name)
+        (art / "baseline.record").write_text("route3-baseline-record 1\n")
+        (art / "reference.record").write_text("route3-payload-reference 1\n")
         for p in [self.art, art, art / "wheelhouse"]:
             p.chmod(0o700)
-        for p in [art / "code.tar", art / "MANIFEST.sha256", art / "wheelhouse" / WHEEL_SRC.name]:
+        for p in [art / "code.tar", art / "MANIFEST.sha256", art / "baseline.record", art / "reference.record", art / "wheelhouse" / WHEEL_SRC.name]:
             p.chmod(0o600)
         real = os.path.realpath(PY314)
         self.fields = {
             "RELEASE_REV": self.rev, "ARCHIVE_SHA256": hashlib.sha256(archive).hexdigest(), "MANIFEST_SHA256": hashlib.sha256(manifest.encode()).hexdigest(),
-            "APT_PACKAGES": self.apt, "APT_ORIGIN": self.origin, "PY_SHA256": hashlib.sha256(Path(real).read_bytes()).hexdigest(), "SA2_TREE_SHA256": self.sa2_digest()}
+            "APT_PACKAGES": self.apt, "APT_BASE": "coreutils=9.4", "BASELINE_SHA256": hashlib.sha256((art / "baseline.record").read_bytes()).hexdigest(),
+            "REFERENCE_SHA256": hashlib.sha256((art / "reference.record").read_bytes()).hexdigest(), "APT_ORIGIN": self.origin, "PY_SHA256": hashlib.sha256(Path(real).read_bytes()).hexdigest(), "SA2_TREE_SHA256": self.sa2_digest()}
 
     def sa2_digest(self) -> str:
         lines = "".join(f"{hashlib.sha256(c).hexdigest()}  {n}\n" for n, c in sorted([("./lib/rp11_roles.py", b"roles"), ("./rp11_h1.py", b"sa2")]))
@@ -725,7 +596,8 @@ def test_the_candidate_is_no_go_with_every_field_unset_and_names_each_one():
     script = definitions() + "\n" + fields_block() + "\n" + block("S0.1") + "\n"
     done = subprocess.run(["/bin/bash", "-c", script], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"}, check=False)
     assert done.returncode == 1 and "[S0.1 rc=1]" in done.stdout
-    for name in ("ROUTE3_RELEASE_REV", "ROUTE3_ARCHIVE_SHA256", "ROUTE3_MANIFEST_SHA256", "ROUTE3_PY_SHA256", "ROUTE3_SA2_TREE_SHA256", "ROUTE3_APT_PACKAGES", "ROUTE3_APT_ORIGIN"):
+    for name in ("ROUTE3_RELEASE_REV", "ROUTE3_ARCHIVE_SHA256", "ROUTE3_MANIFEST_SHA256", "ROUTE3_PY_SHA256", "ROUTE3_BASELINE_SHA256", "ROUTE3_REFERENCE_SHA256", "ROUTE3_SA2_TREE_SHA256", "ROUTE3_APT_PACKAGES", "ROUTE3_APT_BASE",
+                 "ROUTE3_APT_ORIGIN"):
         assert name in done.stdout, name
 
 
@@ -743,8 +615,8 @@ def run_fields(values: dict[str, str]) -> subprocess.CompletedProcess:
 
 
 GOOD_APT = "python3.14=3.14.4-1ubuntu0.2 python3.14-minimal=3.14.4-1ubuntu0.2 python3.14-venv=3.14.4-1ubuntu0.2 python3-pip-whl=26.0-1"
-GOOD_FIELDS = {"RELEASE_REV": "b" * 40, "ARCHIVE_SHA256": "c" * 64, "MANIFEST_SHA256": "d" * 64, "PY_SHA256": "e" * 64, "SA2_TREE_SHA256": "f" * 64,
-               "APT_PACKAGES": GOOD_APT, "APT_ORIGIN": "http://x.test/ubuntu resolute-updates/main, http://security.x.test/ubuntu resolute-security/main"}
+GOOD_FIELDS = {"RELEASE_REV": "b" * 40, "ARCHIVE_SHA256": "c" * 64, "MANIFEST_SHA256": "d" * 64, "PY_SHA256": "e" * 64, "SA2_TREE_SHA256": "f" * 64, "BASELINE_SHA256": "a" * 64, "REFERENCE_SHA256": "9" * 64,
+               "APT_PACKAGES": GOOD_APT, "APT_BASE": "libc6=2.43-2ubuntu1 libgcc-s1=16.1-1ubuntu1", "APT_ORIGIN": "http://x.test/ubuntu resolute-updates/main, http://security.x.test/ubuntu resolute-security/main"}
 
 
 def test_complete_well_formed_fields_pass_and_each_malformed_one_is_a_no_go():
@@ -756,7 +628,9 @@ def test_complete_well_formed_fields_pass_and_each_malformed_one_is_a_no_go():
                      ("APT_PACKAGES", "python3.14=1 python3.14-venv=1"),  # python3.14-minimal absent
                      ("APT_PACKAGES", "python3.14=1 python3.14-minimal=1 python3.14-venv=1 libx=1 libx=2"),  # a name twice
                      ("APT_PACKAGES", "python3.14=1 python3.14-minimal=1 python3.14-venv"),  # an unpinned member
-                     ("APT_ORIGIN", "resolute-updates"), ("APT_ORIGIN", "http://x.test/ubuntu resolute-updates/main, resolute"), ("APT_ORIGIN", "ftp://x.test/ubuntu a/b")):
+                     ("APT_ORIGIN", "resolute-updates"), ("APT_ORIGIN", "http://x.test/ubuntu resolute-updates/main, resolute"), ("APT_ORIGIN", "ftp://x.test/ubuntu a/b"),
+                     ("BASELINE_SHA256", "UNSET"), ("BASELINE_SHA256", "a" * 63), ("REFERENCE_SHA256", "UNSET"), ("REFERENCE_SHA256", "9" * 63), ("APT_BASE", "UNSET"), ("APT_BASE", ""), ("APT_BASE", "libc6"), ("APT_BASE", "libc6=1 libc6=2"),
+                     ("APT_BASE", "python3.14-venv=3.14.4-1ubuntu0.2")):  # a base member that is also pinned
         done = run_fields({**GOOD_FIELDS, key: bad})
         assert done.returncode == 1 and "NO-GO" in done.stdout, (key, bad, done.stdout)
 
@@ -769,7 +643,7 @@ PREFLIGHT_DEVIATIONS = ["existing deployment", "existing account", "existing tmp
 def test_the_preflight_passes_on_a_pristine_world_and_is_read_only(world):
     w = world(); w.release()
     done = w.run("S0.2"); ok(done, "S0.2")
-    assert not [c for c in w.calls() if c.split()[0] in ("useradd", "apt-mark") or (c.split()[0] == "apt-get" and "--simulate" not in c)]  # only the read-only solver simulation
+    assert not [c for c in w.calls() if c.split()[0] in ("useradd", "apt-mark", "apt-get")]  # no mutation, and no apt-get at all: the plan has no solver and no install path
     assert not w.evid.exists() and not w.base.exists()
 
 
@@ -999,17 +873,15 @@ def restored(w: World, before: dict) -> None:
 
 
 @host
-@pytest.mark.parametrize("fail_at", ["S1.1 apt install (no effect)", "S1.1 apt install (partial)", "S1.1 hold", "S1.2 pip", "S1.3 useradd", "S1.4 tmpfiles install", "after STOP-A"])
+@pytest.mark.parametrize("fail_at", ["S1.1 gate refuses (no effect)", "S1.1 hold", "S1.2 pip", "S1.3 useradd", "S1.4 tmpfiles install", "after STOP-A"])
 def test_partial_failure_at_each_checkpoint_undoes_the_later_objects_and_stops_at_the_attended_package_boundary(world, fail_at):
     w = world(); w.release()
     before = w.objects()
     ok(w.run("S1.0"), "S1.0")
-    if fail_at == "S1.1 apt install (no effect)":
-        w.state["fail"] = {"apt-get install": 100}; w.state["partial_n"] = 0; w.save_state()
-        failed(w.run("S1.1"), "S1.1")
-    elif fail_at == "S1.1 apt install (partial)":
-        w.state["fail"] = {"apt-get install": 100}; w.state["partial_n"] = 2; w.save_state()
-        failed(w.run("S1.1"), "S1.1")
+    if fail_at == "S1.1 gate refuses (no effect)":
+        w.state["gate_rc"] = 1; w.save_state()
+        done = w.run("S1.1"); failed(done, "S1.1")
+        assert done.returncode == 2 and "begin-C1" not in (w.evid / "checkpoints").read_text() and not package_mutations(w.calls()), "refused before anything was recorded or held"
     elif fail_at == "S1.1 hold":
         w.state["fail"] = {"apt-mark": 1}; w.save_state()
         failed(w.run("S1.1"), "S1.1")
@@ -1029,12 +901,12 @@ def test_partial_failure_at_each_checkpoint_undoes_the_later_objects_and_stops_a
         for ident in ("S1.1", "S1.2", "S1.3", "S1.4"):
             ok(w.run(ident), ident)
     (w.top / "tmpfiles-fail").unlink(missing_ok=True)
-    w.state = w.load_state(); w.state["fail"] = {}; w.state["partial_n"] = 0; w.save_state()
+    w.state = w.load_state(); w.state["fail"] = {}; w.state["gate_rc"] = 0; w.save_state()
     st = w.load_state()
     done, muts = run_r(w)
-    if fail_at == "S1.1 apt install (no effect)":
+    if fail_at == "S1.1 gate refuses (no effect)":
         ok(done, "R"); restored(w, before); assert not muts          # package and hold state equal the record: nothing to recover, no false ambiguity
-        assert "No package or hold recovery is required" in done.stdout and "Pre-state restored" in done.stdout
+        assert "Pre-state restored" in done.stdout
     else:
         attended(done, muts)
         after = w.objects()                                          # every later S1 object was undone; the packages and holds were not touched
@@ -1255,13 +1127,31 @@ def drop(pattern: str):
 
 
 @host
-def test_removing_the_artifact_digest_check_lets_a_wrong_archive_digest_through(world):
+def test_a_wrong_archive_digest_is_refused_independently_by_the_gate_and_by_the_staged_copy_check(world):
+    """Defense in depth. A wrong ROUTE3_ARCHIVE_SHA256 is caught twice: by route3_gate (before anything is built) and, separately, by the S1.2 check on the staged copy. Removing either layer
+    alone still refuses; only removing both lets the wrongly identified archive through, which shows each mutation really removes the layer it claims to."""
+    gate_line = r'  route3_gate \|\| \{[^\n]*\n'
+    inner_check = r'  sha256sum --check --status <\(printf[^\n]*ROUTE3_STAGE/in/code\.tar[^\n]*\n'
     w = world(); w.release(); ok(w.run("S1.0"), "S1.0"); ok(w.run("S1.1"), "S1.1")
     wrong = {"ARCHIVE_SHA256": "0" * 64}
-    failed(w.run("S1.2", fields=wrong), "S1.2")
+    # the shipped block: the gate refuses first (status 2), before the begin-C2 marker, staging or any other effect
+    done = w.run("S1.2", fields=wrong)
+    failed(done, "S1.2"); assert done.returncode == 2 and "differs from its field digest" in done.stdout and "nothing was built" in done.stdout, done.stdout
+    assert "begin-C2" not in (w.evid / "checkpoints").read_text() and not Path(str(w.base) + ".stage").exists()
+    nothing_published(w)
+    # layer 1 alone: the old S1.2 staged-copy check is removed and the gate still refuses, with the same effect
+    done = w.run("S1.2", fields=wrong, mutate=drop(inner_check))
+    failed(done, "S1.2"); assert done.returncode == 2 and "differs from its field digest" in done.stdout
+    assert "begin-C2" not in (w.evid / "checkpoints").read_text() and not Path(str(w.base) + ".stage").exists()
+    nothing_published(w)
+    # layer 2 alone: the gate is removed and the staged-copy check refuses (status 6) after staging; block R withdraws the stage
+    done = w.run("S1.2", fields=wrong, mutate=drop(gate_line))
+    failed(done, "S1.2"); assert done.returncode == 6 and "differs from its field digest" in done.stdout, done.stdout
+    nothing_published(w)
     boundary(w)
-    done = w.run("S1.2", fields=wrong, mutate=drop(r'  sha256sum --check --status <\(printf[^\n]*ROUTE3_STAGE/in/code\.tar[^\n]*\n'))
-    assert done.returncode == 0 and w.base.exists(), "the mutated block must publish the wrongly identified archive: the regression above is what stops it"
+    # both layers removed: nothing refuses the wrongly identified archive, so the mutated block publishes it (the shipped block cannot)
+    done = w.run("S1.2", fields=wrong, mutate=lambda b: drop(inner_check)(drop(gate_line)(b)))
+    assert done.returncode == 0 and w.base.exists(), "with both layers removed the wrongly identified archive is published"
 
 
 @host
@@ -1314,7 +1204,7 @@ def calls_of(w: World, cmd: str, sub: str | None = None) -> list[str]:
 
 
 def real_installs(w: World) -> list[str]:
-    return [c for c in w.calls() if c.startswith("apt-get") and " install " in f" {c} " and "--simulate" not in c]
+    return [c for c in w.calls() if c.startswith("apt-get")]    # the plan runs apt-get never: not an install, not a simulation
 
 
 def add_unrelated(w: World, name: str = "libunrelated", version: str = "7") -> None:
@@ -1404,108 +1294,16 @@ def test_a_reverse_dependant_of_a_reviewed_package_is_never_swept_away_and_nothi
 
 # ---- 2. partial or interrupted apt: only the attributable packages go -----------------------------------------------------------------
 
-@host
-def test_a_partial_install_with_a_non_zero_status_keeps_its_packages_and_stops_at_the_attended_boundary(world):
-    w = world(); w.release()
-    ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=2)
-    done = w.run("S1.1")
-    failed(done, "S1.1")
-    assert done.returncode == 3 and (w.evid / "observed.pkgs").read_text().count("\n") == 2 and not (w.evid / "owned.pkgs").exists()
-    partial = set(w.load_state()["pkgs"]) - {"coreutils"}
-    assert len(partial) == 2
-    add_unrelated(w); knobs(w, fail={}, partial_n=0); st = w.load_state()
-    done, muts = run_r(w)
-    attended(done, muts)
-    assert "libunrelated" in done.stdout and all(n in done.stdout for n in partial)
-    unchanged(w, st)
-    assert not removed_by_apt(w)
-    # without the unrelated package the same partial state still stops at the boundary
-    w2 = world(); w2.release(); ok(w2.run("S1.0"), "S1.0")
-    knobs(w2, fail={"apt-get install": 100}, partial_n=3); failed(w2.run("S1.1"), "S1.1")
-    knobs(w2, fail={}, partial_n=0); st2 = w2.load_state()
-    done, muts = run_r(w2); attended(done, muts); unchanged(w2, st2)
-
-
-@host
-def test_an_interrupted_install_leaves_no_observation_and_rollback_changes_nothing_and_escalates(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=2, kill_parent=True)
-    done = w.run("S1.1")
-    assert done.returncode == 137 and not (w.evid / "observed.pkgs").exists() and (w.evid / "apt.txn").exists() and not (w.evid / "apt.effects").exists()
-    installed = set(w.load_state()["pkgs"]) - {"coreutils"}
-    assert len(installed) == 2
-    add_unrelated(w); knobs(w, fail={}, partial_n=0, kill_parent=False); st = w.load_state()
-    for _ in range(2):                                                   # repeated: still refused, still non-mutating
-        done, muts = run_r(w)
-        attended(done, muts)
-        unchanged(w, st)
-        assert set(w.load_state()["pkgs"]) - {"coreutils"} == installed | {"libunrelated"}
-    assert (w.evid / "apt.txn").exists() and (w.evid / "apt.intent").exists()
-
-
-# ---- 3. the exact reviewed closure passes; each deviation fails before anything is installed ---------------------------------------------
-
-def closure_without(name: str) -> str:
-    return " ".join(t for t in CLOSURE.split() if not t.startswith(name + "="))
-
-
-CLOSURE_DEVIATIONS = {
-    "omitted dependency": dict(fields={"APT_PACKAGES": closure_without("libfake-dep")}),
-    "additional solver dependency": dict(state={"deps": {**FAKE_DEPS, "python3.14-minimal": ["libextra"]}, "cand": {**FAKE_CAND, "libextra": "5"}}),
-    "version change": dict(state={"sim_override": {"libfake-dep": "2.0"}}),
-    "removal": dict(state={"sim_inject": ["Remv coreutils [9.4]"]}),
-    "downgrade": dict(state={"pkgs": {"coreutils": "9.5"}, "sim_inject": ["Inst coreutils [9.5] (9.4 Fake:1/fake [amd64])"]}),
-    "upgrade": dict(state={"sim_inject": ["Inst coreutils [9.4] (9.6 Fake:1/fake [amd64])"]}),
-    "candidate origin mismatch": dict(state={"madison": {"libfake-dep": [["1.0", "http://evil.test/ubuntu other/main"]]}}),
-    "unlisted second origin for the pinned version": dict(state={"madison": {"python3.14": [["3.14.9-1fake", "http://mirror.example.test/ubuntu fake-updates/main"], ["3.14.9-1fake", "http://ppa.test/ubuntu x/main"]]}}),
-    "member installed at another version": dict(state={"pkgs": {"coreutils": "9.4", "python3.14-venv": "1.0"}}),
-    "a listed version the archive does not offer": dict(state={"madison": {"python3.14-venv": []}}),
-}
-
-
-@host
-def test_the_exact_reviewed_closure_passes_the_preflight_and_installs_exactly_that_set(world):
-    w = world(); w.release()
-    ok(w.run("S0.2"), "S0.2")
-    ok(w.run("S1.0"), "S1.0"); ok(w.run("S1.1"), "S1.1")
-    assert set(w.load_state()["pkgs"]) == CLOSURE_NAMES | {"coreutils"}
-    assert (w.evid / "apt.intent").read_text().splitlines() == sorted(t.replace("=", "\t") for t in CLOSURE.split())
-    assert (w.evid / "observed.pkgs").read_text() == (w.evid / "apt.intent").read_text() and (w.evid / "held.new").exists()
-    install = real_installs(w)
-    assert len(install) == 1 and all(t in install[0].split() for t in CLOSURE.split()), install  # every member is installed pinned name=version
-
-
-@host
-@pytest.mark.parametrize("label", sorted(CLOSURE_DEVIATIONS))
-def test_each_closure_deviation_fails_the_preflight_and_s1_1_before_any_installation(world, label):
-    w = world(); w.release()
-    dev = CLOSURE_DEVIATIONS[label]
-    if "state" in dev:  # the deviation is part of the host the pre-state records, so rollback can converge
-        st = w.load_state()
-        for k, v in dev["state"].items():
-            st[k] = {**st[k], **v} if isinstance(v, dict) and isinstance(st.get(k), dict) else v
-        w.state = st; w.save_state()
-    ok(w.run("S1.0"), "S1.0")
-    done = w.run("S0.2", fields=dev.get("fields"))
-    failed(done, "S0.2")
-    assert "NO-GO" in done.stdout, done.stdout
-    done = w.run("S1.1", fields=dev.get("fields"))
-    failed(done, "S1.1")
-    assert done.returncode == 2 and not real_installs(w), "S1.1 must refuse before apt-get install"
-    assert "begin-C1" not in (w.evid / "checkpoints").read_text() and not (w.evid / "apt.intent").exists()
-    ok(w.run("R"), "R")
-
-
-@host
-def test_the_solver_proposal_block_prints_the_closure_and_refuses_a_change(world):
-    w = world(); w.release()
-    done = w.run("S0.0"); ok(done, "S0.0")
-    for t in CLOSURE.split():
-        assert t in done.stdout, t
-    assert not real_installs(w) and not w.evid.exists()
-    knobs(w, sim_inject=["Inst coreutils [9.4] (9.6 Fake:1/fake [amd64])"])
-    done = w.run("S0.0"); failed(done, "S0.0"); assert "NOT ACCEPTABLE" in done.stdout
+def test_the_withdrawn_solver_proposal_refuses_everything_and_runs_nothing(tmp_path):
+    """S0.0 assumed python3.14 was absent and proposed an install closure. On the pre-installed baseline it must never run: it only refuses."""
+    empty = tmp_path / "empty-path"
+    empty.mkdir()
+    text = block("S0.0")
+    done = subprocess.run(["/bin/bash", "-c", text], capture_output=True, text=True, env={"PATH": str(empty)}, check=False)   # an empty PATH: nothing but builtins can run
+    assert done.returncode == 64 and "[S0.0 rc=64]" in done.stdout and "withdrawn" in done.stdout and "nothing was read or changed" in done.stdout, (done.stdout, done.stderr)
+    code = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
+    assert not re.search(r"apt-get|apt-cache|apt-mark|dpkg|route3_apt|simulate", code), "no executable line of the withdrawn block touches the package manager"
+    assert "NONE" in text.splitlines()[0], "it carries no authority"
 
 
 # ---- 4. an origin line that belongs only to a non-candidate version does not satisfy the origin check -----------------------------------
@@ -1526,53 +1324,26 @@ def test_a_trusted_origin_line_for_another_version_does_not_bind_the_pinned_vers
     failed(w.run("S0.2"), "S0.2")
 
 
-# ---- 5. post-install verification ---------------------------------------------------------------------------------------------------
+# ---- 5. the host verification inside S1.1 (the trusted gate) ---------------------------------------------------------------------------------
 
 @host
-def test_post_install_verification_fails_on_an_unlisted_effect_and_rollback_changes_nothing(world):
-    w = world(); w.release()
-    ok(w.run("S1.0"), "S1.0")
-    knobs(w, install_extra=[["libsurprise", "3"]])
-    done = w.run("S1.1")
-    failed(done, "S1.1"); assert done.returncode == 4 and "outside the reviewed closure" in done.stdout and "libsurprise" in done.stdout
-    assert "done-C1" not in (w.evid / "checkpoints").read_text()
-    observed = (w.evid / "observed.pkgs").read_text()
-    assert "libsurprise" not in observed and "python3.14" in observed
-    st = w.load_state()
-    done, muts = run_r(w)
-    attended(done, muts)
-    assert "libsurprise" in done.stdout
-    unchanged(w, st); assert st["pkgs"]["libsurprise"] == "3" and CLOSURE_NAMES <= set(st["pkgs"])  # nothing is removed, the unlisted package included
-
-
-@host
-def test_post_install_verification_fails_on_a_listed_version_mismatch(world):
-    w = world(); w.release()
-    ok(w.run("S1.0"), "S1.0")
-    knobs(w, install_wrong={"python3.14-venv": "3.14.9-1other"})
-    done = w.run("S1.1")
-    failed(done, "S1.1"); assert done.returncode == 4 and "python3.14-venv" in done.stdout
-    st = w.load_state()
-    done, muts = run_r(w)  # the mismatching package stays: R changes no package
-    attended(done, muts); unchanged(w, st)
-    assert "python3.14-venv" in st["pkgs"] and st["pkgs"]["python3.14-venv"] == "3.14.9-1other"
-
-
-@host
-@pytest.mark.parametrize("label", ["changed packaged file", "interpreter digest differs"])
-def test_post_install_verification_fails_on_a_changed_file_or_a_different_interpreter(world, label):
+@pytest.mark.parametrize("label", ["changed packaged file", "interpreter digest differs", "gate tool refuses"])
+def test_s1_1_refuses_a_changed_file_a_different_interpreter_or_a_failing_trusted_tool_before_recording_or_holding_anything(world, label):
     w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
     kw = {}
     if label == "changed packaged file":
         knobs(w, verify_fail=True)
+    elif label == "gate tool refuses":
+        knobs(w, gate_rc=1, gate_msg="payload drift: the installed files of libfake-dep=1.0 are not those of the signed-archive package")
     else:
         kw["fields"] = {"PY_SHA256": "0" * 64}
     done = w.run("S1.1", **kw)
-    failed(done, "S1.1"); assert done.returncode == 4 and ("dpkg --verify" in done.stdout or "differs from ROUTE3_PY_SHA256" in done.stdout)
-    assert "done-C1" not in (w.evid / "checkpoints").read_text()
-    knobs(w, verify_fail=False); st = w.load_state()
+    failed(done, "S1.1"); assert done.returncode == 2 and "the trusted baseline attestation failed" in done.stdout
+    assert any(m in done.stdout for m in ("dpkg --verify", "differs from ROUTE3_PY_SHA256", "payload drift")), done.stdout
+    assert "begin-C1" not in (w.evid / "checkpoints").read_text() and not package_mutations(w.calls()) and not (w.evid / "held.new").exists() and not (w.evid / "beforeC1.dpkg").exists()
+    knobs(w, verify_fail=False, gate_rc=0); st = w.load_state()
     done, muts = run_r(w)
-    attended(done, muts); unchanged(w, st)
+    ok(done, "R"); assert not muts; unchanged(w, st)
 
 
 @host
@@ -1591,36 +1362,6 @@ def test_s1_1_refuses_to_run_twice_and_while_an_apt_run_holds_a_lock(world):
     ok(w.run("S1.1"), "S1.1")
     again = w.run("S1.1"); failed(again, "S1.1"); assert again.returncode == 2 and "already begun" in again.stdout
 
-
-@host
-def test_rollback_after_an_interrupted_install_escalates_while_an_apt_run_is_active(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=1, kill_parent=True); failed(w.run("S1.1"), "S1.1"); knobs(w, fail={}, kill_parent=False, partial_n=0)
-    holder = subprocess.Popen([sys.executable, "-c",
-                               "import fcntl,sys,time\nf=open(sys.argv[1],'a')\nfcntl.lockf(f,fcntl.LOCK_EX)\nprint('held',flush=True)\ntime.sleep(60)", str(w.sys["dpkg"] / "lock")],
-                              stdout=subprocess.PIPE, text=True)
-    try:
-        assert holder.stdout.readline().strip() == "held"
-        done, muts = run_r(w)
-        assert done.returncode == 24 and "cannot be compared now" in done.stdout and "Pre-state restored" not in done.stdout and not muts
-    finally:
-        holder.kill(); holder.wait()
-    st = w.load_state()
-    done, muts = run_r(w)                                # the package set differs from the record: the attended boundary, nothing changed
-    attended(done, muts); unchanged(w, st)
-
-
-@host
-def test_rollback_without_any_diagnostic_record_still_changes_no_package_or_hold(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0"); ok(w.run("S1.1"), "S1.1"); st = w.load_state()
-    for n in ("observed.pkgs", "apt.intent", "apt.txn", "apt.effects", "held.new"):
-        (w.evid / n).unlink()
-    done, muts = run_r(w)
-    attended(done, muts); unchanged(w, st)
-    assert CLOSURE_NAMES <= set(w.load_state()["pkgs"])
-
-
-# ---- 6. identity queries are three-valued; a failed query is never absence --------------------------------------------------------------
 
 @host
 @pytest.mark.parametrize("status", [1, 3, 9, 127])
@@ -1731,12 +1472,29 @@ def test_an_s1_0_failure_after_each_write_leaves_no_authoritative_evidence_and_i
 
 
 @host
-def test_an_s1_0_failure_inside_a_snapshot_command_is_recovered_the_same_way(world):
-    w = world(); w.release()
+def test_an_s1_0_package_query_failure_is_refused_by_the_gate_before_any_write(world):
+    """dpkg-query now fails first inside route3_gate (route3_python_ok), so S1.0 stops with status 9 before it creates anything: no stage, no evidence, nothing for R0 to recover."""
+    w = world(); w.release(); before = w.objects()
     knobs(w, fail={"dpkg-query": 1})
-    done = w.run("S1.0"); failed(done, "S1.0"); assert done.returncode == 5
+    done = w.run("S1.0"); failed(done, "S1.0")
+    assert done.returncode == 9 and "nothing was written" in done.stdout, (done.returncode, done.stdout)
+    assert not w.evid.exists() and not Path(str(w.evid) + ".new").exists(), "the earlier refusal leaves neither evidence nor an unpublished stage"
+    restored(w, before)
     knobs(w, fail={})
     ok(w.run("R0"), "R0"); ok(w.run("S1.0"), "S1.0")
+
+
+@host
+def test_an_s1_0_failure_inside_a_snapshot_command_after_the_gate_is_recovered_by_r0(world):
+    """The recovery property itself, with the failing command past the gate: the snapshot of the package list fails after the stage exists; only R0 clears it."""
+    w = world(); w.release(); before = w.objects()
+    stage = Path(str(w.evid) + ".new")
+    done = w.run("S1.0", mutate=lambda b: b.replace('route3_pkgs > "$S/prestate.dpkg"', 'false > "$S/prestate.dpkg"'))
+    failed(done, "S1.0"); assert done.returncode == 5 and "run block R0" in done.stdout
+    assert stage.is_dir() and not w.evid.exists()
+    ok(w.run("R0"), "R0"); assert not stage.exists()
+    restored(w, before)
+    ok(w.run("S1.0"), "S1.0")
 
 
 @host
@@ -1757,7 +1515,13 @@ def test_r0_refuses_published_evidence_with_or_without_later_markers_and_removes
     w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
     r0 = w.run("R0"); failed(r0, "R0"); assert r0.returncode == 31 and w.evid.is_dir()
     ok(w.run("S1.1"), "S1.1")
-    r0 = w.run("R0"); assert r0.returncode == 31 and (w.evid / "observed.pkgs").exists() and "begin-C1" in (w.evid / "checkpoints").read_text()
+    # S1.1 attests and holds only: its evidence is the before/after package lists, the hold list and the markers (the apt-transaction record observed.pkgs belonged to removed machinery)
+    evidence = sorted(p.name for p in w.evid.iterdir())
+    marks = (w.evid / "checkpoints").read_text().splitlines()
+    assert {"beforeC1.dpkg", "afterC1.dpkg", "held.new", "pre.sha256", "prestate.dpkg", "prestate.holds", "prestate.objects"} <= set(evidence) and "observed.pkgs" not in evidence, evidence
+    assert marks[:3] == ["s1-start", "begin-C1", "done-C1"], marks
+    r0 = w.run("R0"); assert r0.returncode == 31 and w.evid.is_dir()
+    assert sorted(p.name for p in w.evid.iterdir()) == evidence and (w.evid / "checkpoints").read_text().splitlines() == marks, "R0 removed or changed published evidence"
     stage = Path(str(w.evid) + ".new"); stage.mkdir(mode=0o700)
     r0 = w.run("R0"); assert r0.returncode == 31 and stage.is_dir() and w.evid.is_dir(), "both present is ambiguous: nothing is removed"
 
@@ -1819,15 +1583,6 @@ def test_tampered_published_evidence_is_not_a_pre_state(world):
 
 
 @host
-def test_accepting_an_extra_solver_package_lets_an_unreviewed_closure_through_the_preflight(world):
-    w = world(); w.release()
-    fields = {"APT_PACKAGES": closure_without("libfake-dep")}
-    failed(w.run("S0.2", fields=fields), "S0.2")
-    mutated = w.run("S0.2", fields=fields, dmutate=lambda d: d.replace('[ "$got" = "$ROUTE3_TODO" ] ||', "true ||"))
-    ok(mutated, "S0.2")
-
-
-@host
 def test_treating_any_non_zero_getent_status_as_absence_reports_a_restored_pre_state(world):
     w = world(); w.release(); ok(w.run("S1.0"), "S1.0"); knobs(w, fail={"getent": 3})
     assert w.run("R").returncode == 27
@@ -1876,26 +1631,6 @@ def installed_closure() -> tuple[list[str], str]:
 
 
 @real_apt
-def test_real_apt_simulation_parser_matches_the_installed_apt_version():
-    leaf = subprocess.run(["apt-get", "--simulate", "--no-install-recommends", "install", "hello"], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"}, check=False)
-    if leaf.returncode != 0 or "Inst hello" not in leaf.stdout:
-        pytest.skip("no uninstalled leaf package is simulatable on this host")
-    done = real_bash('route3_apt_sim hello; echo "rc=$?"; printf "%s\\n" "$ROUTE3_SIM"')
-    version = re.search(r"Inst hello \(([^ ]+) ", leaf.stdout)[1]
-    assert "rc=0" in done.stdout and f"new hello={version}" in done.stdout, (done.stdout, done.stderr)
-    assert "change" not in done.stdout and "remove" not in done.stdout
-    # a removal simulation: the dependents of python3.14-venv are reported as removals, which is what the rollback guard compares against
-    rm = subprocess.run(["apt-get", "--simulate", "remove", "python3.14-venv"], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"}, check=False)
-    parsed = real_bash("route3_apt_parse", stdin=rm.stdout)
-    removed = sorted(l.split()[1] for l in parsed.stdout.splitlines() if l.startswith("remove "))
-    real_removed = sorted(l.split()[1] for l in rm.stdout.splitlines() if l.startswith("Remv "))
-    assert removed == real_removed and "python3.14-venv" in removed, (removed, real_removed)
-    # an upgrade-shaped line is parsed as a change, never as a new install
-    parsed = real_bash("route3_apt_parse", stdin="Inst libc6 [2.39-1] (2.40-2 Ubuntu:26.04/resolute [amd64])\nConf libc6 (2.40-2 Ubuntu:26.04/resolute [amd64])\n")
-    assert parsed.stdout.strip() == "change libc6 2.39-1>2.40-2"
-
-
-@real_apt
 def test_real_apt_closure_and_origin_binding_accept_the_installed_set_and_reject_a_wrong_origin():
     tokens, madison = installed_closure()
     sources = set()
@@ -1911,44 +1646,11 @@ def test_real_apt_closure_and_origin_binding_accept_the_installed_set_and_reject
     done = real_bash(good.split(";")[0] + '; ROUTE3_APT_ORIGIN="http://evil.test/ubuntu other/main"; route3_apt_check; echo "rc=$?"')
     assert "rc=1" in done.stdout and "also offered by an origin that is not listed" in done.stdout, done.stdout
     done = real_bash(good + '; ROUTE3_APT_PACKAGES="python3.14-minimal=0.0-1"; route3_apt_check; echo "rc=$?"')
-    assert "rc=1" in done.stdout and "offered by no configured archive source" in done.stdout, done.stdout
+    # a wrong version is refused on the installed version, before any origin lookup (the plan installs nothing, so "not installed at that version" is the whole finding)
+    assert "rc=1" in done.stdout and "python3.14-minimal is installed at" in done.stdout and "not 0.0-1" in done.stdout, done.stdout
     # apt and dpkg are idle on the disposable host, and the lock files the plan inspects exist
     done = real_bash('route3_apt_idle; echo "rc=$?"')
     assert "rc=0" in done.stdout, done.stdout
-
-
-@real_apt
-def test_real_apt_solver_result_for_a_missing_member_is_exactly_that_member():
-    if subprocess.run(["dpkg-query", "-W", "-f=${Version}", "hello"], capture_output=True, text=True, check=False).stdout:
-        pytest.skip("hello is installed on this host")
-    rows = [[c.strip() for c in l.split("|")] for l in subprocess.run(["apt-cache", "madison", "hello"], capture_output=True, text=True, check=False).stdout.splitlines()]
-    if not rows:
-        pytest.skip("hello is not offered by this host's archive")
-    version = rows[0][1]
-    sources = sorted({r[2].rsplit(" ", 2)[0] for r in rows if r[1] == version})
-    base = f'ROUTE3_APT_PACKAGES="hello={version}"; ROUTE3_APT_ORIGIN="{", ".join(sources)}"'
-    done = real_bash(base + '; route3_apt_check; echo "rc=$? todo=[$ROUTE3_TODO]"')
-    assert f"rc=0 todo=[hello={version}]" in done.stdout, (done.stdout, done.stderr)
-    # nothing was installed by the check
-    assert subprocess.run(["dpkg-query", "-W", "-f=${Version}", "hello"], capture_output=True, text=True, check=False).stdout == ""
-    done = real_bash(base.replace(f"hello={version}", "hello=0.0") + '; route3_apt_check; echo "rc=$?"')
-    assert "rc=1" in done.stdout
-
-
-# ---- static structure of the R2 blocks ----------------------------------------------------------------------------------------------------
-
-def test_apt_is_never_asked_to_purge_autoremove_or_downgrade_and_installs_only_through_the_one_function():
-    for ident in ["S0.0", "S0.2", "S1.0", "S1.1", "R0", "R"]:
-        b = block(ident)
-        assert not re.search(r"\b(purge|autoremove|--allow-downgrades|--allow-remove-essential|--allow-change-held-packages|dist-upgrade|full-upgrade|upgrade)\b", b), ident
-    # the one apt-get install is the block-D function, called by S1.1 alone, with the per-invocation hook options and no other apt configuration
-    assert not [i for i in IDS if re.search(r"apt-get\s+install\s+--", block(i))]
-    users = [i for i in IDS if "route3_apt_install" in block(i)]
-    assert users == ["S1.1"] and block("S1.1").count("route3_apt_install $ROUTE3_TODO") == 1
-    fn = re.search(r"^route3_apt_install\(\) \{.*?^\}", definitions(), re.S | re.M)[0]
-    assert len(re.findall(r"apt-get install --yes --no-install-recommends", fn)) == 1 and fn.count(" -o ") == 4 and '-- "$@"' in fn
-    assert "DPkg::Pre-Install-Pkgs::=$h" in fn and "DPkg::Post-Invoke::=$e" in fn and "Version=3" in fn and "InfoFD=3" in fn and "/etc/apt" not in fn and "apt.conf" not in fn
-    assert not [l for l in block("R").splitlines() if re.search(r"apt-get\s+remove", l)], "R5: block R never removes a package"
 
 
 def test_s1_0_stages_publishes_atomically_and_only_r0_removes_the_stage():
@@ -1979,12 +1681,6 @@ RACED = [["libfake-dep", "1.0"], ["python3.14-minimal", "3.14.9-1fake"]]
 RACED_NAMES = {n for n, _ in RACED}
 
 
-def txn_rows(w: World) -> list[str]:
-    lines = (w.evid / "apt.txn").read_text().splitlines()
-    assert lines[0] == "route3-apt-txn 1" and lines[-1] == f"end\t{len(lines) - 2}", lines
-    return [l.split("\t", 1)[1].replace("\t", "=") for l in lines[1:-1]]
-
-
 def removed_by_apt(w: World) -> list[str]:
     out: list[str] = []
     for c in w.calls():
@@ -1994,752 +1690,6 @@ def removed_by_apt(w: World) -> list[str]:
 
 
 # ---- 1. the reproduced race: another transaction installs reviewed members after the snapshot and before Route 3 owns the lock ------------
-
-@host
-def test_a_reviewed_package_installed_by_another_transaction_in_the_pre_lock_race_survives_rollback(world):
-    w = world(); w.release(); before = w.objects(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, race_install=RACED)
-    done = w.run("S1.1"); ok(done, "S1.1")                # the closure is complete and verified: the raced members satisfy it
-    assert "ANOTHER transaction" in done.stdout and all(n in done.stdout for n in RACED_NAMES)
-    mine = set(txn_rows(w))
-    assert mine == {t for t in CLOSURE.split() if t.split("=")[0] not in RACED_NAMES}, mine      # what this invocation submitted
-    assert {l.replace("\t", "=") for l in (w.evid / "observed.pkgs").read_text().splitlines()} == mine
-    assert not any(n in (w.evid / "observed.pkgs").read_text() for n in RACED_NAMES) and not (w.evid / "owned.pkgs").exists()
-    assert (w.evid / "apt.intent").read_text().count("\n") == 4, "the pre-snapshot intent still names the raced members"
-    st = w.load_state()
-    done, muts = run_r(w)
-    attended(done, muts)
-    assert RACED_NAMES.isdisjoint(removed_by_apt(w)), removed_by_apt(w)
-    unchanged(w, st); assert set(st["pkgs"]) == {"coreutils"} | CLOSURE_NAMES
-    again, muts = run_r(w); attended(again, muts); unchanged(w, st)     # idempotent, still preserved
-
-
-@host
-def test_the_same_race_followed_by_a_failed_route3_apt_run_removes_nothing(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, race_install=RACED, fail={"apt-get install": 100}, partial_n=1)
-    failed(w.run("S1.1"), "S1.1")
-    rows = txn_rows(w)
-    assert RACED_NAMES.isdisjoint(r.split("=")[0] for r in rows), rows
-    partial = set(w.load_state()["pkgs"]) - {"coreutils"} - RACED_NAMES
-    assert len(partial) == 1
-    add_unrelated(w); knobs(w, fail={}, partial_n=0, race_install=[]); st = w.load_state()
-    done, muts = run_r(w)
-    attended(done, muts); unchanged(w, st)
-    assert not removed_by_apt(w) and set(w.load_state()["pkgs"]) == {"coreutils", "libunrelated"} | RACED_NAMES | partial
-
-
-@host
-def test_the_same_race_followed_by_a_killed_route3_apt_run_is_ambiguous_and_removes_nothing(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, race_install=RACED, fail={"apt-get install": 100}, partial_n=1, kill_parent=True)
-    assert w.run("S1.1").returncode == 137
-    add_unrelated(w); knobs(w, fail={}, partial_n=0, race_install=[], kill_parent=False)
-    st = w.load_state()
-    done, muts = run_r(w)
-    attended(done, muts); unchanged(w, st)
-
-
-@host
-def test_a_complete_submission_record_alone_is_not_ownership_after_an_interruption(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=3, kill_parent=True)
-    done = w.run("S1.1"); assert done.returncode == 137 and not (w.evid / "observed.pkgs").exists()
-    assert (w.evid / "apt.txn").stat().st_mode & 0o777 == 0o600 and len(txn_rows(w)) == 4 and not (w.evid / "apt.txn.tmp").exists()
-    knobs(w, fail={}, partial_n=0, kill_parent=False)
-    installed = set(w.load_state()["pkgs"]) - {"coreutils"}
-    assert len(installed) == 3
-    st = w.load_state()
-    done, muts = run_r(w); attended(done, muts); unchanged(w, st)
-    assert set(w.load_state()["pkgs"]) - {"coreutils"} == installed
-
-
-# ---- 2. interruption before the transaction record exists removes nothing and escalates (28) ------------------------------------------------
-
-@host
-def test_interruption_before_the_hook_ran_with_a_reviewed_package_present_removes_nothing_and_escalates(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0"); pre = w.load_state()
-    knobs(w, race_install=RACED, die_before_hook=100, kill_parent=True)
-    done = w.run("S1.1"); assert done.returncode == 137 and not (w.evid / "apt.txn").exists() and not (w.evid / "observed.pkgs").exists()
-    knobs(w, die_before_hook=0, kill_parent=False, race_install=[]); st = w.load_state()
-    done, muts = run_r(w)
-    attended(done, muts)
-    assert "libfake-dep" in done.stdout
-    assert not removed_by_apt(w) and set(w.load_state()["pkgs"]) == {"coreutils"} | RACED_NAMES and w.load_state() == st
-    assert w.evid.is_dir() and (w.evid / "apt.intent").exists() and (w.evid / "beforeC1.dpkg").exists(), "the evidence is preserved for attended recovery"
-    assert w.run("R").returncode == 28                           # stable, never silently resolved by repetition
-
-
-@host
-def test_interruption_before_the_hook_ran_with_nothing_installed_leaves_nothing_to_own(world):
-    w = world(); w.release(); before = w.objects(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, die_before_hook=100)
-    failed(w.run("S1.1"), "S1.1")
-    assert not (w.evid / "apt.txn").exists() and (w.evid / "observed.pkgs").read_text() == ""
-    done, muts = run_r(w); ok(done, "R"); restored(w, before)     # package and hold state equal the record: no false ambiguity
-    assert not muts and not removed_by_apt(w)
-
-
-# ---- 3. a malformed, missing, duplicated, out-of-closure or contradictory record is an ambiguity, never a delta-derived ownership ----------
-
-def _rewrite(path: Path, fn):
-    path.write_text(fn(path.read_text()))
-
-
-TXN_CORRUPTIONS = {
-    "record missing": lambda w: (w.evid / "apt.txn").unlink(),
-    "record truncated (no end line)": lambda w: _rewrite(w.evid / "apt.txn", lambda s: "".join(s.splitlines(True)[:-1])),
-    "record empty": lambda w: (w.evid / "apt.txn").write_text(""),
-    "header altered": lambda w: _rewrite(w.evid / "apt.txn", lambda s: s.replace("route3-apt-txn 1", "route3-apt-txn 2")),
-    "unknown line": lambda w: _rewrite(w.evid / "apt.txn", lambda s: s.replace("end\t", "junk\tx\nend\t")),
-    "end count wrong": lambda w: _rewrite(w.evid / "apt.txn", lambda s: re.sub(r"end\t\d+", "end\t9", s)),
-    "row after the end line": lambda w: (w.evid / "apt.txn").open("a").write("pkg\tlibfake-dep\t1.0\n"),
-    "duplicate row": lambda w: _rewrite(w.evid / "apt.txn", lambda s: s.replace("end\t4", "pkg\tlibfake-dep\t1.0\nend\t5")),
-    "same name at two versions": lambda w: _rewrite(w.evid / "apt.txn", lambda s: s.replace("end\t4", "pkg\tlibfake-dep\t2.0\nend\t5")),
-    "out-of-closure package": lambda w: _rewrite(w.evid / "apt.txn", lambda s: s.replace("end\t4", "pkg\tlibunrelated\t7\nend\t5")),
-    "closure member at another version": lambda w: _rewrite(w.evid / "apt.txn", lambda s: s.replace("pkg\tlibfake-dep\t1.0", "pkg\tlibfake-dep\t9.9")),
-    "four-field row": lambda w: _rewrite(w.evid / "apt.txn", lambda s: s.replace("pkg\tlibfake-dep\t1.0", "pkg\tlibfake-dep\t1.0\t0.5")),
-    "record is a symlink": lambda w: (lambda p, q: (p.rename(q), p.symlink_to(q)))(w.evid / "apt.txn", w.evid / "apt.txn.real"),
-    "record not root-0600": lambda w: (w.evid / "apt.txn").chmod(0o644),
-    "observed.pkgs names a package the record does not": lambda w: (w.evid / "observed.pkgs").open("a").write("libunrelated\t7\n"),
-    "observed.pkgs is a symlink": lambda w: (lambda p, q: (p.rename(q), p.symlink_to(q)))(w.evid / "observed.pkgs", w.evid / "observed.real"),
-    "record owned by another user": lambda w: os.chown(w.evid / "apt.txn", 65534, 65534),
-    "apt.intent missing": lambda w: (w.evid / "apt.intent").unlink(),
-    "apt.intent is a symlink": lambda w: (lambda p, q: (p.rename(q), p.symlink_to(q)))(w.evid / "apt.intent", w.evid / "apt.intent.real"),
-    "held.new missing": lambda w: (w.evid / "held.new").unlink(),
-    "held.new is a symlink": lambda w: (lambda p, q: (p.rename(q), p.symlink_to(q)))(w.evid / "held.new", w.evid / "held.real"),
-    "held.new names an unrelated package": lambda w: (w.evid / "held.new").open("a").write("coreutils\n"),
-    "beforeC1.dpkg missing": lambda w: (w.evid / "beforeC1.dpkg").unlink(),
-}
-
-
-@host
-@pytest.mark.parametrize("label", sorted(TXN_CORRUPTIONS))
-def test_an_unusable_diagnostic_record_cannot_enable_a_package_or_hold_mutation(world, label):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0"); ok(w.run("S1.1"), "S1.1")
-    st = w.load_state(); assert set(st["holds"]) == CLOSURE_NAMES and CLOSURE_NAMES <= set(st["pkgs"])
-    TXN_CORRUPTIONS[label](w)
-    for _ in range(2):
-        done, muts = run_r(w)
-        assert done.returncode == 28, (label, done.returncode, done.stdout)
-        attended(done, muts)
-        assert not removed_by_apt(w) and not calls_of(w, "apt-mark", "unhold")
-        unchanged(w, st)
-    assert w.evid.is_dir()
-
-
-@host
-def test_a_failed_s1_1_with_an_unusable_record_leaves_every_package_and_says_so(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=2)
-    failed(w.run("S1.1", mutate=lambda b: b.replace('route3_observed_write "$E/afterC1.dpkg"', 'rm -f "$E/apt.txn"; route3_observed_write "$E/afterC1.dpkg"')), "S1.1")
-    assert not (w.evid / "observed.pkgs").exists()
-    st = w.load_state()
-    done, muts = run_r(w); attended(done, muts); unchanged(w, st)
-
-
-@host
-def test_a_record_that_contradicts_the_pre_snapshot_or_the_installed_state_is_not_owned(world):
-    """Direct, literal-function cases for the two contradictions a file edit cannot reach through R: a record naming a package present before the transaction, and a record claiming an install that did not happen."""
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    st = w.load_state(); st["pkgs"]["libfake-dep"] = "1.0"; w.state = st; w.save_state()
-    (w.evid / "apt.intent").write_text("libfake-dep\t1.0\n")
-    (w.evid / "beforeC1.dpkg").write_text("coreutils\t9.4\nlibfake-dep\t1.0\n")
-    (w.evid / "apt.txn").write_text("route3-apt-txn 1\npkg\tlibfake-dep\t1.0\nend\t1\n"); (w.evid / "apt.txn").chmod(0o600)
-    done = w.run_raw(w.script("D") + '\nroute3_txn_rows "$ROUTE3_EVID/apt.txn"; echo "rc=$?"')
-    assert "rc=1" in done.stdout and "already installed before the transaction" in done.stdout, done.stdout
-    # a clean first S1.1, then the record claims a package that is not installed: apt returned 0, so this is a contradiction (exit 4), not success
-    w2 = world(); w2.release(); ok(w2.run("S1.0"), "S1.0")
-    knobs(w2, install_wrong={"python3.14-venv": "3.14.9-1other"})
-    done = w2.run("S1.1"); assert done.returncode == 4 and "says was installed is not installed" in done.stdout
-
-
-# ---- 4. mutation: going back to the R2 inference (intent ∩ package delta) lets the race through --------------------------------------------
-
-R2_INFERENCE = ('    route3_txn_rows "$ROUTE3_EVID/apt.txn" || return 1\n    route3_effects_rows "$ROUTE3_EVID/apt.effects" || return 1',
-                '    ROUTE3_TXN=$(LC_ALL=C comm -12 "$ROUTE3_EVID/apt.intent" <(LC_ALL=C comm -13 "$ROUTE3_EVID/beforeC1.dpkg" "$1")); ROUTE3_EFF=$ROUTE3_TXN')
-
-
-@host
-def test_mutating_the_observation_back_to_intent_intersect_delta_cannot_make_r_remove_the_raced_packages(world):
-    """The R2 inference would have labelled the other transaction's packages as ours. It now only affects the DIAGNOSTIC record: R changes no package either way."""
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, race_install=RACED)
-    assert R2_INFERENCE[0] in definitions()
-    mut = lambda d: d.replace(*R2_INFERENCE)
-    ok(w.run("S1.1", dmutate=mut), "S1.1")
-    assert RACED_NAMES <= {l.split("\t")[0] for l in (w.evid / "observed.pkgs").read_text().splitlines()}, "the inference widens the diagnostic record"
-    st = w.load_state()
-    done, muts = run_r(w, dmutate=mut)
-    attended(done, muts); unchanged(w, st)
-    assert RACED_NAMES.isdisjoint(removed_by_apt(w))
-
-
-@host
-def test_the_hook_refuses_a_removal_in_the_transaction_and_records_nothing(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, hook_remove=["coreutils"])
-    done = w.run("S1.1")
-    assert done.returncode == 3 and "unsupported or malformed protocol" in done.stderr + done.stdout
-    assert not (w.evid / "apt.txn").exists() and not (w.evid / "apt.txn.tmp").exists() and set(w.load_state()["pkgs"]) == {"coreutils"}, "apt aborted before anything was installed"
-    ok(w.run("R"), "R")
-
-
-@host
-def test_the_hook_refuses_to_run_outside_an_apt_transaction_and_a_second_time(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    text = w.localize(real_bash("route3_hook_text").stdout)
-    hook = w.top / "hook.sh"; hook.write_text(text); hook.chmod(0o700)
-    env = {"PATH": "/usr/bin:/bin"}
-    bare = subprocess.run([str(hook)], capture_output=True, text=True, env=env, check=False)
-    assert bare.returncode == 70 and not (w.evid / "apt.txn").exists(), "no protocol descriptor: refused"
-    r, wr = os.pipe(); os.write(wr, b"VERSION 3\n\n"); os.close(wr)
-    fake = subprocess.run([str(hook)], capture_output=True, text=True, env={**env, "APT_HOOK_INFO_FD": str(r)}, pass_fds=(r,), check=False)
-    os.close(r)
-    assert fake.returncode in (70, 74) and not (w.evid / "apt.txn").exists(), "a descriptor without a lock holder among its ancestors is not an apt transaction"
-
-
-# ---- 5. the real hook protocol against the installed apt, with a fixture-owned package ------------------------------------------------------
-
-def _fixture_deb(tmp: Path, name: str, version: str) -> Path:
-    root = tmp / f"{name}-{version}-root"; (root / "DEBIAN").mkdir(parents=True)
-    (root / "DEBIAN/control").write_text(f"Package: {name}\nVersion: {version}\nArchitecture: all\nMaintainer: Test <test@example.test>\nDescription: fixture package for the provisioning-plan hook test\n")
-    deb = tmp / f"{name}_{version}_all.deb"
-    subprocess.run(["dpkg-deb", "--build", "--root-owner-group", str(root), str(deb)], capture_output=True, check=True)
-    return deb
-
-
-@real_apt
-def test_real_apt_runs_the_hook_inside_the_transaction_with_the_documented_protocol_and_propagates_its_status():
-    tmp = Path(tempfile.mkdtemp(prefix="frt-plan-hook-", dir="/var/tmp")); tmp.chmod(0o700)
-    name = "frt-plan-hook-fixture"
-    try:
-        evid = tmp / "evid"; evid.mkdir(mode=0o700)
-        deb = _fixture_deb(tmp, name, "1.0")
-        hook_text = real_bash("route3_hook_text").stdout.replace("/root/route3-evidence", str(evid))
-        assert hook_text.startswith("#!/bin/sh\n") and "E=" + str(evid) in hook_text
-        hook = evid / "apt-hook.sh"; hook.write_text(hook_text); hook.chmod(0o700)
-        opts = ["-o", f"DPkg::Pre-Install-Pkgs::={hook}", "-o", f"DPkg::Tools::Options::{hook}::Version=3", "-o", f"DPkg::Tools::Options::{hook}::InfoFD=3"]
-        # route3_apt_install carries exactly these three options (the literal function is the one the plan runs)
-        fn = real_bash(f'ROUTE3_EVID={evid}; type route3_apt_install').stdout
-        assert "DPkg::Pre-Install-Pkgs::=$h" in fn and "DPkg::Tools::Options::$h::Version=3" in fn and "DPkg::Tools::Options::$h::InfoFD=3" in fn
-        env = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "DEBIAN_FRONTEND": "noninteractive", "LC_ALL": "C"}
-        # 1. a failing hook aborts the transaction BEFORE anything is unpacked, and apt reports a non-zero status
-        bad = evid / "apt-hook-fail.sh"; bad.write_text("#!/bin/sh\nexit 7\n"); bad.chmod(0o700)
-        failing_opts = ["-o", f"DPkg::Pre-Install-Pkgs::={bad}", "-o", f"DPkg::Tools::Options::{bad}::Version=3", "-o", f"DPkg::Tools::Options::{bad}::InfoFD=3"]
-        done = subprocess.run(["apt-get", "install", "--yes", "--no-install-recommends", *failing_opts, "--", str(deb)], capture_output=True, text=True, env=env, check=False)
-        assert done.returncode != 0 and subprocess.run(["dpkg-query", "-W", name], capture_output=True, check=False).returncode != 0, (done.returncode, done.stdout[-400:])
-        # 2. the real hook, inside the real transaction: the record names exactly this invocation's package
-        done = subprocess.run(["apt-get", "install", "--yes", "--no-install-recommends", *opts, "--", str(deb)], capture_output=True, text=True, env=env, check=False)
-        assert done.returncode == 0, (done.returncode, done.stdout[-600:], done.stderr[-600:])
-        assert (evid / "apt.txn").read_text() == f"route3-apt-txn 1\npkg\t{name}\t1.0\nend\t1\n"
-        assert (evid / "apt.txn").stat().st_mode & 0o777 == 0o600 and not (evid / "apt.txn.tmp").exists()
-        # 3. the literal validator accepts it against an intent that names it, and refuses it when it does not
-        (evid / "apt.intent").write_text(f"{name}\t1.0\n"); (evid / "beforeC1.dpkg").write_text("coreutils\t9\n")
-        ok_ = real_bash(f'ROUTE3_EVID={evid}; route3_txn_rows {evid}/apt.txn; echo "rc=$? own=[$ROUTE3_TXN]"')
-        assert f"rc=0 own=[{name}\t1.0]" in ok_.stdout, ok_.stdout
-        (evid / "apt.intent").write_text("other\t1.0\n")
-        assert "rc=1" in real_bash(f'ROUTE3_EVID={evid}; route3_txn_rows {evid}/apt.txn; echo "rc=$?"').stdout
-        # 4. a second run of the hook in the same evidence directory is refused and changes nothing
-        again = _fixture_deb(tmp, name, "2.0")
-        done = subprocess.run(["apt-get", "install", "--yes", "--no-install-recommends", *opts, "--", str(again)], capture_output=True, text=True, env=env, check=False)
-        assert done.returncode != 0 and (evid / "apt.txn").read_text().count(name) == 1
-        assert subprocess.run(["dpkg-query", "-W", "-f=${Version}", name], capture_output=True, text=True, check=False).stdout == "1.0"
-    finally:
-        subprocess.run(["apt-get", "remove", "--yes", name], capture_output=True, env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "DEBIAN_FRONTEND": "noninteractive"}, check=False)
-        shutil.rmtree(tmp, ignore_errors=True)
-    assert subprocess.run(["dpkg-query", "-W", name], capture_output=True, check=False).returncode != 0, "the fixture package must be gone"
-    assert subprocess.run(["dpkg", "--audit"], capture_output=True, text=True, check=False).stdout == ""
-
-
-# =====================================================================================================================================
-# R4 remediation: a pre-install SUBMISSION record is never ownership; only a COMPLETED-EFFECT record, published inside the transaction, is
-# =====================================================================================================================================
-
-def effects_rows(w: World) -> list[str]:
-    lines = (w.evid / "apt.effects").read_text().splitlines()
-    assert lines[0] == "route3-apt-effects 1" and lines[1] == "txn\t" + hashlib.sha256((w.evid / "apt.txn").read_bytes()).hexdigest(), lines[:2]
-    assert lines[-1] == f"end\t{len(lines) - 3}", lines
-    return [l.split("\t", 1)[1].replace("\t", "=") for l in lines[2:-1]]
-
-
-def later_transaction_installs(w: World, rows: list[str]) -> None:
-    """A SEPARATE package transaction installs recorded exact versions after Route 3's apt was killed."""
-    st = w.load_state()
-    for r in rows:
-        n, _, v = r.partition("="); st["pkgs"][n] = v
-    w.state = st; w.save_state()
-
-
-# ---- 1. the reproduced sequence: record complete, killed before any unpack, a later transaction installs a recorded package ----------------
-
-@host
-@pytest.mark.parametrize("when", ["after the kill", "between the record and the kill"])
-def test_r4_reproduction_a_package_a_later_transaction_installed_after_the_pre_install_record_is_never_removed(world, when):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=0, kill_parent=True, race_after_hook=([["libfake-dep", "1.0"]] if when != "after the kill" else []))
-    done = w.run("S1.1"); assert done.returncode == 137, done.stdout
-    assert "libfake-dep=1.0" in txn_rows(w) and not (w.evid / "apt.effects").exists() and not (w.evid / "observed.pkgs").exists()
-    knobs(w, fail={}, kill_parent=False, race_after_hook=[])
-    if when == "after the kill":
-        later_transaction_installs(w, ["libfake-dep=1.0"])
-    assert w.load_state()["pkgs"] == {"coreutils": "9.4", "libfake-dep": "1.0"}
-    for _ in range(2):                                               # a refused rollback stays refused and never mutates
-        done, muts = run_r(w)
-        attended(done, muts)
-        assert not removed_by_apt(w) and "libfake-dep" not in " ".join(c for c in w.calls() if c.startswith("apt-get remove"))
-        assert w.load_state()["pkgs"] == {"coreutils": "9.4", "libfake-dep": "1.0"} and w.load_state()["holds"] == []
-        assert (w.evid / "apt.txn").exists() and (w.evid / "apt.intent").exists()
-
-
-@host
-def test_r4_some_packages_installed_by_route3_before_the_kill_and_the_rest_by_a_later_transaction_are_all_ambiguous(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=2, kill_parent=True)
-    assert w.run("S1.1").returncode == 137 and not (w.evid / "apt.effects").exists()
-    mine = set(w.load_state()["pkgs"]) - {"coreutils"}; assert len(mine) == 2
-    later_transaction_installs(w, [r for r in txn_rows(w) if r.split("=")[0] not in mine])
-    assert set(w.load_state()["pkgs"]) - {"coreutils"} == CLOSURE_NAMES
-    knobs(w, fail={}, partial_n=0, kill_parent=False)
-    done, muts = run_r(w)
-    attended(done, muts) 
-    assert set(w.load_state()["pkgs"]) - {"coreutils"} == CLOSURE_NAMES, "neither Route 3's partial effect nor the later transaction's packages were touched"
-
-
-@host
-def test_r4_killed_after_every_package_was_unpacked_but_before_the_effect_record_is_still_ambiguous(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, kill_before_post=True)
-    assert w.run("S1.1").returncode == 137 and (w.evid / "apt.txn").exists() and not (w.evid / "apt.effects").exists()
-    assert set(w.load_state()["pkgs"]) - {"coreutils"} == CLOSURE_NAMES
-    knobs(w, kill_before_post=False); st = w.load_state()
-    done, muts = run_r(w); attended(done, muts); unchanged(w, st)
-
-
-# ---- 2. normal success and normal failure publish the completed effects, and R removes exactly those ---------------------------------------
-
-@host
-def test_r5_a_successful_invocation_publishes_its_observation_and_r_then_keeps_every_package_and_hold(world):
-    w = world(); w.release(); before = w.objects(); ok(w.run("S1.0"), "S1.0")
-    ok(w.run("S1.1"), "S1.1")
-    assert sorted(effects_rows(w)) == sorted(CLOSURE.split()) and sorted(txn_rows(w)) == sorted(effects_rows(w))
-    assert (w.evid / "apt.effects").stat().st_mode & 0o777 == 0o600 and not (w.evid / "apt.effects.tmp").exists()
-    assert {l.replace("\t", "=") for l in (w.evid / "observed.pkgs").read_text().splitlines()} == set(CLOSURE.split()) and not (w.evid / "owned.pkgs").exists()
-    st = w.load_state(); assert set(st["holds"]) == CLOSURE_NAMES
-    for _ in range(2):
-        done, muts = run_r(w)
-        attended(done, muts)
-        unchanged(w, st); assert not removed_by_apt(w) and not calls_of(w, "apt-mark", "unhold")
-        for n in ("apt.intent", "apt.txn", "apt.effects", "observed.pkgs", "held.new", "beforeC1.dpkg", "afterC1.dpkg", "prestate.dpkg", "prestate.holds"):
-            assert (w.evid / n).is_file(), n
-    assert w.objects()["paths"] == before["paths"], "the later S1 objects were not created by S1.1, so the objects equal the pre-state"
-
-
-@host
-def test_r5_a_normal_non_zero_invocation_with_a_valid_observation_keeps_its_partial_packages(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=2)
-    assert w.run("S1.1").returncode == 3
-    partial = set(w.load_state()["pkgs"]) - {"coreutils"}
-    assert len(effects_rows(w)) == 2 and {r.split("=")[0] for r in effects_rows(w)} == partial and len(txn_rows(w)) == 4
-    knobs(w, fail={}, partial_n=0)
-    later_transaction_installs(w, [r for r in txn_rows(w) if r.split("=")[0] not in partial])   # the unsubmitted rest arrives from elsewhere
-    st = w.load_state()
-    done, muts = run_r(w)
-    attended(done, muts); unchanged(w, st)
-    assert not removed_by_apt(w) and set(w.load_state()["pkgs"]) - {"coreutils"} == CLOSURE_NAMES
-
-
-@host
-def test_r5_a_reverse_dependant_and_a_later_package_remain_with_the_partial_effect(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=2)
-    assert w.run("S1.1").returncode == 3
-    partial = sorted(set(w.load_state()["pkgs"]) - {"coreutils"})
-    add_unrelated(w, "libdependent", "3"); add_unrelated(w); knobs(w, fail={}, partial_n=0, rdeps={partial[0]: ["libdependent"]}); st = w.load_state()
-    done, muts = run_r(w)
-    attended(done, muts); unchanged(w, st)
-    assert not removed_by_apt(w) and {"libdependent", "libunrelated", *partial} <= set(w.load_state()["pkgs"])
-
-
-# ---- 3. kill or failure at every material write, sync and publication boundary of the effect record -------------------------------------------
-
-EFFECT_BOUNDARIES = [
-    ("before the record is written", "{ printf 'route3-apt-effects 1", False),
-    ("after the write, before its fsync", 'sync -- "$E/apt.effects.tmp" ||', False),
-    ("after the fsync, before the rename", 'mv --no-target-directory --no-clobber -- "$E/apt.effects.tmp"', False),
-    ("after the rename, before the directory fsync", 'sync -- "$E" || fail "the effect record directory', True),
-]
-
-
-@host
-@pytest.mark.parametrize("how", ["exit", "kill"])
-@pytest.mark.parametrize("label,anchor,published", EFFECT_BOUNDARIES, ids=[b[0] for b in EFFECT_BOUNDARIES])
-def test_r5_a_failure_at_each_boundary_of_the_observation_record_never_enables_a_package_mutation(world, label, anchor, published, how):
-    w = world(); w.release(); before = w.objects(); ok(w.run("S1.0"), "S1.0")
-    action = "kill -9 $$" if how == "kill" else "exit 77"
-
-    def mut(d: str) -> str:
-        assert d.count(anchor) == 1, anchor
-        return d.replace(anchor, action + "\n" + anchor)
-    done = w.run("S1.1", dmutate=mut)
-    assert done.returncode != 0 and set(w.load_state()["pkgs"]) - {"coreutils"} == CLOSURE_NAMES, "apt reported the failing hook; every package was unpacked"
-    assert (w.evid / "apt.effects").exists() == published
-    st = w.load_state()
-    for _ in range(2):
-        done, muts = run_r(w, dmutate=mut)
-        attended(done, muts); unchanged(w, st)
-        assert not removed_by_apt(w) and not calls_of(w, "apt-mark", "unhold") and set(w.load_state()["pkgs"]) - {"coreutils"} == CLOSURE_NAMES
-
-
-# ---- 4. a missing or unusable effect record is an ambiguity, never a fallback to apt.txn or to a package delta ---------------------------------
-
-EFF_CORRUPTIONS = {
-    "record missing": lambda w: (w.evid / "apt.effects").unlink(),
-    "record truncated (no end line)": lambda w: _rewrite(w.evid / "apt.effects", lambda s: "".join(s.splitlines(True)[:-1])),
-    "record empty": lambda w: (w.evid / "apt.effects").write_text(""),
-    "header altered": lambda w: _rewrite(w.evid / "apt.effects", lambda s: s.replace("route3-apt-effects 1", "route3-apt-effects 2")),
-    "bound to another transaction record": lambda w: _rewrite(w.evid / "apt.effects", lambda s: re.sub(r"txn\t[0-9a-f]{64}", "txn\t" + "0" * 64, s)),
-    "transaction record changed after the effects": lambda w: (w.evid / "apt.txn").write_text((w.evid / "apt.txn").read_text().replace("pkg\tlibfake-dep\t1.0\n", "") .replace("end\t4", "end\t3")),
-    "digest line missing": lambda w: _rewrite(w.evid / "apt.effects", lambda s: re.sub(r"txn\t[0-9a-f]{64}\n", "", s)),
-    "unknown line": lambda w: _rewrite(w.evid / "apt.effects", lambda s: s.replace("end\t", "junk\tx\nend\t")),
-    "end count wrong": lambda w: _rewrite(w.evid / "apt.effects", lambda s: re.sub(r"end\t\d+", "end\t9", s)),
-    "row after the end line": lambda w: (w.evid / "apt.effects").open("a").write("eff\tlibfake-dep\t1.0\n"),
-    "duplicate row": lambda w: _rewrite(w.evid / "apt.effects", lambda s: s.replace("end\t4", "eff\tlibfake-dep\t1.0\nend\t5")),
-    "same name at two versions": lambda w: _rewrite(w.evid / "apt.effects", lambda s: s.replace("end\t4", "eff\tlibfake-dep\t2.0\nend\t5")),
-    "package the submission record does not name": lambda w: _rewrite(w.evid / "apt.effects", lambda s: s.replace("end\t4", "eff\tlibunrelated\t7\nend\t5")),
-    "pre-state package": lambda w: _rewrite(w.evid / "apt.effects", lambda s: s.replace("end\t4", "eff\tcoreutils\t9.4\nend\t5")),
-    "recorded package at another version": lambda w: _rewrite(w.evid / "apt.effects", lambda s: s.replace("eff\tlibfake-dep\t1.0", "eff\tlibfake-dep\t9.9")),
-    "four-field row": lambda w: _rewrite(w.evid / "apt.effects", lambda s: s.replace("eff\tlibfake-dep\t1.0", "eff\tlibfake-dep\t1.0\t0.5")),
-    "record is a symlink": lambda w: (lambda p, q: (p.rename(q), p.symlink_to(q)))(w.evid / "apt.effects", w.evid / "apt.effects.real"),
-    "record not root-0600": lambda w: (w.evid / "apt.effects").chmod(0o644),
-    "record present without the submission record": lambda w: (w.evid / "apt.txn").unlink(),
-    "observed.pkgs omits what the effects name": lambda w: (w.evid / "apt.effects").write_text(re.sub(r"eff\tlibfake-dep\t1.0\n", "", (w.evid / "apt.effects").read_text()).replace("end\t4", "end\t3")),
-}
-
-
-@host
-@pytest.mark.parametrize("label", sorted(EFF_CORRUPTIONS))
-def test_r5_an_unusable_observation_record_cannot_enable_a_package_or_hold_mutation(world, label):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0"); ok(w.run("S1.1"), "S1.1")
-    st = w.load_state(); assert set(st["holds"]) == CLOSURE_NAMES and CLOSURE_NAMES <= set(st["pkgs"])
-    EFF_CORRUPTIONS[label](w)
-    for _ in range(2):
-        done, muts = run_r(w)
-        assert done.returncode == 28, (label, done.returncode, done.stdout)
-        attended(done, muts)
-        assert not removed_by_apt(w) and not calls_of(w, "apt-mark", "unhold")
-        unchanged(w, st)
-    assert w.evid.is_dir()
-
-
-@host
-def test_r4_the_effect_validator_refuses_a_row_that_was_already_installed_before_the_transaction(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    (w.evid / "apt.intent").write_text("libfake-dep\t1.0\n"); (w.evid / "beforeC1.dpkg").write_text("coreutils\t9.4\nlibfake-dep\t1.0\n")
-    (w.evid / "apt.txn").write_text("route3-apt-txn 1\npkg\tlibfake-dep\t1.0\nend\t1\n"); (w.evid / "apt.txn").chmod(0o600)
-    digest = hashlib.sha256((w.evid / "apt.txn").read_bytes()).hexdigest()
-    (w.evid / "apt.effects").write_text(f"route3-apt-effects 1\ntxn\t{digest}\neff\tlibfake-dep\t1.0\nend\t1\n"); (w.evid / "apt.effects").chmod(0o600)
-    done = w.run_raw(w.script("D") + '\nROUTE3_TXN="libfake-dep\t1.0"; route3_effects_rows "$ROUTE3_EVID/apt.effects"; echo "rc=$?"')
-    assert "rc=1" in done.stdout and "already installed before the transaction" in done.stdout, done.stdout
-    (w.evid / "beforeC1.dpkg").write_text("coreutils\t9.4\n")
-    st = (w.evid / "prestate.dpkg").read_text(); (w.evid / "prestate.dpkg").write_text(st + "libfake-dep\t1.0\n")
-    done = w.run_raw(w.script("D") + '\nROUTE3_TXN="libfake-dep\t1.0"; route3_effects_rows "$ROUTE3_EVID/apt.effects"; echo "rc=$?"')
-    assert "rc=1" in done.stdout and "already installed before the transaction" in done.stdout, "also refused against the recorded pre-state"
-
-
-# ---- 5. mutation: the R3 fallback (submission record = ownership) makes the exact reproduction delete the other transaction's package ---------
-
-
-
-
-
-
-# ---- 6. the completed-effect hook refuses to run outside an apt transaction, without a submission record, or with an untrusted one -----------
-
-@host
-def test_r5_the_effect_hook_refuses_outside_an_apt_transaction_and_records_nothing(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    hook = w.top / "effects-hook.sh"; hook.write_text(w.localize(real_bash("route3_effects_hook_text").stdout)); hook.chmod(0o700)
-    env = {"PATH": "/usr/bin:/bin"}
-    none = subprocess.run([str(hook)], capture_output=True, text=True, env=env, check=False)
-    assert none.returncode == 0 and not (w.evid / "apt.effects").exists(), "no submission record: nothing was submitted, nothing to prove"
-    (w.evid / "apt.txn").write_text("route3-apt-txn 1\npkg\tlibfake-dep\t1.0\nend\t1\n"); (w.evid / "apt.txn").chmod(0o644)
-    assert subprocess.run([str(hook)], capture_output=True, text=True, env=env, check=False).returncode == 81
-    (w.evid / "apt.txn").chmod(0o600)
-    bare = subprocess.run([str(hook)], capture_output=True, text=True, env=env, check=False)
-    assert bare.returncode == 84 and not (w.evid / "apt.effects").exists() and not (w.evid / "apt.effects.tmp").exists(), bare.stderr
-    (w.evid / "apt.txn").unlink(); (w.evid / "apt.txn").symlink_to("/etc/hostname")
-    assert subprocess.run([str(hook)], capture_output=True, text=True, env=env, check=False).returncode == 81
-
-
-# ---- 7. the real apt against fixture-owned packages: ordering, lock context, record contents and status propagation -----------------------
-
-def _fixture_deb_script(tmp: Path, name: str, version: str, postinst: str | None) -> Path:
-    root = tmp / f"{name}-{version}-root"; (root / "DEBIAN").mkdir(parents=True)
-    (root / "DEBIAN/control").write_text(f"Package: {name}\nVersion: {version}\nArchitecture: all\nMaintainer: Test <test@example.test>\nDescription: fixture package for the provisioning-plan effect test\n")
-    if postinst:
-        (root / "DEBIAN/postinst").write_text(postinst); (root / "DEBIAN/postinst").chmod(0o755)
-    deb = tmp / f"{name}_{version}_all.deb"
-    subprocess.run(["dpkg-deb", "--build", "--root-owner-group", str(root), str(deb)], capture_output=True, check=True)
-    return deb
-
-
-KILL_APT_POSTINST = """#!/bin/sh
-# SIGKILL the outermost apt-get among this process's ancestors (apt forks before it runs hooks, so the first match would only be the forked child)
-p=$PPID; top=
-while [ "$p" -gt 1 ]; do
-  [ "$(cat /proc/$p/comm)" = apt-get ] && top=$p
-  p=$(awk '{ sub(/^.*\\) /, ""); print $2 }' /proc/$p/stat) || break
-done
-[ -n "$top" ] && kill -9 "$top"
-exit 0
-"""
-
-
-def _dpkg_idle(timeout: float = 60.0) -> None:
-    """dpkg outlives an apt that was killed under it: wait until no dpkg runs and the database has no unfinished package."""
-    import time
-    end = time.time() + timeout
-    while time.time() < end:
-        if subprocess.run(["pgrep", "-x", "dpkg"], capture_output=True, check=False).returncode != 0:
-            return
-        time.sleep(0.2)
-    raise AssertionError("dpkg is still running")
-
-
-def _purge_fixtures(*names: str) -> None:
-    """Fixture-owned packages only; --force-all so that a half-configured fixture cannot block its own cleanup."""
-    _dpkg_idle()
-    subprocess.run(["dpkg", "--purge", "--force-all", *names], capture_output=True, check=False)
-
-
-def _real_plan(evid: Path, script: str) -> subprocess.CompletedProcess:
-    d = definitions().replace("/root/route3-evidence", str(evid))
-    return subprocess.run(["/bin/bash", "-c", d + "\n" + script], capture_output=True, text=True, timeout=300, check=False, env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "HOME": "/root"})
-
-
-def _real_evidence(tmp: Path, name: str, version: str) -> Path:
-    evid = tmp / f"evid-{name}"; evid.mkdir(mode=0o700)
-    pkgs = subprocess.run(["dpkg-query", "-W", "-f=${Package}\t${Version}\n"], capture_output=True, text=True, check=True).stdout
-    (evid / "prestate.dpkg").write_text("".join(sorted(pkgs.splitlines(True)))); (evid / "beforeC1.dpkg").write_text("".join(sorted(pkgs.splitlines(True))))
-    (evid / "apt.intent").write_text(f"{name}\t{version}\n")
-    return evid
-
-
-@real_apt
-def test_real_apt_publishes_the_completed_effect_inside_the_transaction_and_propagates_the_hook_status():
-    tmp = Path(tempfile.mkdtemp(prefix="frt-plan-eff-", dir="/var/tmp")); tmp.chmod(0o700)
-    names = ["frt-plan-eff-ok", "frt-plan-eff-bad", "frt-plan-eff-kill", "frt-plan-eff-hookfail"]
-    env = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "DEBIAN_FRONTEND": "noninteractive", "LC_ALL": "C"}
-    try:
-        # 1. normal success: the record names exactly the package the invocation installed; the validators accept it
-        deb = _fixture_deb_script(tmp, names[0], "1.0", None); evid = _real_evidence(tmp, names[0], "1.0")
-        assert _real_plan(evid, "route3_apt_hook_write").returncode == 0
-        assert {p.name for p in evid.iterdir() if p.name.startswith("apt-")} == {"apt-hook.sh", "apt-effects-hook.sh"}
-        done = _real_plan(evid, f"ROUTE3_PATH=/usr/sbin:/usr/bin:/sbin:/bin; route3_apt_install {deb}")
-        assert done.returncode == 0, (done.stdout[-500:], done.stderr[-500:])
-        assert (evid / "apt.txn").read_text() == f"route3-apt-txn 1\npkg\t{names[0]}\t1.0\nend\t1\n"
-        digest = hashlib.sha256((evid / "apt.txn").read_bytes()).hexdigest()
-        assert (evid / "apt.effects").read_text() == f"route3-apt-effects 1\ntxn\t{digest}\neff\t{names[0]}\t1.0\nend\t1\n"
-        assert (evid / "apt.effects").stat().st_mode & 0o777 == 0o600 and not (evid / "apt.effects.tmp").exists()
-        v = _real_plan(evid, 'route3_observe_resolve /dev/null; echo "rc=$? obs=[$ROUTE3_EFF]"')
-        assert f"rc=0 obs=[{names[0]}\t1.0]" in v.stdout, v.stdout
-        # the hook refuses to run outside an apt transaction (no ancestor holds the frontend lock)
-        again = _real_plan(evid, "rm -f $ROUTE3_EVID/apt.effects; /bin/sh $ROUTE3_EVID/apt-effects-hook.sh; echo rc=$?")
-        assert "rc=84" in again.stdout and not (evid / "apt.effects").exists(), again.stdout + again.stderr
-        # 2. normal non-zero: dpkg fails in the configure step (half-configured); apt is non-zero, the record names the unpacked package
-        deb = _fixture_deb_script(tmp, names[1], "1.0", "#!/bin/sh\nexit 1\n"); evid = _real_evidence(tmp, names[1], "1.0")
-        assert _real_plan(evid, "route3_apt_hook_write").returncode == 0
-        done = _real_plan(evid, f"ROUTE3_PATH=/usr/sbin:/usr/bin:/sbin:/bin; route3_apt_install {deb}; echo apt=$?")
-        assert "apt=100" in done.stdout, done.stdout[-400:]
-        st = subprocess.run(["dpkg-query", "-W", "-f=${db:Status-Abbrev}", names[1]], capture_output=True, text=True, check=False).stdout
-        assert st.startswith("iF"), st
-        assert (evid / "apt.effects").read_text().splitlines()[2:] == [f"eff\t{names[1]}\t1.0", "end\t1"]
-        _purge_fixtures(names[1])                                            # apt refuses to work while a package is half-configured
-        # 3. interruption: apt is SIGKILLed after dpkg ran its steps but before the Post-Invoke hook: a complete submission record, no effect record, ambiguity
-        deb = _fixture_deb_script(tmp, names[2], "1.0", KILL_APT_POSTINST); evid = _real_evidence(tmp, names[2], "1.0")
-        assert _real_plan(evid, "route3_apt_hook_write").returncode == 0
-        done = _real_plan(evid, f"ROUTE3_PATH=/usr/sbin:/usr/bin:/sbin:/bin; route3_apt_install {deb}; echo apt=$?")
-        assert "apt=137" in done.stdout, done.stdout[-400:]
-        _dpkg_idle()
-        assert (evid / "apt.txn").read_text() == f"route3-apt-txn 1\npkg\t{names[2]}\t1.0\nend\t1\n" and not (evid / "apt.effects").exists()
-        assert subprocess.run(["dpkg-query", "-W", "-f=${db:Status-Abbrev}", names[2]], capture_output=True, text=True, check=False).stdout.startswith("i")
-        amb = _real_plan(evid, 'route3_observe_resolve /dev/null; echo "rc=$?"')
-        assert "rc=1" in amb.stdout and "AMBIGUOUS" in amb.stdout, amb.stdout
-        _purge_fixtures(names[2])
-        # 4. status propagation: a failing effect hook makes apt non-zero although the package was installed, and nothing is published
-        deb = _fixture_deb_script(tmp, names[3], "1.0", None); evid = _real_evidence(tmp, names[3], "1.0")
-        assert _real_plan(evid, "route3_apt_hook_write").returncode == 0
-        (evid / "apt-effects-hook.sh").write_text("#!/bin/sh\nexit 7\n")
-        done = _real_plan(evid, f"ROUTE3_PATH=/usr/sbin:/usr/bin:/sbin:/bin; route3_apt_install {deb}; echo apt=$?")
-        assert "apt=100" in done.stdout and not (evid / "apt.effects").exists() and (evid / "apt.txn").exists(), done.stdout[-400:]
-        assert subprocess.run(["dpkg-query", "-W", "-f=${Version}", names[3]], capture_output=True, text=True, check=False).stdout == "1.0"
-    finally:
-        _purge_fixtures(*names)
-        shutil.rmtree(tmp, ignore_errors=True)
-    for n in names:
-        assert subprocess.run(["dpkg-query", "-W", n], capture_output=True, check=False).returncode != 0, f"fixture package {n} must be gone"
-    assert subprocess.run(["dpkg", "--audit"], capture_output=True, text=True, check=False).stdout == ""
-
-
-@real_apt
-def test_real_apt_a_later_transaction_installing_a_recorded_package_after_a_killed_route3_run_leaves_no_observation():
-    """The reproduced sequence against the real dpkg database: Route 3's apt is killed after the submission record, a separate apt installs the same exact version."""
-    tmp = Path(tempfile.mkdtemp(prefix="frt-plan-eff-", dir="/var/tmp")); tmp.chmod(0o700)
-    name = "frt-plan-eff-later"; env = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "DEBIAN_FRONTEND": "noninteractive", "LC_ALL": "C"}
-    try:
-        deb = _fixture_deb_script(tmp, name, "1.0", None); evid = _real_evidence(tmp, name, "1.0")
-        assert _real_plan(evid, "route3_apt_hook_write").returncode == 0
-        # the effect hook is made to die before publishing, as an interruption before the record is durable would
-        (evid / "apt-effects-hook.sh").write_text(KILL_APT_POSTINST)
-        done = _real_plan(evid, f"ROUTE3_PATH=/usr/sbin:/usr/bin:/sbin:/bin; route3_apt_install {deb}; echo apt=$?")
-        assert "apt=137" in done.stdout and (evid / "apt.txn").exists() and not (evid / "apt.effects").exists(), done.stdout[-300:]
-        _dpkg_idle()
-        subprocess.run(["apt-get", "remove", "--yes", "--purge", name], capture_output=True, env=env, check=True)   # the dpkg state before the later transaction
-        done = subprocess.run(["apt-get", "install", "--yes", "--", str(deb)], capture_output=True, text=True, env=env, check=False)
-        assert done.returncode == 0                                                                              # the separate transaction
-        amb = _real_plan(evid, 'route3_observe_resolve /dev/null; echo "rc=$? obs=[$ROUTE3_EFF]"')
-        assert "rc=1" in amb.stdout and "obs=[]" in amb.stdout and "AMBIGUOUS" in amb.stdout, amb.stdout
-        assert subprocess.run(["dpkg-query", "-W", "-f=${Version}", name], capture_output=True, text=True, check=False).stdout == "1.0"
-    finally:
-        _purge_fixtures(name)
-        shutil.rmtree(tmp, ignore_errors=True)
-    assert subprocess.run(["dpkg-query", "-W", name], capture_output=True, check=False).returncode != 0
-    assert subprocess.run(["dpkg", "--audit"], capture_output=True, text=True, check=False).stdout == ""
-
-
-# =====================================================================================================================================
-# R5 remediation: package and hold rollback is an ATTENDED boundary. Nothing the plan records is ownership; R never mutates a package or a hold
-# =====================================================================================================================================
-
-R4_ANCHOR = '        esc=28\n      else echo "No package or hold recovery is required'
-R4_REMOVAL = """        if route3_observe_resolve "$E/now.dpkg"; then
-          if [ -s "$E/held.new" ]; then apt-mark unhold -- $(cat "$E/held.new"); fi
-          names=$(printf '%s\\n' "$ROUTE3_EFF" | cut -f1 | tr '\\n' ' ')
-          if [ -n "${names// /}" ]; then /usr/bin/env -i PATH="$ROUTE3_PATH" DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get remove --yes -- $names; fi
-        fi
-        esc=28
-      else echo "No package or hold recovery is required"""
-
-
-def earlier_hook_world(world) -> World:
-    """apt's submitted install fails (status 100) and an EARLIER configured Post-Invoke hook separately installs a submitted name at the submitted version before the Route 3 hook queries dpkg."""
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=0, early_hook_install=[["libfake-dep", "1.0"]])
-    done = w.run("S1.1")
-    assert done.returncode == 3, (done.returncode, done.stdout)
-    assert effects_rows(w) == ["libfake-dep=1.0"], "the Route 3 observation sees (and records) the separately installed package"
-    assert w.load_state()["pkgs"] == {"coreutils": "9.4", "libfake-dep": "1.0"}
-    knobs(w, fail={}, early_hook_install=[])
-    return w
-
-
-def regression_the_earlier_hook_fixture_survives_r(w: World, **kw) -> None:
-    """THE named regression: R5 keeps the separately installed fixture and every hold, exits 28, and issues no package or hold mutation."""
-    st = w.load_state()
-    done, muts = run_r(w, **kw)
-    attended(done, muts)
-    now = w.load_state()
-    assert now["pkgs"].get("libfake-dep") == "1.0", "the separately installed fixture was removed"
-    assert now["holds"] == st["holds"], "a hold was changed"
-    assert not removed_by_apt(w) and not calls_of(w, "apt-mark", "unhold")
-    assert "libfake-dep" in done.stdout, "the exact difference is printed"
-
-
-@host
-def test_r5_the_earlier_hook_reproduction_keeps_the_separately_installed_fixture_and_exits_28(world):
-    w = earlier_hook_world(world)
-    for _ in range(2):
-        regression_the_earlier_hook_fixture_survives_r(w)
-    assert (w.evid / "apt.txn").exists() and (w.evid / "apt.effects").exists() and (w.evid / "apt.intent").exists()
-
-
-@host
-def test_r5_mutation_reintroducing_the_r4_removal_and_unhold_makes_the_named_regression_fail(world):
-    w = earlier_hook_world(world)
-    assert R4_ANCHOR in block("R")
-    mut = lambda b: b.replace(R4_ANCHOR, R4_REMOVAL)
-    with pytest.raises(AssertionError):
-        regression_the_earlier_hook_fixture_survives_r(w, mutate=mut)
-    assert "libfake-dep" not in w.load_state()["pkgs"], "the R4 path deletes the separately installed fixture"
-    # ... and its unhold: after a successful S1.1 the R4 path lifts the Route 3 holds and removes the closure
-    w2 = world(); w2.release(); ok(w2.run("S1.0"), "S1.0"); ok(w2.run("S1.1"), "S1.1")
-    assert set(w2.load_state()["holds"]) == CLOSURE_NAMES
-    with pytest.raises(AssertionError):
-        boundary(w2, mutate=mut)
-    assert w2.load_state()["holds"] == [] and set(w2.load_state()["pkgs"]) == {"coreutils"}
-    # the real block passes the same checks
-    w3 = earlier_hook_world(world); regression_the_earlier_hook_fixture_survives_r(w3)
-    w4 = world(); w4.release(); ok(w4.run("S1.0"), "S1.0"); ok(w4.run("S1.1"), "S1.1"); boundary(w4)
-
-
-@host
-def test_r5_a_successful_s1_1_followed_by_r_issues_no_package_manager_mutation_and_keeps_the_evidence(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0"); ok(w.run("S1.1"), "S1.1")
-    st = w.load_state(); assert set(st["holds"]) == CLOSURE_NAMES and CLOSURE_NAMES <= set(st["pkgs"])
-    n = len(w.calls())
-    done = w.run("R")
-    assert done.returncode == 28 and "Pre-state restored" not in done.stdout
-    issued = w.calls()[n:]
-    assert not package_mutations(issued), issued
-    assert not [c for c in issued if c.split()[0] in ("apt-get", "dpkg", "apt")], issued          # R only reads: dpkg-query and apt-mark showhold
-    assert all(c.startswith(("dpkg-query", "apt-mark showhold", "getent", "systemctl")) for c in issued), issued
-    unchanged(w, st)
-    for name in ("apt.intent", "apt.txn", "apt.effects", "observed.pkgs", "held.new", "beforeC1.dpkg", "afterC1.dpkg", "prestate.dpkg", "prestate.holds", "prestate.objects", "pre.sha256", "checkpoints"):
-        assert (w.evid / name).is_file() and not (w.evid / name).is_symlink(), name
-
-
-@host
-def test_r5_a_normal_non_zero_partial_installation_followed_by_r_is_non_mutating_status_28(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    knobs(w, fail={"apt-get install": 100}, partial_n=2)
-    failed(w.run("S1.1"), "S1.1"); knobs(w, fail={}, partial_n=0); st = w.load_state()
-    assert len(set(st["pkgs"]) - {"coreutils"}) == 2
-    for _ in range(2):
-        done, muts = run_r(w); attended(done, muts); unchanged(w, st)
-
-
-# ---- interruption before and after every former submission / effect publication boundary ---------------------------------------------------
-
-TXN_BOUNDARIES = [
-    ("before the submission record is written", ('eval "exec 9<&$APT_HOOK_INFO_FD"', "before")),
-    ("after the write, before its fsync and rename", ('sync -- "$E/apt.txn.tmp" && mv', "before")),
-    ("after the rename, before the directory fsync", ('&& sync -- "$E" || fail "the record could not be made durable" 73', "braces")),
-]
-
-
-@host
-@pytest.mark.parametrize("how", ["exit", "kill"])
-@pytest.mark.parametrize("label,spec", TXN_BOUNDARIES, ids=[b[0] for b in TXN_BOUNDARIES])
-def test_r5_an_interruption_at_each_submission_boundary_preserves_packages_and_holds(world, label, spec, how):
-    anchor, kind = spec
-    w = world(); w.release(); before = w.objects(); ok(w.run("S1.0"), "S1.0")
-    action = "kill -9 $$" if how == "kill" else "exit 77"
-
-    def mut(d: str) -> str:
-        assert d.count(anchor) == 1, anchor
-        return d.replace(anchor, action + "\n" + anchor) if kind == "before" else d.replace(anchor, "&& { " + action + "; } || fail \"the record could not be made durable\" 73")
-    done = w.run("S1.1", dmutate=mut)
-    assert done.returncode != 0, done.stdout
-    st = w.load_state()
-    done, muts = run_r(w, dmutate=mut)
-    assert not muts and not removed_by_apt(w) and not calls_of(w, "apt-mark", "unhold")
-    unchanged(w, st)
-    if set(st["pkgs"]) == {"coreutils"}:
-        ok(done, "R"); restored(w, before)                       # nothing was installed: the state equals the record
-    else:
-        attended(done, muts)
-
-
-@host
-def test_r5_s1_1_killed_between_apt_and_the_observation_write_still_changes_nothing_in_r(world):
-    w = world(); w.release(); ok(w.run("S1.0"), "S1.0")
-    done = w.run("S1.1", mutate=w.inject("S1.1", "arc=$?", "kill"))
-    assert done.returncode == 137 and not (w.evid / "observed.pkgs").exists()
-    st = w.load_state(); assert set(st["pkgs"]) - {"coreutils"} == CLOSURE_NAMES
-    done, muts = run_r(w); attended(done, muts); unchanged(w, st)
-
 
 @host
 def test_r5_s1_1_killed_after_the_holds_before_done_c1_keeps_packages_and_holds(world):
@@ -2782,30 +1732,29 @@ def test_r5_no_s1_rollback_path_contains_a_package_removal_purge_autoremove_down
         for line in _executable_lines(block(ident)):
             assert not _forbidden_package_mutation(line), (ident, line)
     r = block("R")
-    assert "route3_apt_install" not in r and "route3_observe_resolve" not in r and "route3_observed_write" not in r
     assert not re.search(r"(?<![\w./$-])(apt-get|apt|dpkg|aptitude)(?=\s)", "\n".join(_executable_lines(r))), "R only reads package state (dpkg-query, apt-mark showhold)"
     mark = [l for l in _executable_lines(r) if "apt-mark" in l]
     assert mark and all("apt-mark showhold" in l for l in mark), mark
-    # block D: the only package-manager mutation is the one S1.1 install function; nothing in D removes or holds
+    # block D: NO package-manager mutation of any kind (no apt-get at all: the install path was removed); nothing in D removes, installs or holds
     d = definitions()
     for line in _executable_lines(d):
-        if re.search(r"\bapt-get\b", line) and "--simulate" not in line and "route3_apt_sim" not in line:
-            assert "apt-get install --yes --no-install-recommends" in line, line
-        assert not PACKAGE_REMOVAL.search(line), line
-        assert not PACKAGE_HOLD.search(line), line
-    # no block other than S1.1 holds or unholds; no block at all removes, purges, autoremoves or downgrades
+        assert not re.search(r"(?<![\w./$-])apt-get\b", line), line
+        assert not PACKAGE_REMOVAL.search(line) and not PACKAGE_HOLD.search(line) and not PACKAGE_INSTALL.search(line), line
+    # no block other than S1.1 holds or unholds; no block at all removes, purges, autoremoves, downgrades or INSTALLS
     for ident in IDS:
         for line in _executable_lines(block(ident)):
             assert not PACKAGE_REMOVAL.search(line), (ident, line)
+            assert not PACKAGE_INSTALL.search(line), (ident, line)
+            assert not re.search(r"(?<![\w./$-])apt-get\b", line), (ident, line)
             if ident == "S1.1":
                 assert not re.search(r"\bapt-mark\s+unhold\b", line), (ident, line)
             else:
                 assert not PACKAGE_HOLD.search(line), (ident, line)
-    # S1.1 retains exactly its authorized mutations: the install function call and one hold of the recorded new list
+    # S1.1 retains exactly one authorized mutation: one hold of the recorded list of pinned packages
     s11 = _executable_lines(block("S1.1"))
     holds = [l for l in s11 if PACKAGE_HOLD.search(l)]
-    assert holds and all(re.search(r"\bapt-mark\s+hold\s+--\s", l) for l in holds), holds
-    assert not [l for l in s11 if _forbidden_package_mutation(l) and not PACKAGE_HOLD.search(l)], "S1.1 installs only through route3_apt_install and holds only via apt-mark hold"
+    assert len(holds) == 1 and re.search(r"\bapt-mark\s+hold\s+--\s", holds[0]), holds
+    assert not [l for l in s11 if _forbidden_package_mutation(l) and not PACKAGE_HOLD.search(l)], "S1.1 holds only via apt-mark hold and installs nothing"
 
 
 @pytest.mark.parametrize("injected", [
@@ -2855,85 +1804,10 @@ def test_r5_the_runbook_no_longer_calls_anything_package_ownership():
     text = runbook()
     for needle in ("owned.pkgs", "ROUTE3_OWN", "route3_own_resolve", "route3_owned_write", "operation-owned", "completed-effect", "completed effect", "ownership is ambiguous", "AMBIGUOUS: owned"):
         assert needle not in text, needle
-    d = definitions()
-    assert "NOT ownership" in d and "another configured hook" in d and "never ownership" in d
     r = block("R")
     assert "ATTENDED RECOVERY REQUIRED" in r and "esc=28" in r and "R changed NO package and NO hold" in r
 
 
-# ---- the real apt: an earlier Post-Invoke hook installs the same name and version from another .deb ------------------------------------------
-
-def _payload_deb(tmp: Path, name: str, version: str, payload: str, postinst: str | None) -> Path:
-    root = tmp / "root"; (root / "DEBIAN").mkdir(parents=True); (root / "usr/share/frt-r5").mkdir(parents=True)
-    (root / "DEBIAN/control").write_text(f"Package: {name}\nVersion: {version}\nArchitecture: all\nMaintainer: Test <test@example.test>\nDescription: fixture package for the R5 earlier-hook test\n")
-    (root / f"usr/share/frt-r5/{name}.payload").write_text(payload + "\n")
-    if postinst:
-        (root / "DEBIAN/postinst").write_text(postinst); (root / "DEBIAN/postinst").chmod(0o755)
-    deb = tmp / f"{name}_{version}_all.deb"
-    subprocess.run(["dpkg-deb", "--build", "--root-owner-group", str(root), str(deb)], capture_output=True, check=True)
-    return deb
-
-
-def _shims(dirpath: Path, log: Path) -> None:
-    dirpath.mkdir(mode=0o755)
-    for n in ("apt-get", "apt", "dpkg", "apt-mark", "aptitude"):
-        real = next(c for c in (f"/usr/bin/{n}", f"/usr/sbin/{n}", f"/bin/{n}") if Path(c).exists()) if n != "aptitude" else "/usr/bin/aptitude"
-        (dirpath / n).write_text(f'#!/bin/sh\nprintf \'%s %s\\n\' "{n}" "$*" >> {log}\nexec {real} "$@"\n'); (dirpath / n).chmod(0o755)
-
-
-@real_apt
-def test_r5_real_apt_an_earlier_post_invoke_hook_installs_the_same_package_and_r_exits_28_without_removing_or_unholding_it():
-    tmp = Path(tempfile.mkdtemp(prefix="frt-r5-", dir="/var/tmp")); tmp.chmod(0o755)
-    name = "frt-r5-earlier"
-    dropin = Path("/etc/apt/apt.conf.d/99frt-r5-early-hook")
-    log = tmp / "pm.log"; log.write_text("")
-    try:
-        sub_ = tmp / "submitted"; sub_.mkdir(); early = tmp / "early"; early.mkdir()
-        submitted = _payload_deb(sub_, name, "1.0", "SUBMITTED-BY-APT", "#!/bin/sh\nexit 1\n")          # apt's package: its configure step fails
-        other = _payload_deb(early, name, "1.0", "INSTALLED-BY-THE-EARLIER-HOOK", None)                  # a different .deb, same name and version
-        marker = tmp / "armed"; marker.write_text("")
-        hook = tmp / "early-hook.sh"
-        hook.write_text(f"#!/bin/sh\n[ -e {marker} ] || exit 0\nrm -f {marker}\nexec /usr/bin/dpkg -i {other}\n"); hook.chmod(0o755)
-        dropin.write_text(f'DPkg::Post-Invoke {{ "{hook}"; }};\n')
-        evid = _real_evidence(tmp, name, "1.0")
-        holds = subprocess.run(["apt-mark", "showhold"], capture_output=True, text=True, check=True).stdout
-        objs = _real_plan(evid, "route3_objects").stdout.split()
-        (evid / "prestate.holds").write_text("".join(sorted(holds.splitlines(True))))
-        (evid / "prestate.objects").write_text("".join(f"absent {p}\n" for p in objs) + "absent passwd freedom-executor\nabsent group freedom-executor\n")
-        subprocess.run("sha256sum -- prestate.dpkg prestate.holds prestate.objects > pre.sha256", shell=True, cwd=evid, check=True)
-        (evid / "checkpoints").write_text("s1-start\nbegin-C1\n"); (evid / "held.new").write_text("")
-        _shims(tmp / "shims", log)
-        path = f"ROUTE3_PATH={tmp / 'shims'}:/usr/sbin:/usr/bin:/sbin:/bin"
-        assert _real_plan(evid, "route3_apt_hook_write").returncode == 0
-        done = _real_plan(evid, f"{path}; route3_apt_install {submitted}; echo apt=$?")
-        assert "apt=100" in done.stdout, (done.stdout[-600:], done.stderr[-600:])                  # apt's submitted package failed
-        payload = Path(f"/usr/share/frt-r5/{name}.payload")
-        assert payload.read_text().strip() == "INSTALLED-BY-THE-EARLIER-HOOK", "the installed state came from the earlier hook, not from apt's package"
-        assert subprocess.run(["dpkg-query", "-W", "-f=${db:Status-Abbrev} ${Version}", name], capture_output=True, text=True, check=False).stdout == "ii  1.0"
-        assert (evid / "apt.effects").read_text().splitlines()[2:] == [f"eff\t{name}\t1.0", "end\t1"], "the Route 3 observation records the package as if it were its effect"
-        (evid / "afterC1.dpkg").write_text(subprocess.run(["dpkg-query", "-W", "-f=${Package}\t${Version}\n"], capture_output=True, text=True, check=True).stdout)
-        n = len(log.read_text().splitlines())
-        for _ in range(2):
-            r = _real_plan(evid, f"{path}\n{block('R')}")
-            assert r.returncode == 28 and "[R rc=28]" in r.stdout and "ATTENDED RECOVERY REQUIRED" in r.stdout and "Pre-state restored" not in r.stdout, (r.returncode, r.stdout[-800:], r.stderr[-400:])
-            assert name in r.stdout
-            assert payload.read_text().strip() == "INSTALLED-BY-THE-EARLIER-HOOK"
-            assert subprocess.run(["dpkg-query", "-W", "-f=${Version}", name], capture_output=True, text=True, check=False).stdout == "1.0"
-            assert subprocess.run(["apt-mark", "showhold"], capture_output=True, text=True, check=True).stdout == holds
-        issued = log.read_text().splitlines()[n:]
-        assert not package_mutations(issued), issued
-        assert (evid / "apt.txn").is_file() and (evid / "apt.effects").is_file()
-    finally:
-        dropin.unlink(missing_ok=True)
-        _purge_fixtures(name)
-        shutil.rmtree(tmp, ignore_errors=True)
-    assert not dropin.exists() and subprocess.run(["dpkg-query", "-W", name], capture_output=True, check=False).returncode != 0, "the fixture package must be gone"
-    assert not Path("/usr/share/frt-r5").exists() or not any(Path("/usr/share/frt-r5").iterdir())
-    shutil.rmtree("/usr/share/frt-r5", ignore_errors=True)
-    assert subprocess.run(["dpkg", "--audit"], capture_output=True, text=True, check=False).stdout == ""
-
-
-# ---- 6. manager observations are status-aware ---------------------------------------------------------------------------------------------
 
 SUP = "freedom-blades-executor-supervisor.service"
 UNIT_MUTATING_CALLS = ("userdel", "groupdel", "loginctl", "visudo")
@@ -3085,3 +1959,125 @@ def test_real_systemctl_status_and_state_pairs_are_the_ones_the_helper_accepts()
         assert sh(f'systemctl() {{ echo {word}; return 0; }}; route3_unit x.service').stdout.startswith(word + "\n")
     for out in ("", "weird", "maintenance"):
         assert sh(f'systemctl() {{ echo "{out}"; return 0; }}; route3_unit x.service').stdout.startswith("indeterminate\n")
+
+
+# ---- the plan has no install path, and every mutating boundary runs the whole trusted attestation itself (independent review, finding 2) ----------
+
+REMOVED_INSTALL_MACHINERY = ("route3_apt_install", "route3_apt_sim", "route3_apt_parse", "route3_hook_text", "route3_effects_hook_text", "route3_apt_hook_write", "route3_txn_rows", "route3_effects_rows",
+                             "route3_observe_resolve", "route3_observed_write", "route3_delta_ok", "ROUTE3_TODO", "apt.intent", "apt.txn", "apt.effects", "observed.pkgs", "apt-get install", "DPkg::")
+GATED_BLOCKS = ["S1.0", "S1.1", "S1.2", "S1.3", "S1.4", "S3.1", "S3.2", "S3.3", "S3.5", "S4.1"]
+FIRST_MUTATION = re.compile(r"route3_cp |\binstall\s+-[dm]|apt-mark\s+hold|\buseradd\b|loginctl\s+enable|\bmv\s|route3_installer\s+install|systemctl\s+start|build\.py|route3_pkgs\s*>|printf\b[^\n]*>\s*\"\$N\"|polkit|ROUTE3_TMPFILES\"\s+install")
+
+
+def test_the_runbook_has_no_package_install_path_at_all():
+    every_block = "\n".join(bash_blocks())
+    executable = "\n".join(l for l in every_block.splitlines() if not l.lstrip().startswith("#"))
+    for needle in REMOVED_INSTALL_MACHINERY:
+        assert needle not in executable, needle
+    code = "\n".join(_executable_lines(definitions()) + [l for i in IDS for l in _executable_lines(block(i))])
+    assert not re.search(r"(?<![\w./$-])apt-get\b", code) and not PACKAGE_INSTALL.search(code), "no executable line of any block or of block D installs or asks apt to"
+    check = re.search(r"^route3_apt_check\(\) \{.*?^\}", definitions(), re.S | re.M)[0]
+    assert "never installs a package" in check and 'bad=1' in check and "ROUTE3_TODO" not in check, "a missing member is a hard NO-GO"
+
+
+@pytest.mark.parametrize("ident", GATED_BLOCKS)
+def test_every_mutating_block_calls_the_gate_before_its_first_mutation(ident):
+    lines = [l for l in block(ident).splitlines() if not l.lstrip().startswith("#")]
+    gate = next((i for i, l in enumerate(lines) if "route3_gate" in l), None)
+    mutation = next((i for i, l in enumerate(lines) if FIRST_MUTATION.search(l)), None)
+    assert gate is not None, f"{ident} never runs the trusted gate"
+    assert mutation is None or gate < mutation, f"{ident}: the gate (line {gate}) must precede the first mutation (line {mutation}: {lines[mutation].strip()})"
+    assert "route3_gate ||" in "\n".join(lines) or "route3_gate || exit" in "\n".join(lines) or "&& route3_gate ||" in "\n".join(lines), f"{ident}: the gate's status must stop the block"
+
+
+def test_the_read_only_stages_run_the_same_gate_and_rollbacks_do_not_depend_on_it():
+    for ident in ("S0.3", "S2.1"):
+        assert "route3_gate" in block(ident), ident
+    for ident in ("R0", "R", "R3"):
+        assert "route3_gate" not in block(ident), f"{ident} must run whatever state the host is in"
+    assert "route3_python_ok" not in "".join(block(i) for i in IDS), "the weaker local-metadata check is only a part of the gate, never a stage's sole check"
+
+
+@host
+@pytest.mark.parametrize("ident", ["S1.0", "S1.1", "S1.2", "S1.3", "S1.4"])
+@pytest.mark.parametrize("deviation", ["gate refuses", "artifact tampered"])
+def test_s1_blocks_invoked_directly_refuse_before_mutating_when_the_trusted_attestation_fails(world, ident, deviation):
+    """S0.3 was never run in this world. A failing attestation (a missing, changed or extra member or a payload difference, as the real tool reports it) stops each S1 block before it mutates."""
+    w = world(); w.release()
+    prior = ["S1.0", "S1.1", "S1.2", "S1.3", "S1.4"]
+    for earlier in prior[: prior.index(ident)]:
+        ok(w.run(earlier), earlier)
+    if deviation == "gate refuses":
+        knobs(w, gate_rc=1, gate_msg="unexpected closure: libnew1 is now part of the dependency closure")
+    else:
+        (w.art / w.rev / "reference.record").write_text("tampered\n")
+    before, calls, cps = w.objects(), len(w.calls()), (w.evid / "checkpoints").read_text() if w.evid.exists() else None
+    done = w.run(ident)
+    failed(done, ident)
+    assert "NO-GO" in done.stdout
+    assert w.objects() == before and not package_mutations(w.calls()[calls:]) and not [c for c in w.calls()[calls:] if c.split()[0] in ("useradd", "loginctl", "visudo")]
+    assert ((w.evid / "checkpoints").read_text() if w.evid.exists() else None) == cps, "no checkpoint was written"
+    assert not (w.top / "installer.log").exists()
+
+
+# ---- S4.1 reruns the same attestation before it starts anything (independent review, blocking finding) ---------------------------------------------
+
+def armed_through_s3_5(w: World) -> None:
+    """The world after S3.5 (STOP-B): provisioned, booted once, armed, unit installed and enabled but not started."""
+    provision(w); (w.top / "booted").write_text("")
+    for ident in ("S3.1", "S3.2", "S3.3", "S3.4", "S3.5"):
+        ok(w.run(ident), ident)
+
+
+S4_1_DRIFT = ["baseline drift", "payload drift", "baseline record tampered", "reference record tampered", "archive tampered", "interpreter drift", "release field unset", "deployed tree drift"]
+
+
+@host
+@pytest.mark.parametrize("label", S4_1_DRIFT)
+def test_s4_1_invoked_directly_refuses_drift_before_starting_or_changing_anything(world, label):
+    """S2.1 and S3.x ran earlier in this world, but S4.1 is its own decision and does not rely on that: it reruns the full gate and refuses, with no `systemctl start`, no installer call and no mutation."""
+    w = world(); w.release(); armed_through_s3_5(w)
+    kw: dict = {}
+    if label == "baseline drift":
+        knobs(w, gate_rc=1, gate_msg="unexpected closure: libnew1 is now part of the dependency closure")
+    elif label == "payload drift":
+        knobs(w, gate_rc=1, gate_msg="payload drift: the installed files of libfake-dep=1.0 are not those of the signed-archive package")
+    elif label == "baseline record tampered":
+        (w.art / w.rev / "baseline.record").write_text("tampered\n")
+    elif label == "reference record tampered":
+        (w.art / w.rev / "reference.record").write_text("tampered\n")
+    elif label == "archive tampered":
+        with open(w.art / w.rev / "code.tar", "ab") as f:
+            f.write(b"\0")
+    elif label == "interpreter drift":
+        kw["fields"] = {"PY_SHA256": "0" * 64}
+    elif label == "release field unset":
+        kw["fields"] = {"ARCHIVE_SHA256": "UNSET"}
+    else:
+        (w.base / "code" / "tools" / "extra.py").write_text("")
+    before, calls, cps = w.objects(), len(w.calls()), (w.evid / "checkpoints").read_text()
+    installer_log = (w.top / "installer.log").read_text()
+    done = w.run("S4.1", **kw)
+    failed(done, "S4.1")
+    assert done.returncode == 2 and "NO-GO" in done.stdout and "[S4.1 rc=2]" in done.stdout, (done.returncode, done.stdout, done.stderr)
+    new = w.calls()[calls:]
+    assert not [c for c in new if c.startswith("systemctl")], new                  # not `start`, and no other manager call either
+    assert not package_mutations(new) and not [c for c in new if c.split()[0] in ("useradd", "userdel", "loginctl", "visudo", "reboot", "shutdown", "sudo")], new
+    assert (w.top / "installer.log").read_text() == installer_log, "the installer (verify-ready) was not reached"
+    assert w.objects() == before and (w.evid / "checkpoints").read_text() == cps, "nothing changed and no checkpoint was written"
+
+
+@host
+def test_s4_1_runs_the_gate_and_then_starts_the_supervisor_when_the_host_is_the_reviewed_baseline(world):
+    """The positive control for the refusals above: with no drift the same invocation reruns the gate, starts the supervisor once and returns the installer's verify-ready status."""
+    w = world(); w.release(); armed_through_s3_5(w)
+    gate_runs, calls = len((w.top / "gate.log").read_text().splitlines()), len(w.calls())
+    done = w.run("S4.1"); ok(done, "S4.1")
+    assert len((w.top / "gate.log").read_text().splitlines()) == gate_runs + 1, "S4.1 itself reran the trusted attestation"
+    new = w.calls()[calls:]
+    starts = [c for c in new if c.startswith("systemctl") and re.search(r"\bstart\b", c)]
+    assert starts == ["systemctl start freedom-blades-executor-supervisor.service"], new
+    assert "verify-ready" in (w.top / "installer.log").read_text().splitlines()[-1]
+    # the installer's own status still passes through
+    (w.top / "installer-status").write_text("12")
+    again = w.run("S4.1"); failed(again, "S4.1"); assert again.returncode == 12

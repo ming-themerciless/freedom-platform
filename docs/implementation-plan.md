@@ -2741,15 +2741,41 @@ bot 7,571 passed and 337 skipped, web 2,893 passed and 80 skipped, Foundry 171).
 configuration was an agent-sandbox user-namespace artifact, and unsandboxed the
 paths are `root:root` and `ssh oracle-test` works. Independent Codex re-review
 of the R2 return found no remaining repository or disposable-host finding;
-production journal counts, the final backup hashes
-and sizes, and Peter's decision on the 15:27 write remain open.
+at that point (2026-11-07/08) production journal counts and the final backup
+hashes and sizes were open. On 2026-11-09 Peter accepted the 15:27 pre-window
+write as a documented process deviation, selected `PermitRootLogin
+prohibit-password`, and authorized removal of obsolete `/opt/discord-bots/venv*`
+paths after unused verification. The SSH and legacy-path decisions were verified
+on `oracle-test`; applying them to production was then an attended privileged
+action, performed in the continuation described next. (Its statements about
+open production evidence and pending production actions are a dated historical
+record, superseded by that continuation.)
+
+The attended production continuation subsequently completed those root-only
+items, dependency/runtime currency, backup and journal evidence, and a clean
+31-sample/30-minute observation. During it, apt exposed an active, enabled
+`lavalink.service` under `/opt/lavalink`. OD-40 makes that prohibited residue,
+not a platform component. On 2026-11-11 Peter explicitly authorized complete
+live-host removal, which was executed and verified complete the same day. The
+maintainer removed the final stale repository-local `.env` reference on
+2026-11-11 without exposing its contents; completion evidence is in the active
+handover and production-upgrade handback.
 
 The Route 3 plan review gate is closed, but every block-F release identity
 remains `UNSET`. The old S0.0 procedure assumed Python 3.14 was absent and must
-not run. Its release-record/package procedure requires a separate redesign and
-independent review for the pre-installed Python 3.14 baseline before release
-preparation resumes. Production S1 inert provisioning, S3 arming/install and
-S4 activation remain separate later decisions. Production provisioning,
+not run (it is withdrawn). Its release-record/package procedure was redesigned
+on 2026-11-11 for the pre-installed Python 3.14 baseline (read-only attestation
+tool and runbook blocks S0.A/S0.3; an uncommitted implementation). After two
+remediated Codex review rounds, the exact reviewed tree's `oracle-test` results
+(2026-11-12; handback §13.1) are: release-record module 269 passed; full
+provisioning module as root 234 passed; bot 7,853 passed and 250 skipped; web
+2,893 passed and 80 skipped; Foundry 171 passed. This validates the
+uncommitted candidate, not production; no commit, push or production/staging
+mutation occurred. The next controlled step is publication/commit of the exact
+reviewed candidate, then a separately authorized production read-only S0.A
+attestation to populate the release identities. Production S1 inert
+provisioning, S3 arming/install and S4 activation remain separate later
+decisions. Production provisioning,
 installation and activation remain prohibited without the applicable explicit
 authority.
 

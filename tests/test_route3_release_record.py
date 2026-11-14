@@ -14,9 +14,11 @@ import io
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import textwrap
 from pathlib import Path
 
@@ -31,6 +33,13 @@ PYTHON = sys.executable
 VERSION = "3.14.4-1ubuntu0.2"
 MIRROR = "http://archive.example.test/ubuntu resolute-updates/main"
 SECURITY = "http://security.example.test/ubuntu resolute-security/main"
+
+
+@pytest.fixture(autouse=True)
+def _scratch_directory_is_not_setgid(tmp_path):
+    """A setgid scratch parent (``TMPDIR`` under a setgid directory) makes every file the tests create carry the directory's group, not the process's, so the synthetic
+    packages' recorded owner no longer matches the files and ``dpkg-deb`` refuses a setgid control directory. These tests describe files the process itself owns."""
+    tmp_path.chmod(tmp_path.stat().st_mode & ~stat.S_ISGID)
 
 
 # ---- a synthetic host ----------------------------------------------------------------------------------------------------------------
@@ -76,9 +85,12 @@ class Spec:
     files: dict
     conffiles: tuple
     scripts: dict
+    variant: str = ""       # an architecture-variant build (for example amd64v3): dpkg still records Architecture amd64
 
     def control(self) -> str:
         lines = [f"Package: {self.name}", f"Architecture: {self.arch}", f"Version: {self.version}"]
+        if self.variant:
+            lines.append(f"Architecture-Variant: {self.variant}")
         if self.source != self.name:
             lines.append(f"Source: {self.source} (1.0)")
         if self.depends:
@@ -251,6 +263,25 @@ class SyntheticHost:
         (info / f"{spec.name}.conffiles").write_text("".join(f"{c}\n" for c in spec.conffiles))
         for name, text in spec.scripts.items():
             (info / f"{spec.name}.{name}").write_text(text)
+
+    def label_installed_as(self, name: str, variant: str) -> None:
+        """What dpkg records for a variant build: the same Architecture as the plain build plus an ``Architecture-Variant`` field in the status database."""
+        path = self.admin / "status"
+        text = path.read_text()
+        anchor = f"Package: {name}\nStatus: install ok installed\nArchitecture: {self.specs[name].arch}\n"
+        assert anchor in text
+        path.write_text(text.replace(anchor, anchor + f"Architecture-Variant: {variant}\n", 1))
+        self.specs[name] = dataclasses.replace(self.specs[name], variant=variant)
+
+    def make_variant(self, name: str, variant: str = "amd64v3", rebuilt_files: bool = True) -> None:
+        """Install ``name`` as the variant build: labelled in the status database and (as a real variant is) with different bytes in its libraries; the interpreter file keeps the accepted bytes."""
+        spec = self.specs[name]
+        if rebuilt_files:
+            library = f"/usr/lib/lib{name}.so"
+            spec = dataclasses.replace(spec, files={**spec.files, library: ("file", f"{name} {spec.version} library built for {variant}\n".encode(), 0o755)})
+            self.specs[name] = spec
+            self.install(spec)
+        self.label_installed_as(name, variant)
 
     def set_interpreter(self, content: bytes) -> None:
         """A legitimate interpreter: the installed file AND the archive's package carry it."""
@@ -745,14 +776,22 @@ def test_the_sa2_tree_digest_is_the_s3_2_identity_and_refuses_unsafe_trees(tmp_p
         rr.sa2_tree_digest(empty)
 
 
-def test_the_interpreter_reference_requires_the_signed_index_digest_to_match_the_download(tmp_path):
+def build_interpreter_deb(tmp_path: Path) -> Path:
+    """A real ``python3.14-minimal`` package file whose interpreter is a known byte string, built with dpkg-deb."""
     payload = tmp_path / "payload" / "usr/bin"
     payload.mkdir(parents=True)
     (payload / "python3.14").write_bytes(b"\x7fELF packaged interpreter\n")
-    (tmp_path / "payload/DEBIAN").mkdir()
-    (tmp_path / "payload/DEBIAN/control").write_text("Package: python3.14-minimal\nVersion: 1\nArchitecture: amd64\nMaintainer: t <t@example.test>\nDescription: t\n")
+    control = tmp_path / "payload/DEBIAN"
+    control.mkdir()
+    control.chmod(0o755)
+    (control / "control").write_text("Package: python3.14-minimal\nVersion: 1\nArchitecture: amd64\nMaintainer: t <t@example.test>\nDescription: t\n")
     deb = tmp_path / "python3.14-minimal_1_amd64.deb"
     subprocess.run(["dpkg-deb", "--build", "--root-owner-group", str(tmp_path / "payload"), str(deb)], check=True, capture_output=True)
+    return deb
+
+
+def test_the_interpreter_reference_requires_the_signed_index_digest_to_match_the_download(tmp_path):
+    deb = build_interpreter_deb(tmp_path)
     want = hashlib.sha256(deb.read_bytes()).hexdigest()
 
     def runner(index_digest):
@@ -1026,6 +1065,101 @@ def test_the_unmodified_host_equals_its_signed_archive_reference(host):
     assert all(m.files > 0 and m.deb_sha256 == hashlib.sha256(make_deb(host.specs[m.name], "none")).hexdigest() for m in reference.members), "each member carries the signed-index digest of its package file"
 
 
+# ---- architecture variants: the installed build is the reviewed build, never "plain amd64" by assumption ------------------------------------
+# On oracle-test (2026-11-13, dpkg-query/apt-cache): libc6 and python3.14-minimal are installed as Architecture amd64, Architecture-Variant amd64v3, with Filename ..._amd64v3.deb.
+
+def by_name(reference: rr.Reference) -> dict[str, rr.RefMember]:
+    return {m.name: m for m in reference.members}
+
+
+def test_a_baseline_host_running_amd64v3_builds_attests_and_equals_the_reference_of_those_builds(host, tmp_path):
+    plain = host.archive()
+    for name in ("libc6", "python3.14-minimal"):
+        host.make_variant(name)
+    variant = host.archive()
+    record = rr.attest(host.host())
+    text = record.render()
+    assert {m.name: m.arch for m in record.members}["libc6"] == "amd64" and "amd64v3" not in text, "dpkg's architecture is plain amd64: the baseline record format needs no variant column"
+    reference = rr.build_reference(rr.Baseline.parse(text), text, tmp_path / "variant", variant)
+    assert payload_drift(host, reference) == [], "the reference generated from the variant builds equals the host that runs them"
+    assert rr.reference_findings(reference, record, text) == []
+    wrong = rr.build_reference(rr.Baseline.parse(text), text, tmp_path / "plain", plain)
+    for name in ("libc6", "python3.14-minimal"):
+        assert by_name(reference)[name].deb_sha256 != by_name(wrong)[name].deb_sha256, "another package file"
+        assert by_name(reference)[name].meta_sha256 != by_name(wrong)[name].meta_sha256, "the variant label is bound in the metadata digest"
+    assert by_name(reference)["libc6"].payload_sha256 != by_name(wrong)["libc6"].payload_sha256, "and the bytes differ"
+    assert by_name(reference)["zlib1g"] == by_name(wrong)["zlib1g"], "a plain package of the same closure is untouched"
+    assert "f\tArchitecture-Variant\tamd64v3" in rr.deb_rows(rr.parse_deb(variant.debs["libc6"]))[0]
+    assert not any("Architecture-Variant" in row for row in rr.deb_rows(rr.parse_deb(plain.debs["libc6"]))[0]), "no row for a plain build: its digests are those of every earlier reference"
+
+
+def test_the_payload_rows_of_the_installed_variant_and_of_its_package_file_agree_and_show_the_label(host, tmp_path):
+    host.make_variant("libc6")
+    deb = tmp_path / "libc6.deb"
+    deb.write_bytes(make_deb(host.specs["libc6"]))
+    from_deb = host.cli("payload-rows", "--package", "libc6", "--deb", str(deb), *host.flags())
+    installed = host.cli("payload-rows", "--package", "libc6", *host.flags())
+    assert from_deb.returncode == 0 and from_deb.stdout == installed.stdout
+    assert "Architecture-Variant\tamd64v3" in installed.stdout, "the diagnostic shows which build a host runs, so the reference can be generated for the same one"
+
+
+@pytest.mark.parametrize("installed_is_variant", [True, False], ids=["installed-variant-vs-plain-reference", "installed-plain-vs-variant-reference"])
+def test_a_reference_of_the_other_build_is_a_safe_mismatch_in_both_directions(host, tmp_path, installed_is_variant):
+    plain = host.archive()
+    other = SyntheticHost(tmp_path / "other")
+    other.make_variant("libc6")
+    variant = other.archive()
+    if installed_is_variant:
+        host.make_variant("libc6")
+    record = rr.attest(host.host())
+    text = record.render()
+    reference = rr.build_reference(rr.Baseline.parse(text), text, tmp_path / "wrong", plain if installed_is_variant else variant)
+    findings = payload_drift(host, reference)
+    assert any("package metadata of libc6=" in f for f in findings) and any("installed files of libc6=" in f for f in findings)
+    assert all("libc6=" in f for f in findings), "nothing else of the closure is disturbed"
+    record_file, wrong_file, right_file = tmp_path / "baseline.record", tmp_path / "wrong.reference", tmp_path / "right.reference"
+    record_file.write_text(text)
+    wrong_file.write_text(reference.render())
+    bad = host.cli("verify-host", "--record", str(record_file), "--reference", str(wrong_file), *host.flags())
+    assert bad.returncode == 1 and "payload drift" in bad.stdout
+    right = rr.build_reference(rr.Baseline.parse(text), text, tmp_path / "right", host.archive())
+    right_file.write_text(right.render())
+    good = host.cli("verify-host", "--record", str(record_file), "--reference", str(right_file), *host.flags())
+    assert good.returncode == 0, good.stdout + good.stderr
+
+
+@pytest.mark.parametrize("installed_label", [True, False], ids=["label-only-on-installed", "label-only-on-archive"])
+def test_a_variant_label_alone_is_a_metadata_difference_even_with_identical_files(host, tmp_path, installed_label):
+    plain = host.archive()
+    if installed_label:
+        host.label_installed_as("libc6", "amd64v3")
+        archive = plain
+    else:
+        archive = rr.Archive.__new__(FakeArchive)
+        archive.__init__({**plain.debs, "libc6": make_deb(dataclasses.replace(host.specs["libc6"], variant="amd64v3"), "none")})
+    record = rr.attest(host.host())
+    text = record.render()
+    findings = payload_drift(host, rr.build_reference(rr.Baseline.parse(text), text, tmp_path / "ref", archive))
+    assert len(findings) == 1 and "package metadata of libc6=" in findings[0], findings
+
+
+def test_the_interpreter_reference_takes_the_selected_variant_build_and_never_chooses_between_two(tmp_path):
+    deb = build_interpreter_deb(tmp_path)
+    want = hashlib.sha256(deb.read_bytes()).hexdigest()
+    stanza = f"Package: python3.14-minimal\nVersion: 1\nArchitecture: amd64\nArchitecture-Variant: amd64v3\nFilename: pool/python3.14-minimal_1_amd64v3.deb\nSHA256: {want}\n"
+
+    def runner(shown):
+        def run(argv, cwd):
+            if argv[1] == "show":
+                return 0, shown
+            shutil.copy(deb, cwd / "python3.14-minimal_1_amd64v3.deb")
+            return 0, ""
+        return run
+    assert rr.reference_interpreter("1", tmp_path / "w1", runner(stanza)) == hashlib.sha256(b"\x7fELF packaged interpreter\n").hexdigest()
+    with pytest.raises(rr.RecordError, match="does not state exactly one SHA-256"):
+        rr.reference_interpreter("1", tmp_path / "w2", runner(stanza + "\n" + stanza.replace(want, "b" * 64).replace("Architecture-Variant: amd64v3\n", "")))
+
+
 def mutate_library(host):
     (host.sys / "usr/lib/liblibc6.so").write_bytes(b"malicious shared object\n")
 
@@ -1207,6 +1341,455 @@ def test_the_default_archive_reads_the_signed_index_and_downloads_exactly_one_pa
     broken = lambda argv, cwd: (0, "Package: libc6\nVersion: 2.43-2ubuntu1\nArchitecture: amd64\nSHA256: " + "1" * 64 + "\n\nPackage: libc6\nVersion: 2.43-2ubuntu1\nArchitecture: amd64\nSHA256: " + "2" * 64 + "\n")
     with pytest.raises(rr.RecordError, match="does not state exactly one SHA-256"):
         rr.Archive(broken).index("libc6", "2.43-2ubuntu1", "amd64", tmp_path)
+
+
+def test_an_isolated_apt_configuration_reaches_every_archive_command_and_is_validated(host, tmp_path):
+    record = rr.attest(host.host())
+    text = record.render()
+    debs = {n: make_deb(s) for n, s in host.specs.items()}
+    config = tmp_path / "apt.conf"
+    config.write_text('Dir::State "/var/tmp/x/state";\nAPT::Architecture-Variants "";\n')
+    config.chmod(0o600)
+    calls = []
+
+    def run(argv, cwd):
+        calls.append(list(argv))
+        name = argv[2].split("=")[0] if argv[1] in ("show", "download") else argv[2]
+        spec = host.specs[name]
+        if argv[1] == "show":
+            return 0, f"Package: {name}\nVersion: {spec.version}\nArchitecture: {spec.arch}\nSHA256: {hashlib.sha256(debs[name]).hexdigest()}\n"
+        if argv[1] == "madison":
+            return 0, f" {name} | {spec.version} | {MIRROR} amd64 Packages\n"
+        (cwd / f"{name}_{spec.version.replace(':', '%3a')}_{spec.arch}.deb").write_bytes(debs[name])
+        return 0, ""
+    rr.build_reference(record, text, tmp_path / "w", rr.Archive(run, config))
+    assert calls and all(c[-2:] == ["-c", str(config)] for c in calls), "every apt command carries the isolated configuration, after its positional arguments"
+    assert {c[1] for c in calls} == {"show", "madison", "download"}
+    calls.clear()
+    rr.build_reference(record, text, tmp_path / "w2", rr.Archive(run))
+    assert calls and not any("-c" in c for c in calls), "without a configuration the argument vectors are unchanged"
+
+    with pytest.raises(rr.RecordError, match="absolute"):
+        rr.Archive(run, Path("apt.conf"))
+    with pytest.raises(rr.RecordError, match="cannot be read"):
+        rr.Archive(run, tmp_path / "missing.conf")
+    link = tmp_path / "link.conf"
+    link.symlink_to(config)
+    with pytest.raises(rr.RecordError, match="regular file"):
+        rr.Archive(run, link)
+    config.chmod(0o666)
+    with pytest.raises(rr.RecordError, match="not writable by group or others"):
+        rr.Archive(run, config)
+    with pytest.raises(rr.RecordError, match="regular file"):
+        rr.Archive(run, tmp_path)
+
+
+def test_the_interpreter_reference_passes_the_apt_configuration(tmp_path):
+    deb = build_interpreter_deb(tmp_path)
+    want = hashlib.sha256(deb.read_bytes()).hexdigest()
+    config = tmp_path / "apt.conf"
+    config.write_text('APT::Architecture-Variants "";\n')
+    config.chmod(0o600)
+    calls = []
+
+    def runner(filename):
+        def run(argv, cwd):
+            calls.append(list(argv))
+            if argv[1] == "show":
+                return 0, f"Package: python3.14-minimal\nSHA256: {want}\n"
+            shutil.copy(deb, cwd / filename)
+            return 0, ""
+        return run
+    digest = rr.reference_interpreter("1", tmp_path / "w1", runner(deb.name), config)
+    assert digest == hashlib.sha256(b"\x7fELF packaged interpreter\n").hexdigest()
+    assert [c[-2:] for c in calls] == [["-c", str(config)]] * 2
+    with pytest.raises(rr.RecordError, match="absolute"):
+        rr.reference_interpreter("1", tmp_path / "w3", runner(deb.name), Path("rel.conf"))
+
+
+def test_the_command_line_offers_the_apt_configuration_only_to_the_reference_commands(tmp_path, capsys):
+    for command in ("reference-payload", "reference-interpreter"):
+        with pytest.raises(SystemExit):
+            rr.main([command, "--help"])
+        assert "--apt-config" in capsys.readouterr().out
+    assert rr.main(["reference-interpreter", "--version", "1", "--workdir", str(tmp_path / "w"), "--apt-config", "relative.conf"]) == 1
+    assert "absolute" in capsys.readouterr().out
+
+
+def test_the_command_line_refuses_a_bad_apt_configuration_before_it_creates_anything(host, tmp_path, capsys):
+    text, _ = host.reference()
+    record = tmp_path / "baseline.record"
+    record.write_text(text)
+    bad = tmp_path / "loose.conf"
+    bad.write_text("")
+    bad.chmod(0o666)
+    for config, word in (("relative.conf", "absolute"), (str(tmp_path / "missing.conf"), "cannot be read"), (str(bad), "not writable by group or others")):
+        work = tmp_path / f"w-{word.split()[0]}"
+        assert rr.main(["reference-payload", "--record", str(record), "--workdir", str(work), "--apt-config", config]) == 1
+        assert word in capsys.readouterr().out and not work.exists()
+
+
+def index_stanza(name="libc6", version="2.43-2ubuntu1", arch="amd64", sha="1" * 64, **extra):
+    fields = {"Package": name, "Version": version, "Architecture": arch, **extra, "SHA256": sha}
+    return "".join(f"{k}: {v}\n" for k, v in fields.items())
+
+
+def test_a_variant_stanza_that_dpkg_still_calls_amd64_is_an_ordinary_index_entry(tmp_path):
+    """Real apt 3.2 prints one stanza per version, the one ``APT::Architecture-Variants`` selects: ``Architecture: amd64`` plus ``Architecture-Variant: amd64v3``. The tool takes its digest like any other; it neither refuses nor chooses it."""
+    shown = index_stanza(sha="2" * 64, **{"Architecture-Variant": "amd64v3"})
+    calls = []
+
+    def run(argv, cwd):
+        calls.append(argv[1])
+        return (0, shown) if argv[1] == "show" else (0, f" libc6 | 2.43-2ubuntu1 | {MIRROR} amd64 Packages\n")
+    assert rr.Archive(run).index("libc6", "2.43-2ubuntu1", "amd64", tmp_path) == ("2" * 64, (MIRROR,))
+    assert calls == ["show", "madison"]
+
+
+def test_two_different_builds_in_the_index_are_never_chosen_between(tmp_path):
+    """Should an index ever list the plain and the variant build of one version side by side, the tool does not pick one: the existing exactly-one-SHA-256 rule refuses."""
+    shown = index_stanza(sha="1" * 64) + "\n" + index_stanza(sha="2" * 64, **{"Architecture-Variant": "amd64v3"})
+    with pytest.raises(rr.RecordError, match="does not state exactly one SHA-256"):
+        rr.Archive(lambda argv, cwd: (0, shown)).index("libc6", "2.43-2ubuntu1", "amd64", tmp_path)
+
+
+def test_another_architecture_of_the_same_version_is_not_a_variant(tmp_path):
+    shown = index_stanza(arch="i386", sha="3" * 64) + "\n" + index_stanza(arch="riscv64", sha="6" * 64) + "\n" + index_stanza(sha="1" * 64)
+
+    def run(argv, cwd):
+        return (0, shown) if argv[1] == "show" else (0, f" libc6 | 2.43-2ubuntu1 | {MIRROR} amd64 Packages\n")
+    assert rr.Archive(run).index("libc6", "2.43-2ubuntu1", "amd64", tmp_path) == ("1" * 64, (MIRROR,))
+
+
+def test_a_variant_stanza_for_a_different_package_or_version_is_not_this_members_problem(tmp_path):
+    shown = index_stanza(name="other", arch="amd64v3", sha="4" * 64) + "\n" + index_stanza(version="9", arch="amd64v3", sha="5" * 64) + "\n" + index_stanza(sha="1" * 64)
+
+    def run(argv, cwd):
+        return (0, shown) if argv[1] == "show" else (0, f" libc6 | 2.43-2ubuntu1 | {MIRROR} amd64 Packages\n")
+    assert rr.Archive(run).index("libc6", "2.43-2ubuntu1", "amd64", tmp_path)[0] == "1" * 64
+
+
+def test_an_empty_or_failed_index_is_diagnosed_as_a_missing_source_not_a_digest_problem(tmp_path):
+    for status, shown in ((100, ""), (0, ""), (0, "\n"), (100, index_stanza())):
+        with pytest.raises(rr.RecordError, match=r"shows nothing for libc6=2.43-2ubuntu1 .*--apt-config"):
+            rr.Archive(lambda argv, cwd, r=(status, shown): r).index("libc6", "2.43-2ubuntu1", "amd64", tmp_path)
+    with pytest.raises(rr.RecordError, match=r"shows nothing for python3.14-minimal=1 .*--apt-config"):
+        rr.reference_interpreter("1", tmp_path / "w", lambda argv, cwd: (100, ""))
+
+
+def test_an_unreviewed_origin_points_at_the_isolated_configuration(host, tmp_path):
+    record = rr.attest(host.host())
+    with pytest.raises(rr.RecordError, match=r"none of which the baseline record reviewed \(--apt-config selects the reviewed archive\)"):
+        rr.build_reference(record, record.render(), tmp_path / "w", host.archive(origins=("http://regional.example.test/ubuntu resolute-updates/main",)))
+
+
+def test_the_apt_configuration_must_sit_in_a_directory_nobody_else_can_replace_entries_in(tmp_path):
+    directory = tmp_path / "d"
+    directory.mkdir()
+    directory.chmod(0o755)
+    config = directory / "apt.conf"
+    config.write_text('APT::Architecture-Variants "";\n')
+    config.chmod(0o600)
+    assert rr.apt_config_args(config) == ["-c", str(config)]
+    directory.chmod(0o777)
+    with pytest.raises(rr.RecordError, match="directory of the apt configuration"):
+        rr.apt_config_args(config)
+    directory.chmod(0o1777)
+    assert rr.apt_config_args(config) == ["-c", str(config)], "a sticky directory only lets the owner replace the file"
+    directory.chmod(0o770)
+    with pytest.raises(rr.RecordError, match="directory of the apt configuration"):
+        rr.apt_config_args(config)
+    with pytest.raises(rr.RecordError, match="cannot be read"):
+        rr.apt_config_args(tmp_path / "nowhere" / "apt.conf")
+
+
+@pytest.mark.parametrize("switch", ["Acquire::AllowInsecureRepositories", "Acquire::AllowDowngradeToInsecureRepositories", "Acquire::AllowWeakRepositories", "APT::Get::AllowUnauthenticated"])
+@pytest.mark.parametrize("value", ["true", "1", "yes", "On"])
+def test_an_apt_configuration_that_enables_an_insecure_switch_is_refused(switch, value):
+    assert rr.insecure_apt_findings({switch: value}) == [f"{switch} is enabled"]
+    assert rr.insecure_apt_findings({switch: "false"}) == rr.insecure_apt_findings({switch: "0"}) == rr.insecure_apt_findings({}) == []
+
+
+@pytest.mark.parametrize("line", [
+    "deb [trusted=yes arch=amd64] http://a.example.test/ubuntu x main",
+    "deb [arch=amd64 allow-insecure=yes] http://a.example.test/ubuntu x main",
+    "Types: deb\nURIs: http://a.example.test/ubuntu\nSuites: x\nComponents: main\nTrusted: yes\n",
+    "Types: deb\nURIs: http://a.example.test/ubuntu\nSuites: x\nComponents: main\nAllow-Weak: true\n",
+])
+def test_sources_that_skip_signature_verification_are_refused_wherever_the_configuration_puts_them(tmp_path, line):
+    etc = tmp_path / "etc"
+    (etc / "parts").mkdir(parents=True)
+    (etc / "sources.list").write_text("")
+    for where in (etc / "sources.list", etc / "parts" / "extra.sources", etc / "parts" / "extra.list"):
+        where.write_text(line + "\n")
+        found = rr.insecure_apt_findings({"Dir::Etc::sourcelist": str(etc / "sources.list"), "Dir::Etc::sourceparts": str(etc / "parts")})
+        assert found and str(where) in found[0], (where, found)
+        where.write_text("")
+    ok = "deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg arch=amd64] http://a.example.test/ubuntu x main\n"
+    (etc / "sources.list").write_text(ok)
+    assert rr.insecure_apt_findings({"Dir::Etc::sourcelist": str(etc / "sources.list"), "Dir::Etc::sourceparts": str(etc / "parts")}) == []
+
+
+def test_relative_apt_source_locations_resolve_under_dir_and_dir_etc(tmp_path):
+    (tmp_path / "e").mkdir()
+    (tmp_path / "e/s.list").write_text("deb [trusted=yes] http://a.example.test/ubuntu x main\n")
+    assert rr.insecure_apt_findings({"Dir": str(tmp_path), "Dir::Etc": "e", "Dir::Etc::sourcelist": "s.list", "Dir::Etc::sourceparts": "none.d"})
+    assert rr.insecure_apt_findings({"Dir": "/", "Dir::Etc": str(tmp_path / "e"), "Dir::Etc::sourcelist": "s.list", "Dir::Etc::sourceparts": "none.d"})
+    assert rr.insecure_apt_findings({"Dir": str(tmp_path), "Dir::Etc": "e", "Dir::Etc::sourcelist": "other.list", "Dir::Etc::sourceparts": "none.d"}) == []
+
+
+def test_the_effective_apt_configuration_is_what_apt_reports_and_failure_is_refused():
+    dump = 'Acquire::AllowInsecureRepositories "1";\nDir::Etc::sourcelist "/x/sources.list";\nAPT::Architecture-Variants "";\n'
+    seen = []
+    effective = rr.effective_apt_configuration(Path("/c.conf"), lambda argv: (seen.append(argv), (0, dump))[1])
+    assert seen == [["/usr/bin/apt-config", "dump", "-c", "/c.conf"]]
+    assert effective == {"Acquire::AllowInsecureRepositories": "1", "Dir::Etc::sourcelist": "/x/sources.list", "APT::Architecture-Variants": ""}
+    with pytest.raises(rr.RecordError, match="could not read"):
+        rr.effective_apt_configuration(Path("/c.conf"), lambda argv: (100, ""))
+    listed = rr.effective_apt_configuration(Path("/c.conf"), lambda argv: (0, 'APT::Architectures "";\nAPT::Architectures:: "amd64";\nAPT::Architectures:: "i386";\nAPT::Architecture-Variants:: "amd64v3";\n'))
+    assert listed == {"APT::Architectures": "", "APT::Architectures::": "amd64,i386", "APT::Architecture-Variants::": "amd64v3"}, "a list option is dumped once per item, and every item is kept"
+
+
+def write_sources(tmp_path: Path, one_line: str = "", parts: dict | None = None) -> dict:
+    etc = tmp_path / "etc"
+    (etc / "parts").mkdir(parents=True, exist_ok=True)
+    (etc / "sources.list").write_text(one_line)
+    for name, text in (parts or {}).items():
+        (etc / "parts" / name).write_text(text)
+    return {"Dir::Etc::sourcelist": str(etc / "sources.list"), "Dir::Etc::sourceparts": str(etc / "parts")}
+
+
+K = "signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg"
+
+
+@pytest.mark.parametrize("variants", [{"APT::Architecture-Variants": "amd64v3"}, {"APT::Architecture-Variants::": "amd64v3"}, {"APT::Architecture-Variants": "", "APT::Architecture-Variants::": "amd64v2,amd64v3"}, {"APT::Architecture-Variants": "amd64v3, amd64v2"}])
+@pytest.mark.parametrize("source", [
+    f"deb [arch=amd64 {K}] http://a.example.test/ubuntu x main\n",
+    f"deb [{K} arch=amd64] http://a.example.test/ubuntu x main\n",
+    f"deb [{K} ARCH=amd64,amd64v3] http://a.example.test/ubuntu x main\n",
+    f"deb [{K} arch-=i386] http://a.example.test/ubuntu x main\n",
+    f"deb [{K} arch+=amd64v3] http://a.example.test/ubuntu x main\n",
+    f"  deb-src [{K} arch = amd64] http://a.example.test/ubuntu x main\n",
+    "Types: deb\nURIs: http://a.example.test/ubuntu\nSuites: x\nComponents: main\nArchitectures: amd64\n",
+    "Types: deb\nURIs: http://a.example.test/ubuntu\nSuites: x\nComponents: main\narchitectures-remove: i386\n",
+])
+def test_a_source_architecture_filter_is_refused_while_architecture_variants_are_configured(tmp_path, source, variants):
+    for where in ("sources.list", "parts/extra.list", "parts/extra.sources"):
+        etc = write_sources(tmp_path)
+        (tmp_path / "etc" / where).write_text(source)
+        found = rr.architecture_filter_findings({**etc, **variants})
+        assert len(found) == 1 and str(tmp_path / "etc" / where) in found[0] and "remove the filter from the source" in found[0], (where, found)
+        assert rr.architecture_filter_findings(etc) == [] and rr.architecture_filter_findings({**etc, "APT::Architecture-Variants": ""}) == [], "with no variant configured the filter is harmless"
+        (tmp_path / "etc" / where).write_text("")
+
+
+def test_sources_without_an_architecture_filter_pass_with_architecture_variants_configured(tmp_path):
+    variants = {"APT::Architecture-Variants": "amd64v3"}
+    etc = write_sources(tmp_path, f"# deb [arch=amd64 {K}] http://commented.example.test/ubuntu x main\ndeb [{K}] http://a.example.test/ubuntu x main\n"
+                        f"deb [{K} lang=none] http://b.example.test/ubuntu x main\n",
+                        {"one.sources": "Types: deb\nURIs: http://a.example.test/ubuntu\nSuites: x\nComponents: main\nSigned-By: /k.gpg\n# Architectures: amd64\n",
+                         "empty.sources": "Types: deb\nURIs: http://a.example.test/ubuntu\nSuites: x\nComponents: main\nArchitectures:\n", "note.txt": "deb [arch=amd64] http://ignored.example.test/ubuntu x main\n"})
+    assert rr.architecture_filter_findings({**etc, **variants}) == []
+    assert rr.architecture_filter_findings({"Dir::Etc::sourcelist": str(tmp_path / "absent.list"), "Dir::Etc::sourceparts": str(tmp_path / "absent.d"), **variants}) == []
+
+
+def test_the_architecture_filter_is_refused_before_apt_is_asked_anything(tmp_path):
+    config = tmp_path / "apt.conf"
+    sources = tmp_path / "sources.list"
+    sources.write_text(f"deb [{K} arch=amd64] http://a.example.test/ubuntu x main\n")
+    config.write_text("")
+    config.chmod(0o600)
+    dump = f'Dir::Etc::sourcelist "{sources}";\nDir::Etc::sourceparts "{tmp_path / "none.d"}";\nAPT::Architecture-Variants "amd64v3";\n'
+    calls = []
+    real = rr.effective_apt_configuration
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(rr, "effective_apt_configuration", lambda path, run=None: real(path, lambda argv: (0, dump)))
+        with pytest.raises(rr.RecordError, match="cannot select the architecture variant it names"):
+            rr.Archive(lambda argv, cwd: (calls.append(argv), (0, ""))[1], config)
+        with pytest.raises(rr.RecordError, match="cannot select the architecture variant it names"):
+            rr.reference_interpreter("1", tmp_path / "w", lambda argv, cwd: (calls.append(argv), (0, ""))[1], config)
+        sources.write_text(f"deb [{K}] http://a.example.test/ubuntu x main\n")
+        assert rr.Archive(lambda argv, cwd: (0, ""), config) is not None
+    assert calls == [], "no apt command ran"
+
+
+@pytest.mark.skipif(not Path("/usr/bin/apt-config").exists(), reason="needs the real apt-config")
+def test_the_real_apt_config_refuses_an_unauthenticated_configuration_and_a_broken_one(tmp_path):
+    directory = tmp_path / "c"
+    directory.mkdir(mode=0o700)
+    directory.chmod(0o700)
+    for text, message in (('Acquire::AllowInsecureRepositories "true";\n', "Acquire::AllowInsecureRepositories is enabled"),
+                          ('APT::Get::AllowUnauthenticated "yes";\n', "APT::Get::AllowUnauthenticated is enabled"),
+                          ("this is not apt configuration {{{\n", "could not read the apt configuration")):
+        config = directory / "apt.conf"
+        config.write_text(text)
+        config.chmod(0o600)
+        with pytest.raises(rr.RecordError, match=message):
+            rr.apt_config_args(config)
+        config.unlink()
+    config.write_text('APT::Architecture-Variants "";\n')
+    config.chmod(0o600)
+    assert rr.apt_config_args(config) == ["-c", str(config)]
+
+
+REAL_APT_TOOLS = ("/usr/bin/apt-cache", "/usr/bin/apt-get", "/usr/bin/apt-config", "/usr/bin/dpkg-deb", "/usr/bin/gpg")
+
+
+class LoopbackArchive:
+    """A throwaway signed repository served over loopback, laid out like Ubuntu's for an architecture variant: one version of one package published as two builds in **two separate indexes**, ``main/binary-amd64/Packages``
+    (plain; ``Filename ..._amd64.deb``) and ``main/binary-amd64v3/Packages`` (``Architecture: amd64`` plus ``Architecture-Variant: amd64v3``; ``Filename ..._amd64v3.deb``), each listed with its digest in the signed ``InRelease``.
+    ``requested`` records every path apt asked for, so a test can tell which index a configuration actually fetched."""
+
+    def __init__(self, work: Path, keyring: Path, url: str, debs: dict[str, str]) -> None:
+        self.work, self.keyring, self.url, self.debs, self.requested = work, keyring, url, debs, []
+
+
+@pytest.fixture
+def loopback_archive(tmp_path):
+    import functools
+    import http.server
+    import threading
+
+    if not all(Path(p).exists() for p in REAL_APT_TOOLS):
+        pytest.skip("needs the real apt tools and gpg")
+    work = tmp_path / "repo"
+    payload = work / "payload"
+    (payload / "DEBIAN").mkdir(parents=True)
+    (payload / "DEBIAN").chmod(0o755)
+    (payload / "usr/share").mkdir(parents=True)
+    pool = work / "pool"
+    pool.mkdir()
+    debs, indexes = {}, {}
+    for build, extra, filename in (("plain", "", "route3-e2e_1.0_amd64.deb"), ("amd64v3", "Architecture-Variant: amd64v3\n", "route3-e2e_1.0_amd64v3.deb")):
+        # one version, two builds: dpkg's Architecture is amd64 for both, the variant build carries the label and different bytes (as the real archive does)
+        (payload / "DEBIAN/control").write_text(f"Package: route3-e2e\nVersion: 1.0\nArchitecture: amd64\n{extra}Maintainer: t <t@example.test>\nDescription: t\n")
+        (payload / "usr/share/e2e").write_text(f"e2e {build}\n")
+        deb = pool / filename
+        subprocess.run(["dpkg-deb", "--build", "--root-owner-group", str(payload), str(deb)], check=True, capture_output=True)
+        debs[build] = hashlib.sha256(deb.read_bytes()).hexdigest()
+        indexes["binary-amd64" if build == "plain" else "binary-amd64v3"] = (
+            f"Package: route3-e2e\nVersion: 1.0\nArchitecture: amd64\n{extra}Maintainer: t <t@example.test>\nFilename: pool/{deb.name}\nSize: {deb.stat().st_size}\nSHA256: {debs[build]}\nDescription: t\n")
+    release_hashes = []
+    for directory, packages in indexes.items():
+        (work / "dists/test/main" / directory).mkdir(parents=True)
+        (work / "dists/test/main" / directory / "Packages").write_text(packages)
+        release_hashes.append(f" {hashlib.sha256(packages.encode()).hexdigest()} {len(packages)} main/{directory}/Packages\n")
+    release = f"Origin: e2e\nSuite: test\nCodename: test\nArchitectures: amd64 amd64v3\nComponents: main\nDate: Thu, 12 Nov 2026 00:00:00 UTC\nSHA256:\n{''.join(release_hashes)}"
+    (work / "dists/test/Release").write_text(release)
+    gnupg = Path(tempfile.mkdtemp(prefix="r3g"))      # short, unlike pytest's directories: gpg-agent's socket path is limited to about 100 bytes
+    if len(str(gnupg)) > 80:
+        shutil.rmtree(gnupg, ignore_errors=True)
+        pytest.skip("the temporary directory path is too long for a gpg-agent socket")
+    gpg_env = {"PATH": "/usr/bin:/bin", "GNUPGHOME": str(gnupg), "LC_ALL": "C"}
+    gpg = ["gpg", "--batch", "--yes", "--pinentry-mode", "loopback", "--passphrase", ""]
+    try:      # a throwaway key generated here and discarded with the test: apt must verify the index signature like the real archive's
+        subprocess.run([*gpg, "--quick-gen-key", "route3 e2e <t@example.test>", "ed25519", "sign", "never"], check=True, capture_output=True, env=gpg_env, timeout=120)
+        subprocess.run([*gpg, "--clearsign", "-o", str(work / "dists/test/InRelease"), str(work / "dists/test/Release")], check=True, capture_output=True, env=gpg_env, timeout=120)
+        keyring = tmp_path / "e2e-keyring.gpg"
+        keyring.write_bytes(subprocess.run([*gpg, "--export"], check=True, capture_output=True, env=gpg_env, timeout=120).stdout)
+    finally:
+        subprocess.run(["gpgconf", "--kill", "gpg-agent"], capture_output=True, env=gpg_env, timeout=60, check=False)
+        shutil.rmtree(gnupg, ignore_errors=True)
+    requested: list[str] = []
+
+    class Recording(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args, **kwargs) -> None:
+            pass
+
+        def do_GET(self) -> None:
+            requested.append(self.path)
+            super().do_GET()
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Recording, directory=str(work)))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    archive = LoopbackArchive(work, keyring, f"http://127.0.0.1:{server.server_port}", debs)
+    archive.requested = requested
+    try:
+        yield archive
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def isolated_apt(tmp_path: Path, archive: LoopbackArchive, name: str, variants: str, arch_filter: str = "") -> tuple[Path, Path]:
+    """An isolated apt state for the loopback archive, refreshed with the real ``apt-get update``. ``arch_filter`` is the source's own ``arch=`` option, spelled exactly as an operator would write it, or empty for none."""
+    apt = tmp_path / name
+    apt.mkdir(mode=0o700)
+    apt.chmod(0o700)
+    for sub in ("state/lists/partial", "cache/archives/partial", "etc/sources.list.d", "scratch"):
+        (apt / sub).mkdir(parents=True)
+    (apt / "status").write_text("")
+    options = f"signed-by={archive.keyring}" + (f" arch={arch_filter}" if arch_filter else "")
+    (apt / "etc/sources.list").write_text(f"deb [{options}] {archive.url} test main\n")
+    config = apt / "apt.conf"
+    config.write_text(
+        f'Dir::Etc::sourcelist "{apt}/etc/sources.list";\nDir::Etc::sourceparts "{apt}/etc/sources.list.d";\nDir::State "{apt}/state";\n'
+        f'Dir::State::status "{apt}/status";\nDir::Cache "{apt}/cache";\nAPT::Architecture "amd64";\nAPT::Architectures "amd64";\nAPT::Architecture-Variants "{variants}";\n'
+        'Acquire::http::Proxy "DIRECT";\n')
+    config.chmod(0o600)
+    updated = subprocess.run(["/usr/bin/apt-get", "update", "-c", str(config)], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "TMPDIR": str(apt / "scratch")}, stdin=subprocess.DEVNULL, timeout=120)      # apt's gpgv method writes temporary files
+    assert updated.returncode == 0, updated.stdout + updated.stderr
+    return apt, config
+
+
+def raw_apt_stanza(apt: Path, config: Path) -> str:
+    """What apt itself shows for the package under that configuration, bypassing the tool (and so its refusals)."""
+    done = subprocess.run(["/usr/bin/apt-cache", "show", "route3-e2e=1.0", "-c", str(config)], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "TMPDIR": str(apt / "scratch")}, stdin=subprocess.DEVNULL, timeout=60)
+    assert done.returncode == 0, done.stdout + done.stderr
+    return done.stdout
+
+
+def test_the_real_apt_reads_only_the_isolated_archive_and_leaves_the_system_configuration_alone(tmp_path, loopback_archive):
+    """Real ``apt-cache``/``apt-get`` against a loopback repository: the isolated configuration, and nothing else, reaches the package."""
+    debs, url = loopback_archive.debs, loopback_archive.url
+    system_lists = sorted(p.name for p in Path("/var/lib/apt/lists").glob("*")) if Path("/var/lib/apt/lists").is_dir() else []
+    apt, config = isolated_apt(tmp_path, loopback_archive, "apt", "")
+    archive = rr.Archive(apt_config=config)
+    stated, origins = archive.index("route3-e2e", "1.0", "amd64", apt / "scratch")
+    assert stated == debs["plain"] and origins == (f"{url} test/main",), "the configuration that names no variant selects the plain build"
+    fetched = archive.fetch("route3-e2e", "1.0", apt / "scratch")
+    assert rr.sha256_file(fetched) == debs["plain"]
+    assert not any("Architecture-Variant" in row for row in rr.deb_rows(rr.parse_deb(fetched.read_bytes()))[0])
+
+    # the same repository, a configuration that selects the variant the baseline host runs and no source arch filter: the variant build is indexed, downloaded and bound with its label
+    v3_apt, v3_config = isolated_apt(tmp_path, loopback_archive, "apt-v3", "amd64v3")
+    v3_archive = rr.Archive(apt_config=v3_config)
+    stated, origins = v3_archive.index("route3-e2e", "1.0", "amd64", v3_apt / "scratch")
+    assert stated == debs["amd64v3"] != debs["plain"] and origins == (f"{url} test/main",)
+    v3_fetched = v3_archive.fetch("route3-e2e", "1.0", v3_apt / "scratch")
+    assert v3_fetched.name.endswith("_amd64v3.deb") and rr.sha256_file(v3_fetched) == debs["amd64v3"]
+    v3_rows = rr.deb_rows(rr.parse_deb(v3_fetched.read_bytes()))
+    assert "f\tArchitecture-Variant\tamd64v3" in v3_rows[0] and v3_rows != rr.deb_rows(rr.parse_deb(fetched.read_bytes()))
+
+    with pytest.raises(rr.RecordError, match="shows nothing for route3-e2e=1.0 .*--apt-config"):
+        rr.Archive().index("route3-e2e", "1.0", "amd64", tmp_path)
+    (apt / "etc/sources.list").write_text(f"deb [trusted=yes] {url} test main\n")
+    with pytest.raises(rr.RecordError, match=r"signed-index trust anchor.*trusted=yes"):
+        rr.Archive(apt_config=config)
+    assert sorted(p.name for p in Path("/var/lib/apt/lists").glob("*")) == system_lists if Path("/var/lib/apt/lists").is_dir() else True
+
+
+def test_a_source_arch_filter_makes_real_apt_select_the_plain_build_even_with_architecture_variants_set(tmp_path, loopback_archive):
+    """The 2026-11-14 ``oracle-test`` finding, modelled with Ubuntu's layout (plain and variant builds in separate ``binary-amd64`` / ``binary-amd64v3`` indexes): ``APT::Architecture-Variants "amd64v3"`` with a source
+    written ``[arch=amd64 ...]`` never fetches ``binary-amd64v3/Packages``, so apt shows and downloads the plain build, whose interpreter bytes are not the installed variant's. Only a source without the filter selects the variant."""
+    debs, requested = loopback_archive.debs, loopback_archive.requested
+    seen = {}
+    for name, variants, arch_filter, want in (("plain-unfiltered", "", "", "plain"), ("plain-filtered", "", "amd64", "plain"), ("wrong-filtered", "amd64v3", "amd64", "plain"), ("right-unfiltered", "amd64v3", "", "amd64v3")):
+        requested.clear()
+        apt, config = isolated_apt(tmp_path, loopback_archive, name, variants, arch_filter)
+        fetched_indexes = {p.rsplit("/", 2)[-2] for p in requested if p.endswith("/Packages") or "/Packages." in p}
+        shown = raw_apt_stanza(apt, config)
+        assert f"SHA256: {debs[want]}" in shown and f"SHA256: {debs['amd64v3' if want == 'plain' else 'plain']}" not in shown, (name, shown)
+        assert ("Architecture-Variant: amd64v3" in shown) == (want == "amd64v3"), name
+        seen[name] = fetched_indexes
+    assert seen["plain-unfiltered"] == seen["plain-filtered"] == seen["wrong-filtered"] == {"binary-amd64"}, seen
+    assert seen["right-unfiltered"] == {"binary-amd64v3"}, seen      # the variant's own index; apt does not fetch the plain one beside it
+    # the tool refuses the filtered source before it asks apt anything; the corrected source is accepted and selects the variant
+    with pytest.raises(rr.RecordError, match=r"cannot select the architecture variant it names: .*architecture filter \(arch=amd64\) while APT::Architecture-Variants is amd64v3"):
+        rr.Archive(apt_config=tmp_path / "wrong-filtered/apt.conf")
+    for harmless in ("plain-filtered", "plain-unfiltered"):
+        assert rr.Archive(apt_config=tmp_path / harmless / "apt.conf").index("route3-e2e", "1.0", "amd64", tmp_path / harmless / "scratch")[0] == debs["plain"], "no variant configured: the filter is harmless"
+    right_apt = tmp_path / "right-unfiltered"
+    assert rr.Archive(apt_config=right_apt / "apt.conf").index("route3-e2e", "1.0", "amd64", right_apt / "scratch")[0] == debs["amd64v3"]
 
 
 def test_the_reference_record_is_canonical_and_bound_to_its_baseline_record(host):

@@ -56,8 +56,10 @@ REFERENCE_HEADER = "route3-payload-reference 1"
 FIELD_KEYS = (
     "RELEASE_REV", "ARCHIVE_SHA256", "MANIFEST_SHA256", "APT_PACKAGES", "APT_BASE", "APT_ORIGIN", "PY_SHA256", "BASELINE_SHA256", "REFERENCE_SHA256", "SA2_TREE_SHA256", "WHEEL", "WHEEL_SHA256",
 )
-# the package metadata that dpkg copies from the package's control file into its status database (the closure itself is computed from these)
-CONTROL_FIELDS = ("Package", "Source", "Version", "Architecture", "Multi-Arch", "Essential", "Pre-Depends", "Depends", "Provides", "Conflicts", "Breaks", "Replaces")
+# the package metadata that dpkg copies from the package's control file into its status database (the closure itself is computed from these).
+# ``Architecture-Variant`` (for example ``amd64v3``) is present only on a variant build, which dpkg still records as plain ``amd64``; a field absent on both sides adds no row, so a
+# plain package's digests are what they always were, and a variant label that differs between the installed and the archive package is a metadata difference.
+CONTROL_FIELDS = ("Package", "Source", "Version", "Architecture", "Architecture-Variant", "Multi-Arch", "Essential", "Pre-Depends", "Depends", "Provides", "Conflicts", "Breaks", "Replaces")
 # the control-archive members dpkg keeps beside the status database as /var/lib/dpkg/info/<package>.<member> ("control" itself lives in the status file)
 CONTROL_MEMBERS = ("conffiles", "config", "md5sums", "postinst", "postrm", "preinst", "prerm", "shlibs", "symbols", "templates", "triggers")
 USRMERGE_TOP = ("bin", "sbin", "lib", "lib32", "lib64", "libx32")
@@ -72,6 +74,15 @@ SAFE_PATH = re.compile(r"[A-Za-z0-9._+@-]+(/[A-Za-z0-9._+@-]+)*")
 SAFE_ABSOLUTE = re.compile(r"/[A-Za-z0-9._+@-]+(/[A-Za-z0-9._+@-]+)*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 TOKEN = re.compile(r"[a-z0-9][a-z0-9.+-]*=[A-Za-z0-9.+~:-]+")
+APT_CONFIG_TOOL = "/usr/bin/apt-config"
+APT_INSECURE_SWITCHES = ("Acquire::AllowInsecureRepositories", "Acquire::AllowDowngradeToInsecureRepositories", "Acquire::AllowWeakRepositories", "APT::Get::AllowUnauthenticated")
+APT_INSECURE_SOURCE = re.compile(r"(?im)(?:^|[\s\[])(trusted|allow-insecure|allow-weak|allow-downgrade-to-insecure)\s*[=:]\s*(yes|true|1|on|with|enable)\b")
+APT_TRUE = ("1", "true", "yes", "on", "with", "enable")
+APT_VARIANT_OPTIONS = ("APT::Architecture-Variants", "APT::Architecture-Variants::")
+# an architecture filter on a source: ``arch=``/``arch+=``/``arch-=`` inside the ``[...]`` of a one-line ``deb`` entry, or the ``Architectures`` fields of a deb822 stanza (comment lines are skipped)
+APT_ARCH_FILTER_ONELINE = re.compile(r"^\s*deb(?:-src)?\s+\[([^\]]*)\]", re.I)
+APT_ARCH_FILTER_OPTION = re.compile(r"(?:^|\s)(arch[+-]?\s*=\s*\S+)", re.I)
+APT_ARCH_FILTER_DEB822 = re.compile(r"^\s*(Architectures(?:-Add|-Remove)?\s*:\s*\S.*?)\s*$", re.I)
 ORIGIN = re.compile(r"https?://[^ ,|\t]+ [A-Za-z0-9._-]+/[A-Za-z0-9._-]+")
 MAX_ARCHIVE_BYTES = 128 << 20
 MAX_MEMBER_BYTES = 8 << 20
@@ -842,11 +853,134 @@ def payload_findings(host: Host, live: Baseline, reference: Reference) -> list[s
     return findings
 
 
+def apt_config_args(config: Path | None) -> list[str]:
+    """``-c <file>`` for an operator-supplied, isolated apt configuration, or nothing.
+
+    The reference commands read the signed archive through apt, and the tool runs apt with an empty environment, so ``APT_CONFIG`` cannot reach it. An off-production host may offer a regional mirror, an architecture variant
+    (``APT::Architecture-Variants "amd64v3"``: a different build with different bytes that dpkg still records as ``amd64``, labelled ``Architecture-Variant``) or no suitable source at all. ``-c`` layers one more configuration
+    file over the system's, so the caller can name exactly the reviewed archive (``Dir::Etc::sourcelist``, ``Dir::Etc::sourceparts``), set ``APT::Architecture-Variants`` to exactly what the baseline host runs (the production
+    packages may be variant builds; plain ``amd64`` is not assumed) and keep apt's state and cache under a scratch directory, all without editing the system's apt configuration.
+    Which build was selected is not trusted either: the reference binds the package's own control fields (the variant label included) and every file, and ``verify-host`` refuses a host whose installed build differs.
+
+    apt reads the file as configuration, and configuration can run commands, so it is as trusted as the caller: it must be an absolute path to a regular file owned by the caller that nobody else can write, inside a directory nobody else can
+    replace entries in (sticky directories such as ``/tmp`` are acceptable). It must also keep apt's verification of the signed index: a configuration that enables unauthenticated or insecure repositories, or sources that say ``trusted=yes``, is refused.
+    A source must not carry an architecture filter (``[arch=amd64 ...]``, ``Architectures:``) while ``APT::Architecture-Variants`` is nonempty: apt then fetches only the plain ``binary-amd64`` index, never ``binary-amd64v3``, and
+    silently selects the plain build (observed on ``oracle-test``, 2026-11-14). That is refused here, early and with the cause; it is a convenience, not the safeguard: a wrong build still fails the digest comparisons below.
+    What the file selects is not taken on trust either: every origin is still compared with the baseline record and every download with the signed index.
+    """
+    if config is None:
+        return []
+    if not config.is_absolute():
+        raise RecordError("the apt configuration must be an absolute path")
+    try:
+        info = config.lstat()
+        parent = config.parent.lstat()
+    except OSError as error:
+        raise RecordError(f"the apt configuration cannot be read: {error.strerror}") from error
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o022:
+        raise RecordError("the apt configuration must be a regular file owned by the caller and not writable by group or others")
+    if not stat.S_ISDIR(parent.st_mode) or parent.st_uid not in (os.geteuid(), 0) or (parent.st_mode & 0o022 and not parent.st_mode & stat.S_ISVTX):
+        raise RecordError("the directory of the apt configuration must be owned by the caller or root and not writable by group or others (unless sticky)")
+    effective = effective_apt_configuration(config)
+    findings = insecure_apt_findings(effective)
+    if findings:
+        raise RecordError("the apt configuration would weaken the signed-index trust anchor: " + "; ".join(findings))
+    findings = architecture_filter_findings(effective)
+    if findings:
+        raise RecordError("the apt configuration cannot select the architecture variant it names: " + "; ".join(findings))
+    return ["-c", str(config)]
+
+
+def effective_apt_configuration(config: Path, run: Callable[[Sequence[str]], tuple[int, str]] | None = None) -> dict[str, str]:
+    """What apt itself makes of the system configuration with ``config`` layered over it (``apt-config dump``, empty environment), as {option: value}."""
+    argv = [APT_CONFIG_TOOL, "dump", "-c", str(config)]
+    if run is None:
+        try:
+            done = subprocess.run(argv, capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"}, stdin=subprocess.DEVNULL, check=False, timeout=60)
+        except (OSError, subprocess.SubprocessError) as error:
+            raise RecordError(f"apt-config could not be run on the apt configuration: {error}") from error
+        status, text = done.returncode, done.stdout
+    else:
+        status, text = run(argv)
+    if status != 0:
+        raise RecordError("apt-config could not read the apt configuration")
+    effective: dict[str, str] = {}
+    for m in re.finditer(r'^(\S+) "(.*)";$', text, re.M):      # a list option (``APT::Architectures::``) is dumped once per item: keep them all, comma-separated
+        effective[m[1]] = ",".join(v for v in (effective.get(m[1]), m[2]) if v) if m[1].endswith("::") else m[2]
+    return effective
+
+
+def insecure_apt_findings(effective: dict[str, str]) -> list[str]:
+    """Findings for a configuration that lets apt trust an index it has not verified: the global switches, or ``trusted=yes`` style options in the sources it would read.
+
+    The reference rests on the archive's *signed* index as apt verifies it (P.3). A configuration that selects the reviewed archive must keep that verification: a keyring via ``signed-by``, never ``trusted=yes``.
+    """
+    findings = [f"{key} is enabled" for key in APT_INSECURE_SWITCHES if effective.get(key, "").lower() in APT_TRUE]
+    sources = apt_source_files(effective)
+    try:
+        for source in sources:
+            if (hit := APT_INSECURE_SOURCE.search(source.read_text(errors="replace"))):
+                findings.append(f"{source} sets {hit[1]}={hit[2]}")
+    except OSError as error:
+        raise RecordError(f"the apt sources cannot be read: {error.strerror}") from error
+    return findings
+
+
+def apt_source_files(effective: dict[str, str]) -> list[Path]:
+    """The regular files apt would read its sources from under this effective configuration: ``Dir::Etc::sourcelist`` and the ``.list``/``.sources`` files of ``Dir::Etc::sourceparts``."""
+    def resolve(key: str, default: str) -> Path:
+        value = Path(effective.get(key) or default)
+        if value.is_absolute():
+            return value
+        etc = Path(effective.get("Dir::Etc") or "etc/apt")
+        return (etc if etc.is_absolute() else Path(effective.get("Dir") or "/") / etc) / value
+    sources = [resolve("Dir::Etc::sourcelist", "sources.list")]
+    parts = resolve("Dir::Etc::sourceparts", "sources.list.d")
+    try:
+        sources += sorted(p for p in parts.iterdir() if p.suffix in (".list", ".sources") and p.is_file()) if parts.is_dir() else []
+        return [source for source in sources if source.is_file()]
+    except OSError as error:
+        raise RecordError(f"the apt sources cannot be read: {error.strerror}") from error
+
+
+def architecture_filter_findings(effective: dict[str, str]) -> list[str]:
+    """Findings for a source that filters architectures while ``APT::Architecture-Variants`` is nonempty.
+
+    apt requests ``main/binary-amd64v3/Packages`` only for a source that does not filter the architecture away, so ``[arch=amd64 ...]`` makes ``apt-cache``/``apt-get download`` offer the plain ``amd64`` build while the variant is
+    configured (the plain and variant builds of one version sit in different indexes with different bytes). Nothing is reported for an empty variant list, where such a filter is harmless; commented lines are not read.
+    """
+    variants = sorted({v for key in APT_VARIANT_OPTIONS for v in re.split(r"[,\s]+", effective.get(key, "")) if v})
+    if not variants:
+        return []
+    findings = []
+    try:
+        for source in apt_source_files(effective):
+            for line in source.read_text(errors="replace").splitlines():
+                if line.lstrip().startswith("#"):
+                    continue
+                options = APT_ARCH_FILTER_ONELINE.match(line)
+                hit = APT_ARCH_FILTER_OPTION.search(options[1]) if options else APT_ARCH_FILTER_DEB822.match(line)
+                if hit:
+                    findings.append(f"{source} carries an architecture filter ({hit[1].strip()}) while APT::Architecture-Variants is {','.join(variants)}: apt would not fetch the variant index and would select the plain build; remove the filter from the source")
+                    break
+    except OSError as error:
+        raise RecordError(f"the apt sources cannot be read: {error.strerror}") from error
+    return findings
+
+
+def missing_source_error(subject: str, status: int, shown: str) -> RecordError | None:
+    """A distinct diagnosis for an index that shows nothing at all, which is a source problem and not a digest problem."""
+    if status != 0 or not shown.strip():
+        return RecordError(f"the archive index shows nothing for {subject} (apt exited {status}): no configured source offers it; pass --apt-config naming a configuration whose sources are the reviewed archive")
+    return None
+
+
 class Archive:
     """Where the reference gets the signed-archive package from: the SHA-256 and origins the signed index states, and the package file itself. Production never uses it."""
 
-    def __init__(self, run: Callable[[Sequence[str], Path], tuple[int, str]] | None = None) -> None:
+    def __init__(self, run: Callable[[Sequence[str], Path], tuple[int, str]] | None = None, apt_config: Path | None = None) -> None:
         self._run = run or self._default
+        self._apt = apt_config_args(apt_config)
 
     @staticmethod
     def _default(argv: Sequence[str], cwd: Path) -> tuple[int, str]:
@@ -854,18 +988,20 @@ class Archive:
         return done.returncode, done.stdout
 
     def index(self, name: str, version: str, arch: str, cwd: Path) -> tuple[str, tuple[str, ...]]:
-        status, shown = self._run(["/usr/bin/apt-cache", "show", f"{name}={version}"], cwd)
+        status, shown = self._run(["/usr/bin/apt-cache", "show", f"{name}={version}", *self._apt], cwd)
+        if (error := missing_source_error(f"{name}={version}", status, shown)) is not None:
+            raise error
         stanzas = [f for f in _paragraphs(shown) if f.get("Package") == name and f.get("Version") == version and f.get("Architecture") == arch]
         stated = {f.get("SHA256", "") for f in stanzas}
-        if status != 0 or not stanzas or len(stated) != 1 or not SHA256.fullmatch(next(iter(stated))):
+        if not stanzas or len(stated) != 1 or not SHA256.fullmatch(next(iter(stated))):
             raise RecordError(f"the archive index does not state exactly one SHA-256 for {name}={version} ({arch})")
-        status, madison = self._run(["/usr/bin/apt-cache", "madison", name], cwd)
+        status, madison = self._run(["/usr/bin/apt-cache", "madison", name, *self._apt], cwd)
         if status != 0:
             raise RecordError(f"apt-cache madison {name} failed")
         return next(iter(stated)), archive_origins(madison, name, version)
 
     def fetch(self, name: str, version: str, directory: Path) -> Path:
-        status, _ = self._run(["/usr/bin/apt-get", "download", f"{name}={version}"], directory)
+        status, _ = self._run(["/usr/bin/apt-get", "download", f"{name}={version}", *self._apt], directory)
         debs = sorted(directory.glob(f"{name}_*.deb"))
         if status != 0 or len(debs) != 1:
             raise RecordError(f"apt-get download did not produce exactly one package file for {name}={version}")
@@ -888,7 +1024,7 @@ def build_reference(record: Baseline, record_text: str, workdir: Path, archive: 
         directory.mkdir()
         stated, origins = archive.index(member.name, member.version, member.arch, directory)
         if not set(origins) & set(member.origins):
-            raise RecordError(f"{member.token} is offered here by [{', '.join(origins) or 'no archive source'}], none of which the baseline record reviewed")
+            raise RecordError(f"{member.token} is offered here by [{', '.join(origins) or 'no archive source'}], none of which the baseline record reviewed (--apt-config selects the reviewed archive)")
         deb = archive.fetch(member.name, member.version, directory)
         data = deb.read_bytes()
         if sha256_bytes(data) != stated:
@@ -1154,7 +1290,7 @@ def sa2_reference(archive: Path, wheel: Path, python: str = INTERPRETER) -> str:
     return digests[0]
 
 
-def reference_interpreter(version: str, workdir: Path, run: Callable[[Sequence[str], Path], tuple[int, str]] | None = None) -> str:
+def reference_interpreter(version: str, workdir: Path, run: Callable[[Sequence[str], Path], tuple[int, str]] | None = None, apt_config: Path | None = None) -> str:
     """The digest of ``/usr/bin/python3.14`` inside ``python3.14-minimal=<version>`` as the archive ships it. Off production, unprivileged, in an empty directory.
 
     The downloaded ``.deb`` must match the SHA-256 that the archive's signed index states for exactly that version before anything is extracted.
@@ -1170,11 +1306,14 @@ def reference_interpreter(version: str, workdir: Path, run: Callable[[Sequence[s
         return done.returncode, done.stdout
 
     run = run or default
-    status, shown = run(["/usr/bin/apt-cache", "show", f"python3.14-minimal={version}"], workdir)
+    apt = apt_config_args(apt_config)
+    status, shown = run(["/usr/bin/apt-cache", "show", f"python3.14-minimal={version}", *apt], workdir)
+    if (error := missing_source_error(f"python3.14-minimal={version}", status, shown)) is not None:
+        raise error
     stated = {m[1] for m in re.finditer(r"^SHA256: ([0-9a-f]{64})$", shown, re.M)}
-    if status != 0 or len(stated) != 1:
+    if len(stated) != 1:
         raise RecordError("the archive index does not state exactly one SHA-256 for that version")
-    status, _ = run(["/usr/bin/apt-get", "download", f"python3.14-minimal={version}"], workdir)
+    status, _ = run(["/usr/bin/apt-get", "download", f"python3.14-minimal={version}", *apt], workdir)
     debs = sorted(workdir.glob("python3.14-minimal_*.deb"))
     if status != 0 or len(debs) != 1:
         raise RecordError("apt-get download did not produce exactly one python3.14-minimal package file")
@@ -1238,6 +1377,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = sub.add_parser("reference-payload", help="derive the payload reference of a baseline record from the signed archive (off production)")
     p.add_argument("--record", required=True)
     p.add_argument("--workdir", required=True)
+    p.add_argument("--apt-config", help="absolute path of an isolated apt configuration (own sources, state and cache) naming the reviewed archive URLs")
     p = sub.add_parser("payload-rows", help="diagnostic: the canonical metadata and payload rows of an installed package or of a package file")
     host_options(p)
     p.add_argument("--package", required=True)
@@ -1261,6 +1401,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = sub.add_parser("reference-interpreter", help="digest of /usr/bin/python3.14 in the archive's python3.14-minimal package (off production)")
     p.add_argument("--version", required=True)
     p.add_argument("--workdir", required=True)
+    p.add_argument("--apt-config", help="absolute path of an isolated apt configuration (own sources, state and cache) naming the reviewed archive URLs")
     args = parser.parse_args(argv)
 
     try:
@@ -1299,7 +1440,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _report(findings)
         if args.command == "reference-payload":
             text = _read(args.record)
-            sys.stdout.write(build_reference(Baseline.parse(text), text, Path(args.workdir)).render())
+            sys.stdout.write(build_reference(Baseline.parse(text), text, Path(args.workdir), Archive(apt_config=Path(args.apt_config) if args.apt_config else None)).render())
             return 0
         if args.command == "payload-rows":
             if args.deb:
@@ -1332,7 +1473,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(sa2_reference(Path(args.archive), Path(args.wheel)))
             return 0
         if args.command == "reference-interpreter":
-            print(reference_interpreter(args.version, Path(args.workdir)))
+            print(reference_interpreter(args.version, Path(args.workdir), apt_config=Path(args.apt_config) if args.apt_config else None))
             return 0
     except RecordError as error:
         return _report([str(error)])

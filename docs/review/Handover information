@@ -160,6 +160,19 @@ publication/commit of the exact reviewed candidate, then a separately authorized
 production read-only S0.A attestation to populate the release identities; S1, S3
 and S4 remain separate gates. See handback §13.1.
 
+**Isolated apt reference generation complete (2026-11-14; uncommitted).**
+After two independent corrections (variant builds must match the baseline, and
+sources must not use `arch=amd64` while selecting `amd64v3`), the real
+`oracle-test` proof is green. libc was brought current to `2.43-2ubuntu2.7`;
+the isolated signed Ubuntu indexes selected `amd64v3`; the interpreter reference
+matched `be9a2a5e...`; and `verify-host` accepted all 32 closure members
+(`baseline` SHA-256 `497a3915...`, `reference` SHA-256 `5d6a3ee7...`). Exact
+disposable results: release-record **346 passed**; provisioning as root **234
+passed**; bot **7,928 passed, 252 skipped**; web **2,894 passed, 80 skipped**;
+Foundry **171 passed**. Failed intermediate attempts and their disposition are
+retained in handback §14. Route 3 remains NO-GO, every block-F value remains
+`UNSET`, and production/staging were untouched.
+
 ## Currency continuation (2026-11-08) — historical snapshot
 
 *Superseded by the current section above where it conflicts: the findings and

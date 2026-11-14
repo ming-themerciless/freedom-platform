@@ -971,6 +971,10 @@ PERMITTED_ROUTE_3_ADAPTER = frozenset({
     # Third executor remediation: the inactive user-service definition of the persistent supervisor,
     "infra/executor/freedom-blades-executor-supervisor.service",
     "tools/executor_supervisor_install.py",
+    # Route 3 release-record/package attestation (2026-11-11; isolated archive
+    # selection added 2026-11-13). Inactive and fail-closed while block F is
+    # UNSET; used only by the controlled release procedure.
+    "tools/route3_release_record.py",
 })
 
 
@@ -1199,6 +1203,8 @@ def test_no_unrelated_production_files_modified() -> None:
         "models/skills.py",
         # Disposable server remediation R2 schema preservation fix.
         "infra/postgresql/backup-restore-drill.sh",
+        # Route 3 release-record/package attestation.
+        "tools/route3_release_record.py",
     ],
 )
 def test_a_declared_production_path_is_accepted(path: str) -> None:

@@ -2779,6 +2779,17 @@ decisions. Production provisioning,
 installation and activation remain prohibited without the applicable explicit
 authority.
 
+The isolated-APT follow-up completed on 2026-11-14 (handback §14.1). It binds
+architecture-variant package metadata and permits off-production reference
+generation from private, signed APT state while refusing insecure or
+variant-suppressing source configuration. Independent `oracle-test` evidence on
+the corrected tree: release-record 346 passed; provisioning as root 234 passed;
+bot 7,928 passed / 252 skipped; database-enabled web 2,894 passed / 80 skipped;
+Foundry 171 passed. A real isolated `amd64v3` archive run verified all 32
+installed closure members. This changes no production authority: all block-F
+values remain `UNSET`, Route 3 remains NO-GO, and publication/commit is the next
+controlled step before any separately authorized production read-only S0.A.
+
 All testing levels are authorized on `oracle-test`, including root/systemd,
 network, packages, PostgreSQL and destructive recovery drills. Production and
 staging mutation, real secrets and real player data remain outside this

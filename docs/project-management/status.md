@@ -216,6 +216,22 @@ The cumulative behavior and evidence record remains the
   reviewed candidate, then a separately authorized production read-only S0.A
   attestation to populate the release identities. S1, S3 and S4 remain
   separate gates.
+- Off-production reference generation is complete and independently exercised
+  on `oracle-test` (2026-11-14; handback §14). Both reference commands accept a
+  private `--apt-config`; insecure sources and an architecture-filtered source
+  with a nonempty variant list are refused before apt runs. The reference binds
+  `Architecture-Variant` and every installed file, so the wrong build is a
+  fail-closed mismatch. The disposable host was brought from superseded libc
+  `2.43-2ubuntu2.4` to offered `2.43-2ubuntu2.7`; the corrected isolated config
+  fetched signed `binary-amd64v3` indexes. The interpreter reference matched
+  the installed digest `be9a2a5e...`; the 32-member payload reference verified
+  the host (`baseline` SHA-256 `497a3915...`, `reference` SHA-256 `5d6a3ee7...`).
+  Final disposable evidence: release-record module **346 passed**; provisioning
+  module as root **234 passed**; bot **7,928 passed, 252 skipped**; web **2,894
+  passed, 80 skipped**; Foundry **171 passed**. Earlier failed attempts (blanket
+  variant refusal, `[arch=amd64]`, missing `universe`, full `/tmp`) are retained
+  in the handback and all are closed. This validates the uncommitted candidate,
+  not production. Route 3 stays NO-GO and every block-F value remains `UNSET`.
 - Production S1 inert provisioning requires a later explicit written
   authorization after all release fields are supplied and reviewed.
 - S3 arming/install and S4 activation are separate later decisions. Activation

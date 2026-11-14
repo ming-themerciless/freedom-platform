@@ -1795,3 +1795,112 @@ Codex reviewed the §13 tree and ran the results below on `oracle-test` against 
 **What this does and does not establish.** It validates the **uncommitted candidate** on the disposable host. It is not production evidence. Route 3 remains **NO-GO**; every block-F release value (`ROUTE3_RELEASE_REV`, `ROUTE3_ARCHIVE_SHA256`, `ROUTE3_MANIFEST_SHA256`, `ROUTE3_APT_PACKAGES`, `ROUTE3_APT_BASE`, `ROUTE3_APT_ORIGIN`, `ROUTE3_PY_SHA256`, `ROUTE3_BASELINE_SHA256`, `ROUTE3_REFERENCE_SHA256`, `ROUTE3_SA2_TREE_SHA256`) remains `UNSET`. No production or staging host was inspected or mutated, and nothing was provisioned, installed, activated, committed or pushed.
 
 **Next controlled step.** Publish and commit the exact reviewed candidate (the maintainer publishes; the repository guards refuse commits and pushes on the default branch). Then, only on Peter's separate authorization, run the production **read-only S0.A attestation** to populate the release identities. S1 inert provisioning, S3 arming/install and S4 activation remain separate later gates, each needing its own explicit authority.
+
+## 14. Isolated apt configuration for the reference commands (2026-11-13; corrected twice, 2026-11-14) — implementation only, uncommitted change, awaiting `oracle-test` run and review
+
+**Defect addressed.** `reference-payload` and `reference-interpreter` ran apt with an empty environment against whatever the generating host offered. Off production that can be a regional mirror or no suitable source, and the failures were misleading
+("does not state exactly one SHA-256").
+
+**First design (2026-11-13) and its failure — recorded, not hidden.** That change also assumed production runs the plain `amd64` build and **refused every architecture variant** (any stanza or package carrying `Architecture-Variant`, or an architecture such as
+`amd64v3`), telling the operator to set `APT::Architecture-Variants ""`. The independent `oracle-test` check showed the assumption false: `dpkg-query` reports `libc6 2.43-2ubuntu2.4 amd64` and `python3.14-minimal 3.14.4-1ubuntu0.2 amd64`, each with
+`Architecture-Variant amd64v3`; `/usr/bin/python3.14` is `be9a2a5eada8c89c1c399fdfb8397179e877c20d8db0739c802f726d4d0e69fd`, the previously accepted digest; `apt-cache show python3.14-minimal` states `Architecture amd64`, a `Filename` ending `_amd64v3.deb` and
+`Architecture-Variant amd64v3`. The blanket refusal would have blocked the correct reference and its remedy would have selected the wrong (plain) build. The same run of the focused module was **1 failed, 304 passed**: the failing case is the real-host
+attestation, which correctly failed because the installed `libc6 2.43-2ubuntu2.4` is no longer offered by the archives (they offer `2.43-2ubuntu2.7`). That is a stale-host environment condition, **still open** (see below), not a tool defect.
+
+**Second independent finding (2026-11-14, `oracle-test`) — the corrected design's own runbook example was wrong, and its test could not see it.** The first real-archive attempt with the corrected design used `APT::Architecture-Variants "amd64v3"` and source lines `deb [arch=amd64 signed-by=...] ...` (the runbook's
+example). Real apt fetched only `main/binary-amd64/Packages`, downloaded `python3.14-minimal_3.14.4-1ubuntu0.2_amd64.deb` and produced interpreter digest `52e0a13e...` instead of the installed `amd64v3` digest `be9a2a5e...`; `reference-payload` then failed on `python3-pip-whl` because the plain archive lacked
+the installed version. **That attempt is the initial failed real proof; it is not a pass.** Removing only `arch=amd64` made `apt-get update` fetch `binary-amd64v3/Packages`; `apt-cache` then showed a `Filename` ending `_amd64v3.deb`, SHA-256 `049113...` and `Architecture-Variant: amd64v3`.
+*Cause:* Ubuntu publishes the plain and variant builds of one version in **separate indexes** (`binary-amd64` and `binary-amd64v3`, each with its own signed `Release` entry), and a source filtered to `arch=amd64` never requests the second. *Why the earlier test passed:* its synthetic repository put the plain and the
+variant stanza together in one `binary-amd64/Packages`, so `[arch=amd64]` still appeared to select variants; the "real apt behaviour" paragraph that said so (below, now corrected) described that artifact, not Ubuntu.
+*Remedy:* (1) the runbook example and the test-server runbook §3.6 omit the filter and prohibit it while the variant list is nonempty; (2) `apt_config_args` now refuses, before any apt call, a source carrying an architecture filter (`arch=`/`arch+=`/`arch-=` in a one-line entry, deb822 `Architectures`,
+`Architectures-Add`, `Architectures-Remove`; comment lines skipped) while the effective `APT::Architecture-Variants` (scalar, comma list or `::` list, read with `apt-config dump -c`) is nonempty. Message: "the apt configuration cannot select the architecture variant it names". It reads the same source files the existing
+insecure-source check reads, with the same kind of line matching, so it adds no new parsing surface beyond one regular expression per form; it is an **early diagnosis, not the safeguard**: a wrong build still fails the origin comparison, the signed-index digest check and the payload/interpreter equality (which stay fail-closed,
+unchanged). *Residual:* a source form this scan does not recognise passes it and relies on that equality, i.e. a NO-GO at `verify-host`, never a pass; and a commented or disabled stanza with a filter in an enabled file would be a false refusal only for deb822 lines the scan reads literally (stanza `Enabled: no` is not interpreted).
+*Regression:* the end-to-end test now models Ubuntu (two separate signed indexes, each with its own `Release` hash entry; the model's `Release` says `Architectures: amd64 amd64v3`, because with `amd64` alone local apt 3.2.1 did not fetch the variant index; Ubuntu's own `Release` was not inspected here) and proves, with real `apt-get update`/`apt-cache`/`apt-get download` and the request log, that a filtered source fetches only `binary-amd64` and selects plain with and without variants configured, that the unfiltered
+source with `"amd64v3"` fetches only `binary-amd64v3` and selects the variant, and that the tool refuses the filtered configuration and accepts the corrected one. Unit tests cover each filter form in each source location, both variant spellings, the empty-variant exemption and comments.
+
+**Design decision — is explicit variant binding needed in the baseline/reference formats? No new field or format; one existing-field addition.**
+* *Baseline record:* unchanged. dpkg's `Architecture` is `amd64` for both builds, and the record only names which package versions the reference must cover. A wrong variant cannot pass through it, because the record is not what is compared with the host's bytes.
+* *Reference and `verify-host`:* the complete comparison already makes a wrong variant a safe mismatch. A reference built from the other build carries that file's SHA-256 (from the signed index), other file bytes (payload digest) and, now, another control field set; `verify-host` recomputes
+  both digests from the installed files and reports `payload drift`. The interpreter digest (`PY_SHA256`) is likewise compared with the installed `/usr/bin/python3.14`.
+* *The one gap closed:* the two builds' bytes differ in practice, but a build differing **only by its label** would have compared equal, so `Architecture-Variant` was added to `CONTROL_FIELDS` (the control fields that enter the metadata digest). It yields a row only when the field is present, so
+  **a plain package's metadata digest, and every reference made so far, is unchanged**; dpkg copies the field into its status database (the observed `dpkg-query` output), so installed and archive sides stay symmetric. The reference file format and the record format are untouched.
+* *Why not a variant column in the record:* it would duplicate what the reference already binds, add a format change and a place to disagree. The operator learns which build the baseline host runs read-only (`dpkg-query ... ${Architecture-Variant}` or the new row in `payload-rows`) and sets
+  `APT::Architecture-Variants` in the isolated configuration accordingly; a mistake is a NO-GO, never a pass.
+* *Residual:* if a host's dpkg did not record the field in its status database while the package file carries it, the result is a false NO-GO (safe), not a false pass.
+
+**Delivered** (`tools/route3_release_record.py`; `--apt-config <absolute file>` on both commands, `Archive(apt_config=...)`, `reference_interpreter(..., apt_config=...)`):
+* The file is passed as `-c <file>` after the positional arguments of every `apt-cache show`, `apt-cache madison` and `apt-get download`; without it the argument vectors are unchanged. The system's apt configuration is never edited. The file must be absolute,
+  a regular file owned by the caller and not group/other writable, in a directory nobody else can replace entries in (sticky allowed).
+* **Trust anchor preserved.** Before any apt call the effective configuration (`apt-config dump -c`) and the sources it names are checked, and a configuration enabling `Acquire::AllowInsecureRepositories`,
+  `Acquire::AllowDowngradeToInsecureRepositories`, `Acquire::AllowWeakRepositories`, `APT::Get::AllowUnauthenticated`, or sources with `trusted=yes`/`allow-insecure=yes`/`allow-weak`/`allow-downgrade-to-insecure` is refused. The origin comparison with the
+  baseline record and the signed-index digest check are unchanged, so a configuration that picks the wrong archive or build still fails closed.
+* **Removed:** the variant refusals (`refuse_variants`, `is_architecture_variant`, the architecture-name pattern) and their tests. **Kept:** a missing source is diagnosed as such ("the archive index shows nothing for ... pass --apt-config"); an unreviewed origin points at `--apt-config`; two different SHA-256 values for one version are still
+  refused by the exactly-one-SHA-256 rule (never chosen between).
+* Runbook P.3 step 4 and the test-server runbook §3.6 are corrected: the configuration names the variant the baseline host runs (the example no longer sets an empty variant list), `oracle-test` is documented as an `amd64v3` host, and the archive's supersession of old versions is stated.
+
+**Real apt behaviour observed (local, apt 3.2.1, throwaway signed loopback repository laid out like Ubuntu: plain build in `main/binary-amd64/Packages`, variant build in `main/binary-amd64v3/Packages`, both in the signed `InRelease`; corrected 2026-11-14).** (The first version of this paragraph described a repository with both stanzas in one
+`binary-amd64` index, which is not Ubuntu's layout and hid the source-filter defect above.) With `APT::Architecture-Variants ""`, filtered or not, `apt-get update` fetches `binary-amd64` and `apt-cache show`/`apt-get download` give the plain build (`..._amd64.deb`). With `"amd64v3"` and an **unfiltered** source apt fetches only `binary-amd64v3`
+and shows/downloads the variant (`Architecture: amd64`, `Architecture-Variant: amd64v3`, `..._amd64v3.deb`); with `"amd64v3"` and `[arch=amd64]` it fetches only `binary-amd64` and selects the **plain** build. `madison` carries no variant information. The end-to-end tests pin all four.
+
+**Tests** (local, repository host, `venv-web` Python 3.14.4, unprivileged, `-o tmp_path_retention_policy=failed`): `tests/test_route3_release_record.py`. Regressions for this correction: a baseline host whose `libc6` and `python3.14-minimal` are `amd64v3` attests (record stays `amd64`) and equals the reference of those builds, whose deb, metadata and payload digests differ from the plain
+reference's while an unaffected package is identical; the diagnostic `payload-rows` agrees between package file and installed package and shows the label; a reference of the other build is a `payload drift` mismatch in **both** directions (installed variant vs plain reference, installed plain vs variant reference) and `verify-host` exits 1 for it and 0 for the right reference; a label-only difference
+on either side is exactly one metadata finding (mutation-checked: removing the field makes these fail); a variant index stanza is an ordinary entry and two differing SHA-256 values are refused; the interpreter reference takes the selected variant and refuses two; and the real-apt end-to-end case selects plain or variant through the isolated configuration with the label bound only on the variant. Earlier
+coverage is unchanged: configuration reaches all three commands and is validated, CLI refusals before anything is created, each insecure switch and source form, no-source diagnostics, and `/var/lib/apt/lists` untouched.
+
+**Environment traps found.** (1) A setgid scratch `TMPDIR` gave every file the directory's group instead of the process's, so the synthetic packages' recorded owner no longer matched (19 payload-drift failures across the module, none touching the apt code) and `dpkg-deb --build` refused an inherited setgid control directory. The test module has an autouse fixture that clears the
+setgid bit on each test's `tmp_path`. (2) A full `/tmp` quota made apt's `gpgv` method exit 111 before executing; the end-to-end case gives apt its own `TMPDIR`.
+
+**Not done / still open.**
+* Nothing was generated against the real archive and `oracle-test` was not touched (not updated, not synchronized): `reference-interpreter`/`reference-payload` with `--apt-config` have not run there.
+* **Stale `libc6` on `oracle-test`** (installed `2.43-2ubuntu2.4`, archives offer `2.43-2ubuntu2.7`): the real-host test and `attest-host` fail until the host is brought current. The signed index lists only current versions, so no reference can be generated for a superseded version; the same will hold for any baseline host (production included) whose closure has since been updated, and that is the correct, fail-closed outcome.
+* Route 3 remains **NO-GO**; every block-F value stays `UNSET`; no commit, push, provisioning, installation, activation, production or staging access, secret or environment file was involved.
+
+**Results (tree after the second 2026-11-14 correction, local, unprivileged; supersedes the 309-passed figure of the first correction).** `tests/test_route3_release_record.py`: **344 passed, 0 failed, 0 errors, 2 skipped** (the two documented `oracle-test`-only cases: the real installed closure/archive test and the real SA-2 build; the real-apt loopback tests ran
+and passed, with real `apt-get`, `apt-cache` and `apt-config` 3.2.1). That module with the modules that consume the edited runbook and records (`test_provisioning_plan.py`, `test_production_checklist_item_8.py`, `test_production_checklist_item_5b.py`, `test_filesystem_layout.py`) after all documentation edits, one invocation:
+**457 passed, 0 failed, 0 errors, 232 skipped, exit 0**; skip reasons 186 root/`python3.14`/pinned-wheel, 42 root-ownership, one each for root+real apt, root+systemd, the real installed-closure test and the real SA-2 build, all needing `oracle-test`. `tests/web/test_p3_4_static_assets.py` 112 passed; `.claude/hooks/test_guards.py` (40 cases)
+and `git diff --check` clean. Mutation check: with the new architecture-filter check disabled, 34 of the new tests fail (every filter form, the early-refusal test and the real-apt test) and pass again when restored. Not run: the full bot, web and Foundry suites (only `tools/route3_release_record.py` and its tests changed) and anything on `oracle-test`.
+**Remaining on `oracle-test`** (not performed here): (1) separately and deliberately bring the host's packages current (or otherwise resolve the stale `libc6`), recording the new versions; (2) synchronize the exact tree with the secret-excluding procedure and run `tests/test_route3_release_record.py` (the real-host case exercises the default, configuration-free archive) and `tests/test_provisioning_plan.py` as root;
+(3) read the closure's variants (`dpkg-query -W -f='${Package} ${Architecture} ${Architecture-Variant}\n'`), build an isolated configuration for the reviewed origin with `APT::Architecture-Variants "amd64v3"` and **source lines without any `arch=` option**, run `reference-interpreter --apt-config` (expect `be9a2a5e...`) and `reference-payload --apt-config`, and confirm `verify-host` accepts that reference and rejects one generated with an empty variant list and one from a regional mirror;
+(4) then the canonical three suites on the final tree.
+
+### 14.1 Final independent disposable-host return — 2026-11-14
+
+This subsection supersedes §14's “not done” and “remaining” lists; the failed
+intermediate attempts remain above as evidence. Codex synchronized the final
+tree with the secret-excluding procedure and independently closed the host work.
+`oracle-test`'s superseded libc `2.43-2ubuntu2.4` was brought to the currently
+offered `2.43-2ubuntu2.7`. The first real isolated configuration correctly
+failed because `[arch=amd64]` selected the plain index; after the documented
+correction, signed indexes selected `binary-amd64v3`. Omitting `universe` then
+correctly failed on `python3-pip-whl`; adding every reviewed Ubuntu component
+closed it. A full `/tmp` failure was an environment accommodation only; the
+final public-package work directory used the disposable host's disk and was
+removed afterward.
+
+The final real references are conclusive: `reference-interpreter` printed
+`be9a2a5eada8c89c1c399fdfb8397179e877c20d8db0739c802f726d4d0e69fd`,
+exactly the installed interpreter digest; `reference-payload` covered all 32
+closure members; and `verify-host` printed `ok`. The disposable baseline record
+SHA-256 was `497a39157e3f60ffdf80fa262f206e56885eb43b486c717eb8ccb0b8600051b6`;
+the payload-reference SHA-256 was
+`5d6a3ee7df5ad355fe5e30b045b4e0278e829c0f2788a73bf328e8add18f4c97`.
+These are disposable-host evidence, not block-F production values.
+
+Final results on `oracle-test`: `tests/test_route3_release_record.py` **346
+passed** (376.41 s); `tests/test_provisioning_plan.py` as root **234 passed**
+(3,398.09 s); canonical bot suite **7,928 passed, 252 skipped** (1,219.72 s;
+printed reasons limited to the documented root/ownership/real-apt/systemd,
+RLIMIT, non-owner-role and RP-11 toolchain conditions); database-enabled web
+suite **2,894 passed, 80 skipped** (610.79 s); Foundry **171 passed, 0 skipped**.
+The web suite's first run had one declared-scope failure for the changed release
+tool; the strictly enumerated Route 3 allowlist was corrected, its 16 focused
+cases passed and the complete web rerun above is green. `git diff --check` is
+clean after this record update.
+
+This validates the uncommitted candidate on the disposable host, not
+production. Route 3 remains **NO-GO**; every block-F value remains `UNSET`;
+production/staging were not inspected or mutated; nothing was provisioned,
+installed or activated there. The next controlled step is commit/publication of
+this exact candidate. Production read-only S0.A and S1/S3/S4 remain separate
+later authorizations.

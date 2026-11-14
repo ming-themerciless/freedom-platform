@@ -210,6 +210,25 @@ installed and check that a request carrying `?code=` is logged as `?<redacted>`:
 N-7 redaction depends on uvicorn's access-line format, which the source-reading test
 `tests/web/test_n7_access_log_redaction.py` pins.
 
+### 3.6 Generating the Route 3 reference on this host
+
+`reference-payload` and `reference-interpreter` (`tools/route3_release_record.py`, runbook P.3 step 4) read the signed archive through this host's apt. If the host's own sources are a regional mirror the baseline record did not review, or have no
+suitable source, the tools refuse. Pass `--apt-config <absolute file>` naming an isolated configuration (its own sources, state and cache under a `0700` scratch directory); it is layered over the system's apt configuration and never edits
+`/etc/apt`. The runbook has the example and the constraints.
+
+**This host runs architecture-variant builds.** Observed by the independent `oracle-test` run, reported 2026-11-14 (`dpkg-query`/`apt-cache show`): `libc6 2.43-2ubuntu2.7` and `python3.14-minimal 3.14.4-1ubuntu0.2` are installed as `Architecture: amd64`, `Architecture-Variant: amd64v3`
+(file `..._amd64v3.deb`); `/usr/bin/python3.14` is `be9a2a5eada8c89c1c399fdfb8397179e877c20d8db0739c802f726d4d0e69fd`, the accepted digest. A configuration with `APT::Architecture-Variants ""` would therefore select the **wrong** (plain) builds, and
+`verify-host` would report payload drift. Set `APT::Architecture-Variants "amd64v3"` in the isolated configuration here (or whatever `dpkg-query -W -f='${Package} ${Architecture-Variant}\n'` reports for the closure).
+
+**And do not filter the source's architecture.** The first real attempt here (2026-11-14) used `APT::Architecture-Variants "amd64v3"` with source lines `deb [arch=amd64 signed-by=...] ...`: apt fetched only `binary-amd64/Packages`, downloaded
+`python3.14-minimal_3.14.4-1ubuntu0.2_amd64.deb` (interpreter digest `52e0a13e...`, not the installed `be9a2a5e...`), and `reference-payload` then failed on `python3-pip-whl`. Without `arch=amd64` apt fetched `binary-amd64v3/Packages` and selected the `_amd64v3.deb`
+build (SHA-256 `049113...`). `--apt-config` now refuses a source with an architecture filter while the variant list is nonempty; write the sources line as `deb [signed-by=<keyring>] <url> <suite> <component>`.
+
+The earlier stale-libc refusal is closed: this host now has the offered
+`2.43-2ubuntu2.7` closure. The final real-host module passed 346 tests, and an
+isolated signed-archive run verified all 32 installed members. Nothing here
+changes the secret-excluding synchronization or the suite procedure.
+
 ---
 
 ## 4. Resetting the Disposable Environment

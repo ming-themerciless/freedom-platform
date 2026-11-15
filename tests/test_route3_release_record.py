@@ -520,15 +520,44 @@ def bound_fields(host) -> tuple[dict[str, str], str]:
     return fields, text
 
 
-def test_the_committed_runbook_block_f_is_read_strictly_and_every_unset_is_a_finding():
+def test_the_committed_runbook_block_f_is_read_strictly_and_is_complete():
     fields = rr.read_fields(RUNBOOK.read_text())
     assert set(fields) == set(rr.FIELD_KEYS)
-    # until a reviewed record is supplied the live block must refuse; once it is supplied this asserts completeness instead
-    findings = rr.validate_fields(fields)
-    if any(v == "UNSET" for v in fields.values()):
-        assert len([f for f in findings if "UNSET" in f]) == len([k for k, v in fields.items() if "UNSET" in v])
-    else:
-        assert findings == []
+    assert not [k for k, v in fields.items() if "UNSET" in v]
+    # the record-free check of the live block finds nothing; the bound check is the next test
+    assert rr.validate_fields(fields) == []
+
+
+BASELINE_FILE = REPO / "docs/operations/route3-baseline-record.txt"
+REFERENCE_FILE = REPO / "docs/operations/route3-payload-reference.txt"
+RELEASE_REV = "26757f2ab67eb5be4f576dbc2166db5df8870857"  # the deployable revision; later commits change only block F, the records and documents
+
+
+def test_the_committed_s0a_records_and_release_identities_bind_to_block_f_completely():
+    """S0.A evidence (2026-11-15) and the 2026-11-15 release identities: block F is complete and bound to the committed baseline and payload reference."""
+    fields = rr.read_fields(RUNBOOK.read_text())
+    record, reference = BASELINE_FILE.read_text(), REFERENCE_FILE.read_text()
+    parsed = rr.Baseline.parse(record)
+    assert record == parsed.render() and len(parsed.members) == 32 and rr.Reference.parse(reference).baseline_sha256 == rr.sha256_bytes(record.encode())
+    assert fields["BASELINE_SHA256"] == rr.sha256_bytes(record.encode()) and fields["REFERENCE_SHA256"] == rr.sha256_bytes(reference.encode())
+    assert fields["APT_PACKAGES"] == parsed.tokens("pin") and fields["APT_BASE"] == parsed.tokens("base") and fields["APT_ORIGIN"] == parsed.origin_list()
+    # production runs the plain amd64 build; the oracle-test amd64v3 interpreter (be9a2a5e...) is a different file and must never be adopted
+    assert fields["PY_SHA256"] == parsed.interpreter_sha256 == "52e0a13e60a981d8c4b6478be2ba5176f69da07948a056bf49cf6f077e30cb41"
+    assert fields["RELEASE_REV"] == RELEASE_REV
+    assert not [k for k, v in fields.items() if "UNSET" in v]
+    assert rr.validate_fields(fields, record, reference) == []
+
+
+def _release_revision_present() -> bool:
+    return subprocess.run(["git", "-C", str(REPO), "cat-file", "-e", f"{RELEASE_REV}^{{commit}}"], capture_output=True, check=False).returncode == 0
+
+
+@pytest.mark.skipif(not _release_revision_present(), reason="the release revision is not in this checkout")
+def test_the_archive_and_manifest_digests_in_block_f_are_those_of_the_release_revision(tmp_path):
+    fields = rr.read_fields(RUNBOOK.read_text())
+    rr.build_archive(REPO, RELEASE_REV, tmp_path / "out")
+    assert rr.sha256_file(tmp_path / "out" / "code.tar") == fields["ARCHIVE_SHA256"]
+    assert rr.sha256_file(tmp_path / "out" / "MANIFEST.sha256") == fields["MANIFEST_SHA256"]
 
 
 def test_a_good_record_binds_to_the_baseline_and_each_tampered_field_is_refused(host):
@@ -847,6 +876,13 @@ def test_the_real_installed_closure_attests_and_equals_the_real_signed_archive_p
 
 
 WHEEL_SRC = Path(os.environ.get("FREEDOM_JEEPNEY_WHEEL", "/home/ubuntu/jeepney-0.9.0-py3-none-any.whl"))
+
+
+@pytest.mark.skipif(not (ORACLE and _release_revision_present() and WHEEL_SRC.exists() and rr.sha256_file(WHEEL_SRC) == rr.WHEEL_SHA256), reason="needs the disposable host, /usr/bin/python3.14, the release revision and the pinned wheel")
+def test_the_sa2_digest_in_block_f_is_the_reference_build_of_the_release_revision(tmp_path):
+    fields = rr.read_fields(RUNBOOK.read_text())
+    rr.build_archive(REPO, RELEASE_REV, tmp_path / "out")
+    assert rr.sa2_reference(tmp_path / "out" / "code.tar", WHEEL_SRC) == fields["SA2_TREE_SHA256"]
 
 
 @pytest.mark.skipif(not (ORACLE and WHEEL_SRC.exists() and rr.sha256_file(WHEEL_SRC) == rr.WHEEL_SHA256), reason="needs the disposable host, /usr/bin/python3.14 and the pinned wheel")
@@ -2058,3 +2094,17 @@ def test_the_gate_text_is_the_single_attestation_and_runs_the_tool_from_the_veri
     assert "route3_python_ok" in gate and "set -o pipefail" in gate
     for forbidden in ("apt-get", "apt-mark", "dpkg -i", " install ", "route3_cp", "tee ", ">>"):
         assert forbidden not in gate, forbidden
+
+
+def test_current_state_documents_agree_on_the_next_step_and_the_p3_rows_are_not_blockers():
+    """2026-11-15: block F is complete but not a GO; the P.3 rows no longer say BLOCKER; every current-state document names the same next step."""
+    runbook = RUNBOOK.read_text()
+    for row in ("| Python 3.14 (installed host baseline) |", "| Signed-archive payload reference |"):
+        line = next(l for l in runbook.splitlines() if l.startswith(row))
+        assert "BLOCKER" not in line and "Set (2026-11-15)" in line, row
+    docs = REPO / "docs"
+    for rel in ("implementation-plan.md", "project-management/status.md", "review/Handover information", "review/route-3-production-readiness-handback.md"):
+        text = " ".join((docs / rel).read_text().split())
+        assert "S0.2/S0.3" in text and "record-only candidate" in text, rel
+    handback = (docs / "review/route-3-production-readiness-handback.md").read_text()
+    assert "awaiting Codex review" not in handback.split("## 15.", 1)[1].splitlines()[0]

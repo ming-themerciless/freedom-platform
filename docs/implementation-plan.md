@@ -2761,7 +2761,24 @@ maintainer removed the final stale repository-local `.env` reference on
 2026-11-11 without exposing its contents; completion evidence is in the active
 handover and production-upgrade handback.
 
-The Route 3 plan review gate is closed, but every block-F release identity
+**Current Route 3 continuation (2026-11-15; supersedes every statement below that
+a block-F identity is `UNSET` or that S0.A is the next step).** The read-only
+S0.A attestation was accepted (32 members, plain `amd64`, interpreter
+`52e0a13e...`), as were the baseline record (`cf9931cd...`) and signed-archive
+payload reference (`31d744c7...`). Codex independently reproduced on
+`oracle-test` the four release identities: `ROUTE3_RELEASE_REV`
+`26757f2ab67eb5be4f576dbc2166db5df8870857`, archive `50f74b4f...`, manifest
+`18e6794d...` and SA-2 tree `5e195c40...`; `check-fields` is fully green. Block F
+is therefore **complete, but that is not a GO**. Nothing was delivered to
+production and no lasting production mutation occurred. The actual next
+controlled step is separately authorized artifact delivery, then read-only
+S0.2/S0.3; the record-only candidate is already committed and published on
+`origin/docs/platform-plan`. S1 inert
+provisioning, S3 arming/install and S4 activation remain separate later
+decisions (handback §15).
+
+*Historical, superseded where it conflicts by the paragraph above:* the Route 3
+plan review gate is closed, but every block-F release identity
 remains `UNSET`. The old S0.0 procedure assumed Python 3.14 was absent and must
 not run (it is withdrawn). Its release-record/package procedure was redesigned
 on 2026-11-11 for the pre-installed Python 3.14 baseline (read-only attestation

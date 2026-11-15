@@ -68,10 +68,22 @@ def definitions() -> str:
     return found[0]
 
 
-def fields_block() -> str:
+def live_fields_block() -> str:
+    """Block F exactly as committed (fully populated since 2026-11-15)."""
     found = [b for b in bash_blocks() if b.startswith("ROUTE3_RELEASE_REV=")]
     assert len(found) == 1
     return found[0]
+
+
+RELEASE_KEYS = ("RELEASE_REV", "ARCHIVE_SHA256", "MANIFEST_SHA256", "APT_PACKAGES", "APT_BASE", "APT_ORIGIN", "PY_SHA256", "BASELINE_SHA256", "REFERENCE_SHA256", "SA2_TREE_SHA256")
+
+
+def fields_block() -> str:
+    """The synthetic-world template: every release identity reset to ``UNSET`` so each test supplies its own values (``set_field``)."""
+    out = live_fields_block()
+    for key in RELEASE_KEYS:
+        out = re.sub(rf'^ROUTE3_{key}=(["\']?).*\1$', lambda m, k=key: f'ROUTE3_{k}={m.group(1)}UNSET{m.group(1)}', out, flags=re.M)
+    return out
 
 
 def stage_entry_code() -> str:
@@ -148,10 +160,20 @@ def test_the_pinned_wheel_in_the_fields_is_the_accepted_lock_pin():
     assert definitions().count(PIN) == 1  # the one literal pin check inside route3_fields_ok
 
 
-def test_the_returned_candidate_is_no_go_by_construction_with_every_unresolved_field_unset():
-    f = fields_block()
-    for name in ("RELEASE_REV", "ARCHIVE_SHA256", "MANIFEST_SHA256", "APT_PACKAGES", "APT_BASE", "APT_ORIGIN", "PY_SHA256", "BASELINE_SHA256", "REFERENCE_SHA256", "SA2_TREE_SHA256"):
-        assert re.search(rf'^ROUTE3_{name}=["]?UNSET["]?$', f, re.M), name
+def test_the_live_block_f_has_no_unset_field_but_the_plan_still_gates_every_stage_separately():
+    f = live_fields_block()
+    for name in RELEASE_KEYS:
+        assert re.search(rf'^ROUTE3_{name}=["]?(?!UNSET)[^"\s][^"]*["]?$', f, re.M), name
+    assert re.search(r'^ROUTE3_RELEASE_REV=[0-9a-f]{40}$', f, re.M)
+
+
+def test_the_live_block_f_passes_s0_1_and_the_template_with_every_identity_unset_is_refused_naming_each():
+    live = subprocess.run(["/bin/bash", "-c", definitions() + "\n" + live_fields_block() + "\n" + block("S0.1") + "\n"], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"}, check=False)
+    assert live.returncode == 0 and "[S0.1 rc=0]" in live.stdout, live.stdout
+    unset = subprocess.run(["/bin/bash", "-c", definitions() + "\n" + fields_block() + "\n" + block("S0.1") + "\n"], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"}, check=False)
+    assert unset.returncode == 1 and "[S0.1 rc=1]" in unset.stdout
+    for name in RELEASE_KEYS:
+        assert f"ROUTE3_{name}" in unset.stdout, (name, unset.stdout)
 
 
 def test_the_installer_function_is_never_called_with_a_pipeline_or_trailing_command_that_masks_its_status():

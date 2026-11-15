@@ -1904,3 +1904,36 @@ production/staging were not inspected or mutated; nothing was provisioned,
 installed or activated there. The next controlled step is commit/publication of
 this exact candidate. Production read-only S0.A and S1/S3/S4 remain separate
 later authorizations.
+
+## 15. S0.A production attestation and reference generation (2026-11-15) — committed and published; reviewed and remediated candidate (Codex reproduced the identities; accepted)
+
+**Authority:** Peter's explicit authorization of the complete read-only S0.A work. **Scope kept:** S1, S3, S4, provisioning, installation, holds, service changes, activation and production artifact delivery were not run.
+
+**S0.A on production (host `ubuntu`, user `foundry`, uid != 0, no sudo).** Tool digest verified before running: `git show 26757f2:tools/route3_release_record.py | sha256sum` = working copy = `0e9c251f40650878703269fbaabbd639ba11f98d4190209716dede11e3ae4b07` (tree clean at 26757f2). Run exactly as the S0.A block: `PATH=/usr/sbin:/usr/bin:/sbin:/bin; /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3.14 -I -S -B tools/route3_release_record.py attest-host` -> **rc 0**, stderr empty, 32 members (5 pin, 27 base). A second run was byte-identical. Output is committed unchanged as `docs/operations/route3-baseline-record.txt`, SHA-256 `cf9931cd562f4b465fad2f216fd77d5c0be78ec7b5ef97a3b71b8f7336a8850e`. The only files written on production were scratch copies of the stdout under `/tmp` (outside the repository, no secret); no package, source, service, database or repository-tracked file there was changed other than this working tree's own new documents.
+
+**Finding that matters:** production runs the **plain `amd64` builds** (`dpkg-query` reports an empty `Architecture-Variant` for `libc6` and `python3.14-minimal`); its interpreter is `52e0a13e60a981d8c4b6478be2ba5176f69da07948a056bf49cf6f077e30cb41`. `oracle-test` runs `amd64v3` (`be9a2a5e...`). The oracle-test reference of 2026-11-14 is therefore **not** a production value and was not reused.
+
+**Independent reference (`oracle-test`, non-production).** Isolated apt configuration under a `0700` scratch directory, `APT::Architecture-Variants ""`, sources `archive.ubuntu.com` (`resolute`, `resolute-updates`) and `security.ubuntu.com` (`resolute-security`), `main universe`, no `arch=` filter, Ubuntu archive keyring, `apt-get update -c` rc 0. `reference-interpreter --version 3.14.4-1ubuntu0.2 --apt-config ...` printed `52e0a13e...`, **equal** to the production installed file. `reference-payload --record <baseline> --apt-config ...` rc 0 and byte-identical on a second run -> `docs/operations/route3-payload-reference.txt`, SHA-256 `31d744c7226d99af9ebeb366c277883163c90255a057fd9acc56c30bfb0af514`.
+
+**Block F (first pass, superseded by the remediation below).** S0.A populated `ROUTE3_APT_PACKAGES`, `ROUTE3_APT_BASE`, `ROUTE3_APT_ORIGIN` (as printed by `propose`), `ROUTE3_PY_SHA256`, `ROUTE3_BASELINE_SHA256` and `ROUTE3_REFERENCE_SHA256`. That pass left the four publication fields `UNSET` on the mistaken premise that they awaited a published commit; 26757f2 was already published (see "Remediation" below).
+
+**Not done / still open.** `verify-host` on production was not run (it needs root-held artifacts; S0.3). The reference was not checked with `verify-host` on a plain-amd64 host, because `oracle-test` is a variant host; its acceptance on production is S0.3's job. Route 3 remains **NO-GO**.
+
+**Remediation plan if the host drifts** (e.g. a security update moves libc6 or openssl before delivery): re-run S0.A, regenerate the reference, re-review; never upgrade in place. Currently there is no drift: every member is offered at its installed version by the configured archives.
+
+**Remediation: publication fields completed (2026-11-15, `oracle-test` only).** Review finding: 26757f2 is committed and on `origin/docs/platform-plan`, and the runbook allows a later release-record-only commit, so procedure steps 1, 2 and 5 were completed rather than deferred. Tool digest verified (`git show 26757f2:tools/route3_release_record.py` = `0e9c251f...`). Values:
+
+| Field | Value |
+|---|---|
+| `ROUTE3_RELEASE_REV` | `26757f2ab67eb5be4f576dbc2166db5df8870857` |
+| `ROUTE3_ARCHIVE_SHA256` | `50f74b4f52e511de278cf0e36ece6c9cd2315e4ce0ee7e177c4838f8be55bfee` |
+| `ROUTE3_MANIFEST_SHA256` | `18e6794d9990566b4473b2a0998028f00f35a79138a0e1857aec89c1b77c5406` |
+| `ROUTE3_SA2_TREE_SHA256` | `5e195c40ca0ad9ff408ffaaecfac6898a85770073e460961da5585320ddd3359` |
+
+`build-archive` ran twice into fresh directories (byte-identical). Independent verification: a plain `git archive --format=tar` with the P.3 pathspec reproduced the same tar SHA-256, and the manifest recomputed with `find`/`sort`/`sha256sum` over the extracted tar equals `MANIFEST.sha256` (273 files). `sa2-reference` (archive plus the pinned jeepney wheel, SHA-256 `97e57145...`) agreed for two separate archives. `check-fields` prints `ok`; `verify-release --published-ref origin/docs/platform-plan` prints `ok: revision, archive, manifest match the release record`; the archive pathspec has no difference between 26757f2 and the working tree; the baseline and reference files are byte-identical (`cf9931cd...`, `31d744c7...`). Artifacts stayed in a `0700` scratch directory on `oracle-test`; nothing was delivered to production and S0.1-S0.3, S1, S3 and S4 were not run. A complete block F is not a GO.
+
+**Tests.** `tests/test_route3_release_record.py` binds the complete block F (`test_the_committed_s0a_records_and_release_identities_bind_to_block_f_completely`) and reproduces the archive and manifest (`..._are_those_of_the_release_revision`) and the SA-2 digest (`..._is_the_reference_build_of_the_release_revision`, `oracle-test` only). `tests/test_provisioning_plan.py` asserts that the live block F has no `UNSET` and passes S0.1, and that the all-`UNSET` template is still refused naming every identity.
+
+**Current state (supersedes the "first pass" and every earlier `UNSET` statement).** Codex independently reproduced the archive, manifest and SA-2 digests on `oracle-test` and accepted all four release identities; `check-fields` is fully green. Block F is complete, which is not a GO. No lasting operational production mutation occurred (S0.A was read-only). The record-only candidate is committed and published on `origin/docs/platform-plan`. Next controlled step: separately authorized artifact delivery, then read-only S0.2/S0.3; S1, S3 and S4 remain separate and Route 3 remains NO-GO.
+
+**Final exact-tree verification (2026-11-15, `oracle-test`, Codex).** `tests/test_route3_release_record.py`: **350 passed in 851.41 s (14:11)**, exit 0. `tests/test_provisioning_plan.py` as root with the pinned wheel: **235 passed in 4738.60 s (1:18:58)**, exit 0. Codex also independently reproduced the archive, manifest, SA-2 and `check-fields` values recorded above. No source or document change requiring a rerun of those modules followed, except this evidence-only documentation update. Route 3 remains **NO-GO**; the record-only candidate is committed and published on `origin/docs/platform-plan`; the next controlled step is separately authorized artifact delivery, then read-only S0.2/S0.3.

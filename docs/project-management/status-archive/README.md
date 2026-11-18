@@ -14,6 +14,7 @@ authority or disposition.
 
 | Snapshot | Scope | SHA-256 at archival |
 |---|---|---|
+| [`status-through-2026-11-15-route-3-s0a-attestation.md`](../status-through-2026-11-15-route-3-s0a-attestation.md) | Complete predecessor status immediately before the S1-complete / attended-reboot consolidation of 2026-11-18; carries the S0.A attestation state and the 2026-11-07 to 2026-11-15 production-baseline history | `4310efb29438d45c6be2865e74bfd65866f349f906b176133df2cf1a3fac706f` |
 | [`status-through-2026-10-24-route-3-production-readiness-acceptance.md`](../status-through-2026-10-24-route-3-production-readiness-acceptance.md) | Complete predecessor status immediately before production-readiness acceptance and current-state consolidation | `43c5c540ded2bd03aa1d86fb923d98c02709d52cad8b20e7e75aff34c767e762` |
 | [`status-through-2026-10-13-route-3-hold-active.md`](../status-through-2026-10-13-route-3-hold-active.md) | Verbatim Route 3 `hold`-active status superseded by acceptance of the complete inactive role series | `a15af842f717a8604624d00011df2985cf65482755a26a3db7647f6e21495755` |
 | [`status-through-2026-10-12-wp3-contract-review.md`](../status-through-2026-10-12-wp3-contract-review.md) | Verbatim WP-3 contract-review status superseded by the baseline v1.9 implementation-first reset | `bb5a1176d4f4c62b19a912cf38917adccbbf135495fd4c4cb64db7c6cb190c3d` |

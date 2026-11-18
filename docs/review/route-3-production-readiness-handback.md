@@ -2,6 +2,8 @@
 
 Date: 2026-10-22 · Implementer: Claude · Reviewer after handback: Codex · Authority: Peter Duscha
 
+**Current state (2026-11-18): see [§16](#16-s1-inert-provisioning-executed-on-production-2026-11-18--stop-a-reached-reboot-prepared-not-executed).** S1 ran to STOP-A on production; an attended reboot is prepared, not authorized; S3 and S4 are not authorized. This is a cumulative, dated record: earlier sections that say every release field is `UNSET`, Route 3 is NO-GO or nothing was provisioned describe the state on their dates.
+
 Assignment: [`route-3-production-readiness-claude-prompt.md`](route-3-production-readiness-claude-prompt.md).
 Review remediation: [`route-3-production-readiness-review-remediation-claude-prompt.md`](route-3-production-readiness-review-remediation-claude-prompt.md).
 Second review remediation: [`route-3-production-readiness-review-remediation-r2-claude-prompt.md`](route-3-production-readiness-review-remediation-r2-claude-prompt.md).
@@ -1937,3 +1939,17 @@ later authorizations.
 **Current state (supersedes the "first pass" and every earlier `UNSET` statement).** Codex independently reproduced the archive, manifest and SA-2 digests on `oracle-test` and accepted all four release identities; `check-fields` is fully green. Block F is complete, which is not a GO. No lasting operational production mutation occurred (S0.A was read-only). The record-only candidate is committed and published on `origin/docs/platform-plan`. Next controlled step: separately authorized artifact delivery, then read-only S0.2/S0.3; S1, S3 and S4 remain separate and Route 3 remains NO-GO.
 
 **Final exact-tree verification (2026-11-15, `oracle-test`, Codex).** `tests/test_route3_release_record.py`: **350 passed in 851.41 s (14:11)**, exit 0. `tests/test_provisioning_plan.py` as root with the pinned wheel: **235 passed in 4738.60 s (1:18:58)**, exit 0. Codex also independently reproduced the archive, manifest, SA-2 and `check-fields` values recorded above. No source or document change requiring a rerun of those modules followed, except this evidence-only documentation update. Route 3 remains **NO-GO**; the record-only candidate is committed and published on `origin/docs/platform-plan`; the next controlled step is separately authorized artifact delivery, then read-only S0.2/S0.3.
+
+## 16. S1 inert provisioning executed on production (2026-11-18) — STOP-A reached; reboot prepared, not executed
+
+**Authority:** Peter's written provisioning authorization (stage S1), attended root session. **Scope kept:** S3 and S4 were not run; no activation, cutover or migration occurred.
+
+**Result (actual production).** Deployable revision `26757f2ab67eb5be4f576dbc2166db5df8870857`; root wrapper SHA-256 `680261d3fdf225f0fbfa6996acd6f509f14eb08ad74c0c71b80b00848687495c`; run evidence `/root/route3-s1-run.XqEtiYXR`. S1.0 through S1.4 each rc 0; S2.1 rc 0 with `STOP-A verified`; S2.2 rc 12, explicitly expected before the first post-S1 boot (P.2). All 32 signed-archive package payloads and metadata were reverified at every trusted gate. The five reviewed Python 3.14 packages were held, `/opt/freedom-route3` was published and verified, the dormant `freedom-executor` account was created without linger, and the `tmpfiles.d` fragment was installed.
+
+**State at STOP-A.** No supervisor unit or enablement, no Route 3 process, no linger or user manager, no sudoers grant, no SA-2 artifact, no state or runtime directory, no activation or cutover.
+
+**Caller artifact.** The outer `/tmp/route3-s1-terminal.rc` is empty only because the caller's final `printf` was mangled after the wrapper had printed its complete success result. `/tmp/route3-s1-terminal.log` is complete. No digest of either file is recorded here; none is needed for any forward gate.
+
+**Review.** Claude and Codex final review found no defect and no rollback need.
+
+**Forward.** The next production action is an explicitly attended production reboot, then read-only verification (new boot, service health, S2.1, S2.2 at rc 0, the §6 v2 checklist as S2.3 with the account-dependent checks, independent review). That procedure is [`docs/operations/production-reboot-and-route-3-continuation-runbook.md`](../operations/production-reboot-and-route-3-continuation-runbook.md); it adds no executable block. The reboot is **prepared, not authorized, not executed**: Peter authorized the preparation and documentation only. S3 and S4 remain separately unauthorized; a reboot between a future S3.5 and S4 or R3 is forbidden. Post-reboot results are to be recorded below as a new dated subsection (16.1), by the operator who runs them.

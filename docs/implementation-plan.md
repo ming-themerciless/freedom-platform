@@ -2537,282 +2537,43 @@ A production feature is complete when:
 
 ## 20. Immediate next actions
 
-Baseline v1.9 replaces the research-first WP-3/WP-4 gate sequence with the
-[active implementation-first delivery plan](project-management/active-delivery-plan.md).
-All earlier WP-1 through WP-3 proof, contract and review records are historical
-background. Their open Q3/Q6 labels and integration observations do not block
-development and need no further documentation-only closure.
+*Current-only record. The earlier assignment, review and acceptance narrative
+that used to fill this section is preserved byte-for-byte in the
+[predecessor plan snapshot](implementation-plan-through-2026-11-15-route-3-s0a-attestation.md)
+(see the [archive index](implementation-plan-archive/README.md)). It is history,
+not authority.*
 
-**Current state: IMPLEMENTATION AND FULL DISPOSABLE-SERVER TESTING AUTHORIZED.**
+**Authority.** Baseline v1.9: implementation and full disposable-server testing
+(`oracle-test`) are authorized. Production and staging mutation, real secrets and
+real player data remain outside that authority.
 
-Peter Duscha accepted the complete inactive Route 3 role series on 2026-10-14
-after independent review. The implemented sequence is:
+**Route 3 position (2026-11-18).** Block F was completed on 2026-11-15
+(deployable revision `26757f2ab67eb5be4f576dbc2166db5df8870857`). S1 inert
+provisioning ran on production under Peter's written authorization (S1.0 through
+S1.4 each rc 0). S2.1 returned rc 0 with `STOP-A verified`; S2.2 returned rc 12,
+the status expected before the first post-S1 boot. Nothing of Route 3 is armed:
+no supervisor unit or enablement, process, linger, sudoers grant, SA-2 artifact,
+state directory, activation or cutover.
 
-1. shared cleanup and `stop-post` — accepted;
-2. `backstop` over that cleanup engine — accepted; and
-3. `hold`, including GRR inspection- and descriptor-close exception safety —
-   accepted.
+**Next production action: an explicitly attended production reboot.** Peter
+authorized its preparation and documentation only; it is **not authorized and
+not executed**. After it, read-only verification runs in this strict order:
 
-Peter Duscha accepted the repository-managed Polkit `tmpfiles.d` prerequisite
-on 2026-10-15 after its real-reboot proof and security remediations. The adapter
-and roles remain inactive in production. Activation still requires an explicit
-decision on the transient inspection-failure risk and an independent security
-review of the completed series.
+1. G1 new boot; 2. G2 service health; 3. G3 S2.1 (rc 0, `STOP-A verified`);
+4. G4 S2.2 (rc 0); 5. G5 the S2.3 checklist and account-dependent checks;
+6. G6 independent review; 7. G7 Peter's written decision on S3.
 
-Claude implemented the static SA-1 `start` role through DI-2. Its environment-
-read, duration, denial-proof and malformed-success findings are remediated;
-independent Codex re-review found no blocking issue, and Peter accepted SA-1 for
-continued non-production development on 2026-10-15. Claude then implemented
-static SA-2 `stop` through the existing narrow stop-unit boundary. After its
-refusal-diagnostic, typed-result and test-only host-job assertion remediations,
-independent Codex re-review found no blocking issue, and Peter accepted SA-2 for
-continued non-production development on 2026-10-16. That acceptance did not
-itself assign another slice. Peter subsequently approved the recommended
-continuation and assigned RT-1 `consume` as the capture unit's PID-1
-`ExecStartPre=+` role, with full `oracle-test` testing and independent Codex
-review after Claude's handback. That review found two blocking failure-path
-defects: failure evidence can become unwritable without entering grant priority,
-and an unexpected CQ-5 exception can retry PK/2. The bounded remediation closed
-both defects; independent Codex re-review found no blocking issue, and Peter
-accepted RT-1 for continued non-production development on 2026-10-17. Peter
-then assigned RT-5 `attest` as the next bounded root-role slice under the
-[`attest` implementation prompt](review/route-3-attest-role-implementation-claude-prompt.md).
-Claude implemented it as an **uncommitted candidate**
-([handback](review/route-3-attest-role-implementation-handback.md)). Independent
-Codex review found a blocking false-success path with missing boot evidence and
-non-reproducible abbreviated commands. Peter assigned one bounded
-[review remediation](review/route-3-attest-role-review-remediation-claude-prompt.md),
-which Claude completed and returned for independent Codex re-review.
-Later reviews found further changed-boot false-success paths involving missing
-directory identity, missing mandatory tree-P history and a lossy tree-P
-projection. Claude completed the fifth bounded correction. Independent Codex
-re-review found no remaining implementation-quality blocker and independently
-reproduced the focused **2369 passed, 2 documented environment skips** result.
-Under the 2026-10-18
-implementation-evidence clarification, summarized routine commands are a
-non-blocking documentation variance when the material claims and results can
-otherwise be assessed; reliable status and failure disclosure remain required.
-Peter accepted RT-5 for continued non-production development on 2026-10-18.
-Peter then assigned the first non-root executor interruption slice under the
-[`executor OC implementation prompt`](review/route-3-executor-oc-implementation-claude-prompt.md):
-unprivileged reads of the fixed capture unit and activation-derived consume
-journal, exact fail-closed OC-1/OC-2/OC-3 evaluation, and at most one invocation
-of the accepted SA-2 `stop` role. At that assignment point the full coordinator,
-start orchestration, automatic attestation and production installer/activation
-work remained later; the inactive executor supervisor package was subsequently
-assigned as recorded below, while production/staging installation and
-activation remain gated.
+**S3 (arming and install) and S4 (activation) are not authorized.** Each is a
+separate, later written decision of Peter's. A reboot between a future S3.5 and
+S4 or R3 remains forbidden. Every executable command stays in the accepted
+provisioning runbook.
 
-The executor's bounded cgroup settlement cannot guarantee disappearance of a
-task in uninterruptible sleep. Peter approves in principle the narrow lifecycle
-change allowing a still-contained unsettled invocation to be transferred to a
-persistent owner that blocks orchestration and continues recovery until the
-boundary is empty. The second-remediation candidate was nevertheless **blocked
-after independent review on 2026-10-19**: its marker is created only after
-launch, so marker failure still permits `UNSETTLED` or an ordinary propagated
-exception while a member remains, and no already-running supervised recovery
-owner or restart proof exists. Durable recoverable ownership must be
-established before privileged launch and proved across every exit path before
-that candidate could be accepted. Peter assigned the bounded correction under the
-[third executor review-remediation prompt](review/route-3-executor-oc-review-remediation-r3-claude-prompt.md).
-The selected design uses a restartable supervisor and a distinct transient
-service for each invocation. Durable exclusive prepared state precedes the sole
-`StartTransientUnit` request, which launches the exact fixed sudo vector
-directly inside the manager-owned invocation cgroup; the supervisor can
-therefore restart independently of a stuck member. The dedicated account's
-lingering systemd user manager owns each transient invocation service. Peter
-selected, for the inactive package, a root-owned system-service wrapper for the
-persistent supervisor (`User=freedom-executor`, enabled only in the system
-manager); production installation and lingering remain a later deployment
-decision.
-No successor slice is assigned. The inactive executor supervisor package (service
-fragment, `tools/executor_supervisor_install.py` and provisioning runbook) was
-directly assigned by Peter and its defects are corrected under the
-[fourth executor review-remediation prompt](review/route-3-executor-oc-review-remediation-r4-claude-prompt.md)
-and the [fifth executor review-remediation prompt](review/route-3-executor-oc-review-remediation-r5-claude-prompt.md); this is not acceptance, and
-production/staging installation or activation is not assigned.
-Peter accepted and assigned a sixth bounded implementation correction on 2026-10-21 while preserving that
-topology: failed request writes are ambiguous handoffs, readiness follows the
-serving-thread start, and installer verification covers effective drop-ins and
-execution identity. The observed PATH-only member environment is retained as
-defense in depth, not claimed as an atomic invariant; privilege instead rests on
-the fixed sudoers/SA-2 argv, Python `-I -S` and the root-owned `stop` artifact's
-no-environment-read behavior. Claude returned that candidate under the
-[accepted R6 implementation prompt](review/route-3-executor-oc-r6-implementation-claude-prompt.md).
-Independent Codex review reproduced the principal focused and root/systemd
-evidence but found that `KeyboardInterrupt` or another `BaseException` at or
-after the request-write boundary can escape rather than return `HANDED_OFF`.
-Peter assigns one direct correction, its deterministic interruption regressions
-and current-document reconciliation under the
-[R6 review-remediation prompt](review/route-3-executor-oc-r6-review-remediation-claude-prompt.md).
-Claude returned that remediation with the corrected ownership boundary.
-Independent Codex re-review found no remaining implementation defect but found
-the two real-socket proofs nondeterministic (a single `recv` may return a
-prefix) and the current-state text stale. Peter accepted the
-[second remediation prompt](review/route-3-executor-oc-r6-review-remediation-r2-claude-prompt.md)
-and assigned Claude the correction, which returned for independent re-review.
-Codex found no implementation or production-safety defect. Peter classified
-the remaining separately-delivered-surplus test-helper overclaim as
-non-blocking and assigned optional bounded test hardening plus its final
-test-only ordering correction. Claude returned the correction; independent
-Codex re-review found no remaining finding and reproduced the focused **511
-passed, 5 documented host-only skips** result on `oracle-test`. Peter accepted
-the cumulative executor OC R6 candidate for continued non-production
-development on 2026-10-22. Peter then assigned Claude the bounded
-[Route 3 production-readiness and security-gate preparation](review/route-3-production-readiness-claude-prompt.md):
-complete-chain review, exact-path root-owned lifecycle rehearsal on
-`oracle-test`, transient inspection-failure decision preparation and a minimal
-production-specific read-only fact checklist. Independent review found blocking installer
-recovery and sudo run-as defects; the bounded remediation (verified recovery, `recovery-incomplete` status 15, exact
-run-as/tag verification, corrected residual analysis and fact methods) has been returned for re-review and is not
-accepted. A second independent review reproduced three installer recovery gaps and two inspection-method defects; the
-bounded second remediation (handback "Second review remediation return") has been returned for re-review and is not
-accepted. That re-review found two remaining upgrade-restoration verification defects (unknown unit-state observations can
-compare equal; a non-zero enable/disable restoration command is discarded when its link effect matches) and a dedicated-account
-user-unit-path inspection gap. Peter assigns the bounded
-[third remediation](review/route-3-production-readiness-review-remediation-r3-claude-prompt.md), which Claude has returned for
-re-review (handback "Third review remediation return"; not accepted). Production/staging access or
-activation remains prohibited; the risk decision and any later inspection or
-activation require separate acceptance.
-That re-review found one remaining strict wants-link observation defect, two
-secret-safe/fixed-account defects in checklist item 5b, and stale current-state
-headings. Peter assigned the bounded
-[fourth remediation](review/route-3-production-readiness-review-remediation-r4-claude-prompt.md),
-which Claude has returned for independent Codex re-review (handback "Fourth review remediation return",
-2026-10-23: strict `enablement-unavailable`/`recovery-incomplete` wants-link observation, fixed-account allowlisted item 5b,
-reconciled headings). The candidate remains unaccepted; production/staging access, inspection and
-activation remain prohibited, and the risk decision remains separate.
-Codex's review of that return found a non-reproducible host-state discrepancy, residual status masking in checklist item 5b and a missing fourth-return section; the bounded
-[fifth remediation](review/route-3-production-readiness-review-remediation-r5-claude-prompt.md) has been returned for independent Codex re-review (handback "Fifth review remediation return", 2026-10-23: fail-closed item 5b/5/11, 47 executable checks, fresh final-tree runs; no product code changed). The candidate remains unaccepted, and the same prohibitions apply.
-Codex's review of the fifth return reproduced one remaining false-completion
-path: item 5b reports `COMPLETE` after a directory search or unit query fails.
-Peter assigns Claude the direct completion correction under the existing
-round-five scope, with two focused regressions and only the focused checklist,
-shell-syntax, directly affected structural and diff checks. This is not a sixth
-remediation round and no full-suite rerun is required. The candidate remains
-unaccepted; the transient-risk decision and production/staging access,
-inspection and activation remain separate and prohibited.
-Claude returned the final portability follow-up using an isolated fixed Python
-errno/type probe rather than diagnostic-text parsing. Independent Codex focused
-re-review found no remaining implementation defect: the extracted checklist
-matched between the workspace and `oracle-test`, **53/53** focused tests,
-`bash -n` and `git diff --check` passed, and the structural run reproduced
-**127 passed, 1 known baseline allowlist failure**. Codex recommends acceptance
-for continued non-production development. Peter accepted the cumulative Route
-3 production-readiness candidate on 2026-10-24, closing this implementation and
-review chain. On 2026-10-25 Peter selected production as the direction,
-classified Route 3 as a bounded, attended migration/cutover evidence facility
-rather than general maintenance, and accepted the transient inspection-failure
-residual only within that bounded use. Each activation requires explicit
-authority, a named attending operator, clean precondition and post-pass checks,
-and verified removal or reboot before the operating window closes if cleanup is
-uncertain. Recurring or unattended use requires a stronger trusted-identity and
-automated-reconciliation design and independent review. No successor
-implementation or production operation was assigned by that decision. Peter
-then explicitly authorized handback §6 production read-only fact collection on
-2026-10-25. Its unprivileged part changed nothing and returned no-go: Python
-3.14, the executor account, Route 3 units/artifact and tmpfiles/runtime
-prerequisites are absent, and the live checkout plus Python 3.12 venv fail the
-root-owned executor trust boundary. Peter then gave the follow-up assignment and
-its named prerequisites; root-assisted sudoers and private-Polkit classification
-completed and found nothing that reaches the future account. Phase B found that
-the runbook's fixed code root and venv were the live `freedom-bot`/
-`freedom-worker` paths, and Phase C did not begin. Production was changed only
-by Peter's temporary root grant(s), the approved `chmod 0440` of
-`/etc/sudoers.d/foundry-bot` and an `rm -f` of the grant file whose status was
-never reported; nothing was provisioned or installed, no service restarted, and
-no migration or cutover ran. Peter then selected a distinct trusted deployment,
-`/opt/freedom-route3/{code,venv}`, implemented and rehearsed only on
-`oracle-test`; the live services are left on their paths. On 2026-10-31 Peter confirmed that the temporary grant file `/etc/sudoers.d/zz-claude-window` is absent and accepted the Phase A stop/order deviation; both blockers are closed. Independent Codex review of the R4 direct-completion return finished
-on 2026-10-30 with no remaining executable defect; reviewer-authorized
-documentation corrections need no separate review. The production provisioning
-plan in runbook part P was subsequently remediated through R6 plus the R7
-documentation correction. Codex's independent R6/R7 re-review found no
-remaining issue, and Peter accepted the plan on 2026-11-03. The completed
-prompt chain is historical in the November 2026 review archive.
-
-Production now runs Ubuntu 26.04.1, Ubuntu Python 3.14.4 and Ubuntu PostgreSQL
-18.6. The disposable host matches that runtime/database baseline and, after the
-2026-11-07 Ubuntu 26.04/PostgreSQL 18 R2 remediation, its exact-tree suites are
-green at the default descriptor limit (bot 7,566 passed and 337 skipped, web 2,892
-passed and 80 skipped, Foundry 171; after the 2026-11-08 dependency currency refresh
-bot 7,571 passed and 337 skipped, web 2,893 passed and 80 skipped, Foundry 171). The canonical SSH route needed no repair: the
-`nobody:nogroup` ownership first reported for the production host's OpenSSH client
-configuration was an agent-sandbox user-namespace artifact, and unsandboxed the
-paths are `root:root` and `ssh oracle-test` works. Independent Codex re-review
-of the R2 return found no remaining repository or disposable-host finding;
-at that point (2026-11-07/08) production journal counts and the final backup
-hashes and sizes were open. On 2026-11-09 Peter accepted the 15:27 pre-window
-write as a documented process deviation, selected `PermitRootLogin
-prohibit-password`, and authorized removal of obsolete `/opt/discord-bots/venv*`
-paths after unused verification. The SSH and legacy-path decisions were verified
-on `oracle-test`; applying them to production was then an attended privileged
-action, performed in the continuation described next. (Its statements about
-open production evidence and pending production actions are a dated historical
-record, superseded by that continuation.)
-
-The attended production continuation subsequently completed those root-only
-items, dependency/runtime currency, backup and journal evidence, and a clean
-31-sample/30-minute observation. During it, apt exposed an active, enabled
-`lavalink.service` under `/opt/lavalink`. OD-40 makes that prohibited residue,
-not a platform component. On 2026-11-11 Peter explicitly authorized complete
-live-host removal, which was executed and verified complete the same day. The
-maintainer removed the final stale repository-local `.env` reference on
-2026-11-11 without exposing its contents; completion evidence is in the active
-handover and production-upgrade handback.
-
-**Current Route 3 continuation (2026-11-15; supersedes every statement below that
-a block-F identity is `UNSET` or that S0.A is the next step).** The read-only
-S0.A attestation was accepted (32 members, plain `amd64`, interpreter
-`52e0a13e...`), as were the baseline record (`cf9931cd...`) and signed-archive
-payload reference (`31d744c7...`). Codex independently reproduced on
-`oracle-test` the four release identities: `ROUTE3_RELEASE_REV`
-`26757f2ab67eb5be4f576dbc2166db5df8870857`, archive `50f74b4f...`, manifest
-`18e6794d...` and SA-2 tree `5e195c40...`; `check-fields` is fully green. Block F
-is therefore **complete, but that is not a GO**. Nothing was delivered to
-production and no lasting production mutation occurred. The actual next
-controlled step is separately authorized artifact delivery, then read-only
-S0.2/S0.3; the record-only candidate is already committed and published on
-`origin/docs/platform-plan`. S1 inert
-provisioning, S3 arming/install and S4 activation remain separate later
-decisions (handback §15).
-
-*Historical, superseded where it conflicts by the paragraph above:* the Route 3
-plan review gate is closed, but every block-F release identity
-remains `UNSET`. The old S0.0 procedure assumed Python 3.14 was absent and must
-not run (it is withdrawn). Its release-record/package procedure was redesigned
-on 2026-11-11 for the pre-installed Python 3.14 baseline (read-only attestation
-tool and runbook blocks S0.A/S0.3; an uncommitted implementation). After two
-remediated Codex review rounds, the exact reviewed tree's `oracle-test` results
-(2026-11-12; handback §13.1) are: release-record module 269 passed; full
-provisioning module as root 234 passed; bot 7,853 passed and 250 skipped; web
-2,893 passed and 80 skipped; Foundry 171 passed. This validates the
-uncommitted candidate, not production; no commit, push or production/staging
-mutation occurred. The next controlled step is publication/commit of the exact
-reviewed candidate, then a separately authorized production read-only S0.A
-attestation to populate the release identities. Production S1 inert
-provisioning, S3 arming/install and S4 activation remain separate later
-decisions. Production provisioning,
-installation and activation remain prohibited without the applicable explicit
-authority.
-
-The isolated-APT follow-up completed on 2026-11-14 (handback §14.1). It binds
-architecture-variant package metadata and permits off-production reference
-generation from private, signed APT state while refusing insecure or
-variant-suppressing source configuration. Independent `oracle-test` evidence on
-the corrected tree: release-record 346 passed; provisioning as root 234 passed;
-bot 7,928 passed / 252 skipped; database-enabled web 2,894 passed / 80 skipped;
-Foundry 171 passed. A real isolated `amd64v3` archive run verified all 32
-installed closure members. This changes no production authority: all block-F
-values remain `UNSET`, Route 3 remains NO-GO, and publication/commit is the next
-controlled step before any separately authorized production read-only S0.A.
-
-All testing levels are authorized on `oracle-test`, including root/systemd,
-network, packages, PostgreSQL and destructive recovery drills. Production and
-staging mutation, real secrets and real player data remain outside this
-authority.
-
+**Live records.**
 [Active handover](review/Handover%20information) ·
+[Status](project-management/status.md) ·
 [Active delivery plan](project-management/active-delivery-plan.md) ·
+[Reboot and continuation runbook](operations/production-reboot-and-route-3-continuation-runbook.md) ·
+[Provisioning runbook](operations/executor-supervisor-provisioning-runbook.md) ·
+[Route 3 handback](review/route-3-production-readiness-handback.md) ·
 [Disposable test server](operations/disposable-test-server.md) ·
 [Historical review index](review/README.md).

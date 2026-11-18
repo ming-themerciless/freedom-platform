@@ -1,0 +1,46 @@
+# Loopback-only TLS perimeter for the disposable oracle-test dress rehearsal.
+# This file is deliberately unusable as the public/production Caddy site: the
+# listener is bound to localhost and relies on SSH forwarding for reachability.
+
+https://localhost:8443 {
+	bind 127.0.0.1
+	tls internal
+	encode zstd gzip
+
+	@health path /healthz /healthz/ /healthz/*
+	handle @health {
+		respond 404
+	}
+
+	# Real WebAuthn enrollment ceremony, reachable only through the SSH tunnel.
+	handle /enrol* {
+		root * /opt/freedom-blades/platform/infra/ceremony
+		rewrite * /passkey-registration.html
+		file_server
+	}
+
+	# The submission API is a separate, submit-only process. This rehearsal
+	# listener remains loopback-only; Foundry browsers reach it through the
+	# operator's SSH tunnel and the API enforces the exact Foundry Origin list.
+	handle /api/v1/foundry/snapshots {
+		reverse_proxy 127.0.0.1:8757
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8001 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+			transport http {
+				read_timeout 35s
+				write_timeout 35s
+			}
+		}
+	}
+
+	request_body {
+		max_size 64MB
+	}
+
+	header -Server
+	header Strict-Transport-Security "max-age=31536000"
+}

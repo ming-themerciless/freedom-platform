@@ -1,5 +1,15 @@
 # Executor supervisor — provisioning runbook (Route 3 executor OC)
 
+**Execution state (2026-11-18; later than the dated text below, which is retained as history).**
+Block F is complete (2026-11-15), and S1 inert provisioning was executed on production on 2026-11-18 under
+Peter's written provisioning authorization: S1.0-S1.4 rc 0, S2.1 rc 0 (`STOP-A verified`), S2.2 rc 12 (the
+status P.2 expects before the first post-S1 boot). S3 and S4 have not been run and remain separately
+unauthorized. The next production action is an attended reboot followed by read-only verification; its
+procedure is the
+[reboot and continuation runbook](production-reboot-and-route-3-continuation-runbook.md), which defines no
+block of its own. The statements below that "nothing in this runbook has been run on production", that
+release identities remain `UNSET` or that provisioning is unauthorized describe earlier dates.
+
 **Status: accepted on 2026-10-22 for continued non-production development as
 part of the cumulative executor OC R6 candidate. Nothing in this runbook has
 been run on production or staging, and following it does not authorize
@@ -41,7 +51,7 @@ production values called out as "production-specific" were not.
 
 ## P. Production provisioning plan (R6 remediation, 2026-11-02) — NO-GO until every field in block F is supplied
 
-**Status of this plan: accepted 2026-11-03; it authorizes nothing.** Peter decided on 2026-10-31 that `/etc/sudoers.d/zz-claude-window` is absent
+*Update 2026-11-18: block F is complete and S1 has been executed to STOP-A on production (see the execution state at the top of this document); S3 and S4 are not authorized. The remainder of this paragraph is the 2026-11-03 position.* **Status of this plan: accepted 2026-11-03; it authorizes nothing.** Peter decided on 2026-10-31 that `/etc/sudoers.d/zz-claude-window` is absent
 and accepted the Phase A stop/order deviation; both blockers are closed. Codex's independent R6/R7 re-review found no remaining issue, and Peter accepted part P. Provisioning, installation and activation remain **unauthorized**:
 every release field is still `UNSET`, S1 requires a later written decision after the exact release record is supplied and reviewed, and activation is a separate later decision. Every block
 below is for a **future** operator under that future written authority; none has been run on production or staging. Rehearsed only on `oracle-test`.

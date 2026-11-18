@@ -14,6 +14,7 @@ assignment or operational authority.
 
 | Snapshot | Scope | SHA-256 at archival |
 |---|---|---|
+| [`Handover-information-through-2026-11-15-route-3-s0a-attestation.md`](../Handover-information-through-2026-11-15-route-3-s0a-attestation.md) | Complete predecessor handover immediately before the S1-complete / attended-reboot consolidation of 2026-11-18; carries the S0.A attestation state and the 2026-11-07 to 2026-11-15 production-baseline history | `b62548266bd5cf7fb337d4fbd3ee4498651599c52dea9ad5d42ce4b9b414c7fe` |
 | [`Handover-information-through-2026-10-24-route-3-production-readiness-acceptance.md`](../Handover-information-through-2026-10-24-route-3-production-readiness-acceptance.md) | Complete predecessor handover immediately before production-readiness acceptance and current-state consolidation | `1798dd4c8f7bb61d623cfa5ee13a6c4a38cc336bcdc3e1592692abd776a20146` |
 | [`Handover-information-through-2026-10-13-route-3-hold-active.md`](../Handover-information-through-2026-10-13-route-3-hold-active.md) | Verbatim Route 3 `hold`-active handover superseded by acceptance of the complete inactive role series | `506abaed3166e6b2b23919abc9b4ea5e21cc67102a0e88d21cdb2e7eb1e47ce8` |
 | [`Handover-information-through-2026-10-12-wp3-contract-review.md`](../Handover-information-through-2026-10-12-wp3-contract-review.md) | Verbatim WP-3 contract-review handover superseded by the baseline v1.9 implementation-first reset | `67968c49b66f47a32c04a8faa7988d27439e44e76f4e82460947462108007d9a` |

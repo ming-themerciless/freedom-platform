@@ -79,7 +79,12 @@ step "Preflight"
 [ -d "$REPO_ROOT" ] || die "$REPO_ROOT does not exist."
 [ -x "$WEB_VENV/bin/python" ] || die "the portal virtualenv is missing at $WEB_VENV."
 command -v psql >/dev/null || die "psql is not installed."
-systemctl is-active --quiet postgresql@16-main || die "PostgreSQL is not running."
+# The supported host service is the cluster-agnostic umbrella unit.  Pinning
+# this preflight to one historical major made the otherwise portable staging
+# installer refuse PostgreSQL 18 hosts even while their active cluster was
+# healthy.  The database URL and the migration guard below still prove the
+# exact local target; this check only establishes that PostgreSQL is running.
+systemctl is-active --quiet postgresql || die "PostgreSQL is not running."
 
 for protected in $PROTECTED_DATABASES; do
     [ "$DB_NAME" = "$protected" ] && die "$DB_NAME is a protected database."

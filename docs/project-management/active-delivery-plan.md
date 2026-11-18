@@ -1,8 +1,8 @@
 # Active delivery plan — implementation-first baseline v1.9
 
-Status: approved and active; Ubuntu 26.04/PostgreSQL 18 production remediation
-and Lavalink residue removal complete (2026-11-11); Route 3 release fields
-no-go
+Status: approved and active; Route 3 S1 inert provisioning complete on
+production at STOP-A (2026-11-18); attended production reboot prepared, not
+authorized or executed; S3 and S4 not authorized
 
 Owner and acceptance authority: Peter Duscha
 
@@ -22,141 +22,72 @@ Owner and acceptance authority: Peter Duscha
 
 ## Current delivery position
 
-The attended production Ubuntu continuation completed the previously open
-root-only work, backup/journal evidence and clean 31-sample/30-minute
-observation. Its temporary sudo grant was removed. Apt exposed one new current
-finding: an active, enabled production `lavalink.service` under `/opt/lavalink`.
-Music is removed under OD-40, and Peter authorized complete removal of that
-live residue on 2026-11-11. The removal is **complete and verified absent**
-(service, unit, `/opt/lavalink`, account/group, OpenJDK 17 packages; platform
-services healthy). This was host cleanup, not a platform feature or a Route 3
-action. The maintainer removed the final stale Lavalink reference from the
-repository-local `.env` on 2026-11-11 without exposing its contents. The
-production continuation has no open item.
+**Production baseline.** Ubuntu 26.04.1, Ubuntu Python 3.14.4 and Ubuntu
+PostgreSQL 18.6 are current; the attended Ubuntu continuation and the Lavalink
+residue removal (music is removed under OD-40) closed on 2026-11-11 with no open
+item. Peter's pre-production currency policy (implementation plan §14.1) stands:
+supported OS, database, runtimes and dependencies are brought current before the
+platform begins production use, without waiving backup, recovery, observation or
+review evidence.
 
-The cumulative inactive Route 3 production-readiness candidate is accepted for
-continued non-production development. Peter has selected production as the
-direction and bounded Route 3 to explicitly authorized, attended
-migration/cutover evidence activations. It is not a general maintenance
-facility and is not approved for recurring or unattended use.
+**Route 3, executed.** Peter bounded Route 3 to explicitly authorized, attended
+migration/cutover evidence activations. It is not a general maintenance facility
+and is not approved for recurring or unattended use; the transient
+inspection-failure residual is accepted only inside that bounded use (named
+attending operator, pre/post residual-state checks, verified root removal or
+reboot if cleanup is uncertain). The provisioning plan (runbook part P) was
+accepted on 2026-11-03; block F was completed on 2026-11-15; and on 2026-11-18,
+under Peter's written S1 authorization, S1 inert provisioning ran on production
+for deployable revision `26757f2ab67eb5be4f576dbc2166db5df8870857`: S1.0 through
+S1.4 rc 0, S2.1 rc 0 with `STOP-A verified`, S2.2 rc 12 as expected before the
+first post-S1 boot, all 32 package payloads reverified at every gate. Claude and
+Codex final review found no defect or rollback need. STOP-A holds: no supervisor
+unit, process, linger, sudoers grant, SA-2 artifact, state or runtime directory,
+activation or cutover. Evidence: handback §16.
 
-The transient inspection-failure residual is accepted only inside that bounded
-use: every activation needs a named attending operator, pre/post residual-state
-checks and verified root removal or reboot before the operating window closes
-if cleanup is uncertain. Any recurring or unattended use requires a stronger
-trusted-identity and automated-reconciliation design, tests and independent
-security review.
+**Next action: an attended production reboot (prepared, not authorized).** Peter
+authorized documenting it, not performing it. When Peter authorizes it, follow the
+[reboot and continuation runbook](../operations/production-reboot-and-route-3-continuation-runbook.md):
+new boot confirmed; service health; S2.1; S2.2 at rc 0; the read-only S2.3
+checklist and account-dependent sudo, Polkit, user-manager and process checks;
+independent review. The reboot interrupts the Freedom bot, worker, PostgreSQL,
+Caddy and Foundry backends and cannot start Route 3, because nothing for the boot
+to start exists at STOP-A.
 
-The 2026-10-25 production-specific §6 inspection was a historical observation:
-Python 3.14 and the Route 3 account, units, artifact, runtime paths and tmpfiles
-prerequisite were absent then. Production has since been upgraded to Ubuntu
-26.04.1, Ubuntu Python 3.14.4 and Ubuntu PostgreSQL 18.6. That maintenance did
-not provision or activate Route 3, and the old S0.0 release-preparation
-procedure no longer applies to the pre-installed Python baseline.
-
-Peter then gave the follow-up assignment and named the window, himself as
-rollback owner and retention until reviewed. Root-assisted sudoers and private
-Polkit classification **completed** (nothing reaches the future account). Phase
-B stopped on a live-path coexistence conflict; Phase C did not begin. Production
-changes were Peter's temporary root grant(s), the approved `chmod 0440` of
-`/etc/sudoers.d/foundry-bot`, and an `rm -f` of the grant file whose status was
-never reported; nothing was provisioned or installed and no service restarted.
-
-Peter then selected a distinct trusted deployment, `/opt/freedom-route3/{code,venv}`.
-It is implemented and rehearsed only on `oracle-test`; the live services stay on
-their paths and are not edited or restarted. The root does not exist on
-production, and the selection authorizes no production change.
-
-Peter confirmed on 2026-10-31 that `/etc/sudoers.d/zz-claude-window` is
-**absent** and accepted the Phase A stop/order deviation. Peter accepted the
-production provisioning plan on 2026-11-03 after Codex's independent R6/R7
-re-review found no remaining issue. The completed prompt chain is archived;
-runbook part P and the cumulative handback remain the forward contract and
-evidence.
-
-Peter's 2026-11-07 pre-production currency decision requires supported OS,
-database, runtime, dependency and related infrastructure upgrades before the
-platform enters production use. It approves the completed PostgreSQL 16-to-18
-migration and retirement of the superseded cluster; it does not waive backup,
-restore, compatibility, observation or independent-review evidence.
-
-*The next three paragraphs (R2 return, dependency currency, currency
-continuation) are dated 2026-11-07/08 snapshots, historical and superseded by
-the 2026-11-11 position above wherever they describe production work or
-evidence as open, blocked or pending; the disposable-host facts and suite
-figures in them stand as stated.*
-
-The Ubuntu 26.04/PostgreSQL 18 R2 remediation returned on 2026-11-07 and passed
-independent Codex re-review on 2026-11-08 with no remaining repository or
-disposable-host finding: the disposable exact-tree suites are green
-at the default descriptor limit (2026-11-07: bot 7,566 passed, 337 skipped; web 2,892
-passed, 80 skipped; Foundry 171; superseded by the 2026-11-08 dependency-currency
-figures below), and the SSH route needed no repair, because the apparent
-`nobody:nogroup` ownership was an agent-sandbox user-namespace artifact
-(unsandboxed, the paths are `root:root` and `ssh oracle-test` works). At that
-date production journal warning/error counts and the final backup hashes and
-sizes were open because the remediation account could not read them; they were
-collected in the 2026-11-09–11 attended continuation. Peter accepted the 15:27
-pre-window write as a documented process deviation on 2026-11-09, selected
-`PermitRootLogin prohibit-password`, and authorized removal of obsolete
-`/opt/discord-bots/venv*` paths after unused verification. Those two production
-actions were then pending an attended privileged session (their disposable-host
-checks were complete) and have since been performed there. Production
-application or schema mutation, `freedom-web` activation and Route 3 execution
-remain out of scope (still in force). See the handback's R2 section.
-
-Dependency currency, 2026-11-08: the stale direct Python bounds were raised (FastAPI
-0.162, uvicorn 0.54, cryptography 50, SQLAlchemy 2.1, py_webauthn 3, pytest 9,
-pytest-asyncio 1.x) and the web lock regenerated; the exact-tree `oracle-test` suites are
-green on it (bot 7,571 passed, 337 skipped; web 2,893 passed, 80 skipped; Foundry 171 on
-Node 24.22.2). At that date production's virtualenvs still held the older sets; they
-were rebuilt from this tested set in the attended continuation. See the handback's
-"Dependency currency return".
-
-The Route 3 plan review gate remains closed, but every block-F release identity
-is `UNSET`. Its release-record/package procedure was redesigned on 2026-11-11 for
-the pre-installed Python 3.14 baseline (read-only attestation tool, withdrawn
-S0.0, new S0.A/S0.3; still uncommitted). Two Codex review rounds were
-remediated, and on 2026-11-12 the exact reviewed tree's `oracle-test` evidence
-was recorded (handback §13.1): release-record module 269 passed; full
-`tests/test_provisioning_plan.py` as root 234 passed; bot suite 7,853 passed,
-250 skipped; web 2,893 passed, 80 skipped; Foundry 171 passed. That validates
-the uncommitted candidate, not production. The next controlled step is
-publication/commit of that exact candidate, then a separately authorized
-production read-only S0.A attestation to populate the release identities. Only
-after all release fields are supplied and reviewed may Peter separately decide
-whether to authorize S1 inert provisioning; S3 arming/install and S4 activation
-remain later independent decisions. Account-dependent inspection repeats after any
-separately authorized provisioning. The coordinator, start orchestration,
-automatic attestation, migration/cutover and RB-1 remain unassigned.
-
-Currency continuation, 2026-11-08: the unprivileged items were closed or
-classified in the production-upgrade handback; root-only production work and
-the journal/backup evidence then needed a privileged production session, which
-was completed on 2026-11-09–11. `oracle-test` runs Node 24.22.2 and current
-Ubuntu packages. Database suites run there, never on the
-production host (a scratch-cluster run reached production's `freedom_test` and was
-repaired; `tests/conftest.py` now requires the dedicated host identity as well as
-the default socket).
+**After that, separate decisions only.** S3 arming/install and S4 activation are
+each a separate written decision of Peter's; S4 additionally needs the attending
+operator, escalation contact and bounded window. A reboot between a future S3.5
+and S4 or R3 is forbidden. The coordinator, start orchestration, automatic
+attestation, migration/cutover and RB-1 remain unassigned.
 
 ## Evidence and boundaries
 
-- Accepted provisioning-plan evidence: exact-tree **309 / 51 / 315 passed**,
-  guard suite **40 passed**, clean shell syntax and `git diff --check`, clean
-  disposable-host residue state, and a clean independent R6/R7 re-review.
-- Final focused checklist review: exact-tree **53/53**, clean `bash -n` and
-  `git diff --check`; the structural run retained one known baseline allowlist
-  failure.
-- Production facts are in handback §§6.1–6.2; §6.1's counts come from checklist
-  v1 (old live paths) and the current checklist is v2 (trusted deployment paths).
-  Post-provision account facts, F-1 through F-3 and the bounded
-  activation/rollback procedure remain later gates; sudoers and Polkit policy
-  are no longer open.
+- Accepted provisioning-plan evidence: exact-tree 309 / 51 / 315 passed, guard
+  suite 40 passed (2026-11-03), clean independent R6/R7 re-review.
+- Release-record and reference tooling (2026-11-14/15, `oracle-test`):
+  release-record module 350 passed; provisioning module as root 235 passed; bot
+  7,928 passed / 252 skipped; web 2,894 passed / 80 skipped; Foundry 171 passed.
+  Those validate the repository tree and the disposable host; the production
+  result is the S1/S2 record above.
+- Production facts and the v2 checklist are in the cumulative
+  [handback](../review/route-3-production-readiness-handback.md) (§6 checklist,
+  §15 S0.A, §16 S1 result).
 - Discord remains the community platform and identity/integration source. Only
-  the legacy Freedom bot is eventually retired under implementation-plan
-  §15.2 after the full completion criteria are met.
+  the legacy Freedom bot is eventually retired under implementation-plan §15.2
+  after the full completion criteria are met.
+
+## History
+
+The previous plan (S0.A attestation state; the 2026-11-07 to 2026-11-11
+production-baseline paragraphs; the 2026-10-25 to 2026-11-03 Route 3
+decisions) is preserved verbatim in
+[`active-delivery-plan-through-2026-11-15-route-3-s0a-attestation.md`](active-delivery-plan-through-2026-11-15-route-3-s0a-attestation.md);
+an earlier predecessor is
+[`active-delivery-plan-through-2026-10-24-route-3-production-readiness.md`](active-delivery-plan-through-2026-10-24-route-3-production-readiness.md).
+Both are indexed in the [plan archive](active-delivery-plan-archive/README.md)
+and are evidence, not authority.
 
 [Active handover](../review/Handover%20information) ·
 [Current status](status.md) ·
 [Implementation plan](../implementation-plan.md) ·
-[Archived predecessor plan](active-delivery-plan-through-2026-10-24-route-3-production-readiness.md)
+[Reboot and continuation runbook](../operations/production-reboot-and-route-3-continuation-runbook.md)

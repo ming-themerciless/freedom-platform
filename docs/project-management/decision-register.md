@@ -1,5 +1,16 @@
 # Decision register
 
+## Record — Route 3 S1 executed to STOP-A; reboot preparation authorized, reboot not — 2026-11-18
+
+Under Peter's written S1 authorization, S1 inert provisioning ran on production
+(S1.0-S1.4 rc 0, S2.1 rc 0, S2.2 rc 12 as expected; deployable revision
+`26757f2ab67eb5be4f576dbc2166db5df8870857`) and stopped at STOP-A; no defect or
+rollback need was found by Claude and Codex review. Peter authorized preparing and
+documenting an attended production reboot. **He has not authorized the reboot, S3
+or S4**, each of which needs its own explicit decision; a reboot between a future
+S3.5 and S4 or R3 remains forbidden. See the
+[reboot and continuation runbook](../operations/production-reboot-and-route-3-continuation-runbook.md).
+
 ## Record — currency continuation, unprivileged scope — 2026-11-08
 
 No new decision is requested. Open for Peter: the 15:27 write; whether to accept

@@ -1,6 +1,18 @@
 # RAID register
 
-**Current-state note, 2026-11-03.** Peter accepted the independently reviewed
+**Current-state note, 2026-11-18.** Route 3 S1 inert provisioning ran on
+production and stopped at STOP-A (S1.0-S1.4 rc 0, S2.1 rc 0, S2.2 rc 12 as
+expected before the first post-S1 boot; no defect, no rollback need). Block F is
+complete. Open and bounded: (1) the attended production reboot is prepared in the
+[reboot and continuation runbook](../operations/production-reboot-and-route-3-continuation-runbook.md)
+but neither authorized nor executed, and it interrupts the bot, worker,
+PostgreSQL, Caddy and Foundry backends while being unable to start Route 3;
+(2) S2.2 must return rc 0 after that boot before any S3 decision; (3) S3 and S4
+each need a separate written decision, and a reboot between a future S3.5 and
+S4 or R3 is forbidden. The 2026-11-03 note below is history: its `UNSET`,
+"not yet committed" and "S0.0 observation" statements no longer apply.
+
+*Historical, superseded by the 2026-11-18 note above.* **Current-state note, 2026-11-03.** Peter accepted the independently reviewed
 Route 3 production provisioning plan. The plan-quality risk described in the
 2026-10-31 note is **closed**; the attended status-28 recovery residual is
 accepted as the deliberate boundary. The remaining items are release and

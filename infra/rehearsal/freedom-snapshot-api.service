@@ -1,0 +1,24 @@
+[Unit]
+Description=Freedom Blades disposable snapshot submission API
+After=network-online.target postgresql.service freedom-web.service
+Wants=network-online.target postgresql.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/freedom-blades/platform
+EnvironmentFile=/etc/freedom-blades/snapshot-api.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/freedom-blades/runtime/venv-web/bin/python -m tools.snapshot_api --host 127.0.0.1 --port 8757
+User=freedomweb
+Group=freedomweb
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+ReadOnlyPaths=/opt/freedom-blades/platform
+ReadWritePaths=/srv/freedom-blades/snapshots
+
+[Install]
+WantedBy=multi-user.target

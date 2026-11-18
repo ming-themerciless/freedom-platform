@@ -2097,7 +2097,7 @@ def test_the_gate_text_is_the_single_attestation_and_runs_the_tool_from_the_veri
 
 
 def test_current_state_documents_agree_on_the_next_step_and_the_p3_rows_are_not_blockers():
-    """2026-11-15: block F is complete but not a GO; the P.3 rows no longer say BLOCKER; every current-state document names the same next step."""
+    """2026-11-18: S1 ran to STOP-A on production; the P.3 rows no longer say BLOCKER; every current-state document names the same next step (an attended reboot, S3/S4 unauthorized)."""
     runbook = RUNBOOK.read_text()
     for row in ("| Python 3.14 (installed host baseline) |", "| Signed-archive payload reference |"):
         line = next(l for l in runbook.splitlines() if l.startswith(row))
@@ -2105,6 +2105,7 @@ def test_current_state_documents_agree_on_the_next_step_and_the_p3_rows_are_not_
     docs = REPO / "docs"
     for rel in ("implementation-plan.md", "project-management/status.md", "review/Handover information", "review/route-3-production-readiness-handback.md"):
         text = " ".join((docs / rel).read_text().split())
-        assert "S0.2/S0.3" in text and "record-only candidate" in text, rel
+        assert "STOP-A" in text and "reboot" in text and "S3" in text and "S4" in text, rel
     handback = (docs / "review/route-3-production-readiness-handback.md").read_text()
+    assert "## 16. S1 inert provisioning executed on production (2026-11-18)" in handback
     assert "awaiting Codex review" not in handback.split("## 15.", 1)[1].splitlines()[0]

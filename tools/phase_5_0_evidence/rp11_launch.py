@@ -44,9 +44,9 @@ INVOCATION_ID_LENGTH = 32
 
 # -- §5.8 the literal execve (R2 §4.4.3.4 item 5; §7.9 LB-2S) -----------------
 
-EXECVE_PATH = "/usr/bin/python3.12"
+EXECVE_PATH = "/usr/bin/python3.14"
 EXECVE_ARGV = (
-    "/usr/bin/python3.12",
+    "/usr/bin/python3.14",
     "-I",
     "-S",
     "/usr/local/libexec/freedom-blades-rp11/rp11_entry.py",
@@ -201,10 +201,10 @@ def ic1_environment(env_class: str, checkout: str) -> tuple[str, ...]:
 
 # -- expected digests (§5.11; equal to infra/rp11-launch/expected.sha256) -------
 
-EXPECTED_IMAGE_SHA256 = "04218ed2d834c1c7abe417a850831d8956f087711befd692eefc2e61b2668572"
-EXPECTED_LISTING_SHA256 = "8c1fedee1c717b17a14d7c746669ffcec3c41d155e5cc4c63d24a5f2527cd188"
+EXPECTED_IMAGE_SHA256 = "7e2b7bde86a5ec8aaf112c3377fbdb3c862ffcb7acfff944c965b1aa0fddc67e"
+EXPECTED_LISTING_SHA256 = "498108223928ddaa1eb5d57cca15c7628f5bd30f331bb1930f10a68dcf7cdfc9"
 EXPECTED_MAP_SHA256 = "5a8b058084edcb1e3f6f7ddea13b60da6af71102300ea276225ae4ab0e8bc34d"
-EXPECTED_LAUNCH_S_SHA256 = "b37280d53eecce690210021a793cde5d5b73a8f9c027d187e4bd1338e7e27706"
+EXPECTED_LAUNCH_S_SHA256 = "3d65779e718d2cd1e8d199fd1db619712237613df975992ade1b8d48cd57786e"
 TOOLCHAIN_LOCK_SHA256 = "f704c0f4f0ddbe9de92da9812dde6929f681ba778263746a603bde8b4b3563d6"
 BUILD_ROOT_MANIFEST_SHA256 = "f08ba9de4374374fa91012021ce12fb83f6370be5547ee4e214232100c38e76f"
 

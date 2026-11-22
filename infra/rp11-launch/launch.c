@@ -204,7 +204,7 @@ rp11_main(long argc, char *const *argv, char *const *envp)
 	idbuf[45] = id[31];
 	idbuf[46] = '\0';
 
-	argv_out[0] = "/usr/bin/python3.12";
+	argv_out[0] = "/usr/bin/python3.14";
 	argv_out[1] = "-I";
 	argv_out[2] = "-S";
 	argv_out[3] = "/usr/local/libexec/freedom-blades-rp11/rp11_entry.py";
@@ -218,7 +218,7 @@ rp11_main(long argc, char *const *argv, char *const *envp)
 	envp_out[2] = idbuf;
 	envp_out[3] = 0;
 
-	rp11_syscall3(RP11_SYS_EXECVE, (long)"/usr/bin/python3.12", (long)argv_out,
+	rp11_syscall3(RP11_SYS_EXECVE, (long)"/usr/bin/python3.14", (long)argv_out,
 		      (long)envp_out);
 	rp11_fail("rp11-launch/1: launch-exec-failed\n", 34, 117);
 }

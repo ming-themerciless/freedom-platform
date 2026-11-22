@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from tests.phase_5_0_evidence.rp11_fixtures import (
+    OTHER_INVOCATION_ID,
     PASS_A,
     PASS_B,
     FaultFilesystem,
@@ -112,6 +113,7 @@ class PassA:
         """A new, internally consistent handback with changed binding fields."""
         fields = dict(
             pass_id=self.binding.pass_id,
+            invocation_id=self.binding.invocation_id,
             capture_root=self.binding.capture_root,
             x3_outcome=self.binding.x3_outcome,
             x4_validity=self.binding.x4_validity,
@@ -735,6 +737,7 @@ def _x4(pass_a: PassA):  # type: ignore[no-untyped-def]
         final_state=pass_a.binding.final_state,
         final_sha256=pass_a.binding.capture_index_sha256,
         pass_id=PASS_A,
+        invocation_id=pass_a.binding.invocation_id,
     )
 
 
@@ -1036,3 +1039,57 @@ def test_an_unadmitted_pair_changing_during_the_check_stops(  # type: ignore[no-
     result = _check_unread(pass_a, RecordingReadOnlyFilesystem(hook=hook))
     assert fired
     _assert_stopped(result, CONDITION_NAME_AGREEMENT, reason)
+
+
+# ===========================================================================
+# G11 — InvocationID chain and binding consistency
+# ===========================================================================
+
+
+def test_a_binding_with_a_different_invocation_id_stops(tmp_path: Path) -> None:
+    pass_a = PassA(tmp_path)
+    pass_a.rebind(invocation_id=OTHER_INVOCATION_ID)
+    _assert_stopped(
+        pass_a.check(), CONDITION_X4, "final-state-does-not-match-its-binding"
+    )
+
+
+def test_a_final_state_with_a_different_invocation_id_stops(tmp_path: Path) -> None:
+    pass_a = PassA(tmp_path)
+    pass_a.forge_final(lambda document: document.__setitem__("invocation_id", OTHER_INVOCATION_ID))
+    _assert_stopped(
+        pass_a.check(), CONDITION_X4, "final-state-does-not-match-its-binding"
+    )
+
+
+def test_tampering_the_invocation_id_of_a_chain_state_breaks_the_chain(tmp_path: Path) -> None:
+    pass_a = PassA(tmp_path)
+    path = pass_a.path("index/000000.open.json")
+    document = parse_canonical(path.read_bytes())
+    document["invocation_id"] = OTHER_INVOCATION_ID
+    path.write_bytes(canonical_bytes(document))
+    _assert_stopped(pass_a.check(), CONDITION_X4, "chain-broken")
+
+
+def test_a_rechained_state_with_a_different_invocation_id_is_inconsistent(tmp_path: Path) -> None:
+    pass_a = PassA(tmp_path)
+    path = pass_a.path("index/000001.open.json")
+    document = parse_canonical(path.read_bytes())
+    document["invocation_id"] = OTHER_INVOCATION_ID
+    path.write_bytes(canonical_bytes(document))
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    pass_a.forge_final(lambda final: final["previous_state"].__setitem__("sha256", digest))
+    _assert_stopped(pass_a.check(), CONDITION_X4, "chain-inconsistent")
+
+
+def test_the_mechanism_x4_refuses_a_different_expected_invocation_id(tmp_path: Path) -> None:
+    pass_a = PassA(tmp_path)
+    result = verify_final_state(
+        PosixReadOnlyFilesystem(),
+        capture_root=pass_a.root,
+        final_state=pass_a.binding.final_state,
+        final_sha256=pass_a.binding.capture_index_sha256,
+        pass_id=PASS_A,
+        invocation_id=OTHER_INVOCATION_ID,
+    )
+    _assert_stopped(result, CONDITION_X4, "final-state-does-not-match-its-binding")

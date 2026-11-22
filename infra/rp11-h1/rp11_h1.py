@@ -102,12 +102,15 @@ def invocation_id_from(environ: bytes):
     return value
 
 
-def _initial_environment() -> bytes:
-    """The block PID 1 passed to ``execve`` (duplicates included), capped."""
+def _initial_environment():
+    """The block PID 1 passed to ``execve`` (duplicates included), capped.
+
+    ``None`` if ``/proc/self/environ`` cannot be read completely: the normalized
+    ``os.environ`` cannot show a duplicate ``INVOCATION_ID``, so there is no fallback."""
     try:
         fd = os.open("/proc/self/environ", os.O_RDONLY | os.O_CLOEXEC)
     except OSError:
-        return b"\0".join(k + b"=" + v for k, v in os.environb.items())
+        return None
     try:
         chunks, total = [], 0
         while total <= _MAX_ENVIRON:
@@ -117,6 +120,8 @@ def _initial_environment() -> bytes:
             chunks.append(chunk)
             total += len(chunk)
         return b"".join(chunks)[: _MAX_ENVIRON + 1]
+    except OSError:
+        return None
     finally:
         os.close(fd)
 
@@ -179,7 +184,9 @@ def first_image_controls(reads_environment=True):
     invocation_id = "absent"
     if reads_environment:
         environ = _initial_environment()
-        invocation_id = invocation_id_from(environ) if len(environ) <= _MAX_ENVIRON else None
+        invocation_id = (
+            invocation_id_from(environ) if environ is not None and len(environ) <= _MAX_ENVIRON else None
+        )
         if invocation_id is None:
             print("rp11_h1: malformed or duplicate INVOCATION_ID", file=sys.stderr)
             return EX_USAGE

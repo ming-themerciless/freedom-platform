@@ -69,6 +69,9 @@ from tools.phase_5_0_evidence.execution.retention_check import PosixReadOnlyFile
 PASS_A = "C-P5.0-R5-OP1-A"
 PASS_B = "C-P5.0-R5-OP1-B"
 TOOL_SHA256 = "5" * 64
+#: A synthetic systemd InvocationID (32 lowercase hex); the real one is never used.
+INVOCATION_ID = "0123456789abcdef0123456789abcdef"
+OTHER_INVOCATION_ID = "fedcba9876543210fedcba9876543210"
 PYTHON = sys.executable
 #: The one environment every real launch in these suites receives. Explicit,
 #: small, and read from nowhere.
@@ -254,12 +257,15 @@ class ScriptedLauncher:
     started: bool = True
     bound_exceeded: bool = False
     complete: bool = True
+    timed_out: bool = False
+    timeouts: list[float] = field(default_factory=list)
     calls: list[tuple[str, ...]] = field(default_factory=list)
 
-    def launch(self, argv, *, environment, stdout, stderr, stream_bound_bytes, drain_seconds=5.0):  # type: ignore[no-untyped-def]
+    def launch(self, argv, *, environment, stdout, stderr, stream_bound_bytes, timeout_seconds, drain_seconds=5.0):  # type: ignore[no-untyped-def]
         self.calls.append(tuple(argv))
+        self.timeouts.append(timeout_seconds)
         if not self.started:
-            return StreamCaptureResult(False, "capture-start-failed", None, 0, 0, False, False)
+            return StreamCaptureResult(False, "capture-start-failed", None, 0, 0, False, False, False)
         index = len(self.calls) - 1
         out, err, code = (
             self.outputs[index] if index < len(self.outputs) else (b"out-%d" % index, b"err-%d" % index, 0)
@@ -268,7 +274,7 @@ class ScriptedLauncher:
             stdout.write(out)
         if err:
             stderr.write(err)
-        return StreamCaptureResult(True, "", code, len(out), len(err), self.bound_exceeded, self.complete)
+        return StreamCaptureResult(True, "", code, len(out), len(err), self.bound_exceeded, self.complete, self.timed_out)
 
 
 @dataclass
@@ -299,12 +305,25 @@ def writes(out: bytes, err: bytes, code: int = 0) -> tuple[str, ...]:
     return python_argv(program)
 
 
-def act(step: str, argv: tuple[str, ...], *, bound: int = 4096, drain: float = 5.0) -> ActRequest:
+#: A test-only deadline, generous enough never to fire in a healthy fixture. It is
+#: not a Pass A value and nothing outside the tests may import it.
+TEST_TIMEOUT_SECONDS = 60.0
+
+
+def act(
+    step: str,
+    argv: tuple[str, ...],
+    *,
+    bound: int = 4096,
+    drain: float = 5.0,
+    timeout: float = TEST_TIMEOUT_SECONDS,
+) -> ActRequest:
     return ActRequest(
         step_or_case_id=step,
         argv=argv,
         environment=dict(INERT_ENVIRONMENT),
         stream_bound_bytes=bound,
+        timeout_seconds=timeout,
         drain_seconds=drain,
     )
 
@@ -338,6 +357,7 @@ def open_session(
     *,
     root: str | None = None,
     pass_id: str = PASS_A,
+    invocation_id: str = INVOCATION_ID,
     filesystem=None,  # type: ignore[no-untyped-def]
     launcher=None,  # type: ignore[no-untyped-def]
     others: tuple[str, ...] = (),
@@ -348,6 +368,7 @@ def open_session(
             capture_root=root or host.root(),
             pass_id=pass_id,
             tool_sha256=TOOL_SHA256,
+            invocation_id=invocation_id,
             policy=host.policy(*others),
         ),
         # A `FaultFilesystem` with no stage is the real filesystem, unchanged,

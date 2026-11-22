@@ -323,8 +323,8 @@ def test_the_namespaces_follow_the_pin():
     )
 
 
-def test_an_install_parent_that_others_can_change_is_reported(tmp_path):
-    assert build._install_parent_problem(tmp_path) is not None  # /tmp is world-writable
+def test_an_install_parent_that_others_can_change_is_reported():
+    assert build._install_parent_problem(Path("/tmp")) is not None  # /tmp is world-writable
     if all(p.stat().st_uid == 0 for p in (Path("/usr"), Path("/"))):
         assert build._install_parent_problem(Path("/usr")) is None
 
@@ -345,9 +345,14 @@ def artifact(wheels):
 
 def test_a_clean_tree_passes_for_its_owner_and_fails_for_root(artifact):
     entry = entry_for(artifact)
-    assert entry._tree_problem(str(artifact), os.getuid()) is None
+    owner = os.getuid()
+    if owner == 0:
+        # Root-owned objects are always accepted, so make one object owned by 65534.
+        owner = 65534
+        os.chown(artifact / "lib/rp11_roles.py", owner, -1)
+    assert entry._tree_problem(str(artifact), owner) is None
     problem = entry._tree_problem(str(artifact), 0)
-    assert problem is not None and f"owner uid {os.getuid()}" in problem
+    assert problem is not None and f"owner uid {owner}" in problem
 
 
 @pytest.mark.parametrize(
@@ -401,8 +406,7 @@ def test_a_missing_lib_or_an_oversized_tree_is_refused(artifact, monkeypatch):
 
 def test_ancestors_are_checked_up_to_the_root(artifact):
     entry = entry_for(artifact)
-    problem = entry._ancestors_problem(str(artifact), os.getuid())
-    assert problem is not None  # /tmp, an ancestor of tmp_path, is world-writable
+    assert entry._ancestors_problem("/tmp", os.getuid()) is not None  # /tmp is world-writable
     if Path("/usr/bin").stat().st_uid == 0:
         assert entry._ancestors_problem("/usr/bin", 0) is None
     assert "symlink" in entry._ancestors_problem(str(_symlinked_dir(artifact)), os.getuid())
@@ -421,6 +425,11 @@ def test_an_unsafe_tree_refuses_as_root_before_any_artifact_code_runs(artifact, 
     roles = artifact / "lib/rp11_roles.py"
     os.chmod(roles, 0o644)
     roles.write_bytes(f"open({str(marker)!r}, 'w')\ndef run(*a, **k):\n    return 69\n".encode())
+    if os.geteuid() == 0:
+        # Under a root basetemp the synthetic tree is already root-owned, i.e. trusted,
+        # so nothing would refuse it and main() would run in-process as a test runner.
+        # Make the planted module genuinely untrusted (owned by nobody) first.
+        os.chown(roles, 65534, -1)
     entry = entry_for(artifact)
     monkeypatch.setattr(entry, "_required_owner", lambda: 0)
     before = list(sys.path)

@@ -863,7 +863,14 @@ def test_the_manifest_pins_whether_a_contract_resolves_anything(plan) -> None:
     # fixes GCC's two garbage-collector parameters (finding FRESH-R4-HS-1), the
     # section gains `compiler_fixed_params`, and the lock, IC-1 contract and
     # re-derived 5305-byte fixture move with it. No vector moves.
-    assert body["manifest_version"] == MANIFEST_VERSION == 31
+    #
+    # **RP-11 launcher Python 3.14 refresh, 2026-11-21.** It moves to 32: the
+    # launcher's two `execve` literals and the `rp11_launch` contract's
+    # EXECVE_PATH/EXECVE_ARGV[0] move from python3.12 to python3.14, and the
+    # listing, `expected.sha256` and image/listing/`launch.s` digests are
+    # re-derived from an `oracle-test` build. The cc1.v baseline, linker map
+    # digest, XD stream digest and every vector stay unchanged.
+    assert body["manifest_version"] == MANIFEST_VERSION == 32
     assert body["supplied_observations"]["schema_version"] == 3
     assert "Band 7 supplied observations only" in (
         body["supplied_observations"]["importer_scope"]

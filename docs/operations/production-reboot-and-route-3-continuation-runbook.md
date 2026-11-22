@@ -1,12 +1,20 @@
 # Production reboot and Route 3 post-S1 continuation
 
-**Status: PREPARED, NOT EXECUTED, NOT AUTHORIZED TO RUN BY THIS DOCUMENT.**
-Peter authorized the preparation and documentation of this procedure on
-2026-11-18. The documentation task that wrote it did not reboot the host, ran
-no privileged command and touched no production state. The reboot itself is
-Peter's separate, explicitly attended decision (named operator, window,
-escalation contact). **S3 and S4 are not authorized by this document or by the
-reboot.**
+**Status (updated 2026-11-21): the reboot and G1-G6 passed; S3.1-S3.5 each returned rc 0; S4.1 ran on 2026-11-20 and `verify-ready` returned `ready` rc 0. Acceptance probes 1 and 4 passed. Probes 2 and 6 are blocked by the absent production capture unit and valid consume evidence; probes 3 and 5 remain incomplete. The supervisor is active and ready.**
+Results are recorded in
+[handback §16.1](../review/route-3-production-readiness-handback.md). The
+sections below, except the section 1 table, are the preparation text written
+before the reboot and are kept as **history**: where they say "prepared, not
+executed", the table in section 1 and the handback record are current. This
+document authorizes nothing itself: the S3 authorization was the maintainer's explicit
+instruction to the implementing session (record: handback §16.3); S4 is a separate, later written
+decision by Peter. The reboot in this document happened before S3. The later S4.1 activation and incomplete acceptance probes are recorded in handback §16.4.
+
+*Historical preparation note (2026-11-18, before the reboot):* Peter authorized
+the preparation and documentation of this procedure. The documentation task that
+wrote it did not reboot the host, ran no privileged command and touched no
+production state. The reboot was Peter's separate, explicitly attended decision
+(named operator, window, escalation contact).
 
 This is a procedure for reconnecting and verifying, not an implementation. It
 defines **no new executable block**. Every Route 3 command is a block of the
@@ -24,11 +32,18 @@ the runbook wins and the difference is a defect to report.
 | Route 3 S1 inert provisioning (S1.0 through S1.4, each rc 0), attended, root, 2026-11-18 | **EXECUTED** |
 | S2.1 on production: rc 0, `STOP-A verified` | **EXECUTED** |
 | S2.2 on production: rc 12 (`fragment-predates-boot`), the status P.2 expects before the first post-S1 boot | **EXECUTED, as expected** |
-| Production reboot | **PREPARED only. Not authorized, not executed.** |
-| Post-reboot verification (section 5) | PREPARED only |
-| S2.3 account-dependent checks after the boot | PREPARED only |
-| Independent review of the post-reboot evidence | PREPARED only |
-| S3 arming and install; S4 activation | **NOT authorized, NOT run**, each a separate later written decision |
+| Production reboot, attended, 2026-11-18 (new boot id `7414d026-f72c-4461-ba00-0cee1c14f275`; kernel boot time 15:14:56 UTC) | **EXECUTED** |
+| G1 to G5 post-reboot verification (section 5), root session, read-only, 2026-11-18 | **EXECUTED, PASSED**: G3 S2.1 rc 0 `STOP-A verified`; G4 S2.2 rc 0 `verify: ok`; G5 every item matches STOP-A |
+| G6 independent review (Codex), 2026-11-18 | **EXECUTED, PASSED**: no blocking operational finding, no rollback need |
+| G7 written S3 decision | **Superseded by the maintainer's explicit S3 authorization to the implementing session, 2026-11-18** (after a first attempt stopped at S3.2 and R3 rc 0 restored STOP-A, and after Codex approved the corrected S3.2/R3 C6p remediation) |
+| S3 arming and install (corrected rerun, about 22:58 UTC) | **EXECUTED**: S3.1 to S3.5 each rc 0; **STOP-B**: unit enabled, `inactive`, no process; boot id unchanged |
+| S4.1 activation (2026-11-20) | **EXECUTED, rc 0**; supervisor active and `verify-ready` returned `ready`; acceptance probes 1 and 4 passed; probes 2, 3, 5 and 6 incomplete (handback §16.4) |
+
+The temporary `/etc/sudoers.d/x` grant for account `foundry` (disclosed in
+handback §16.1, G5 item 4) existed during the attended verification and did not
+reach `freedom-executor`. It was removed after G6 and the final diff review
+(`visudo -c` parsed OK, rc 0; file confirmed absent; unprivileged `sudo -n true`
+rc 1), so general passwordless sudo is no longer available.
 
 Run evidence of S1: `/root/route3-s1-run.XqEtiYXR` (root-only, persists across
 a reboot). The outer `/tmp/route3-s1-terminal.rc` is empty only because the
@@ -165,8 +180,8 @@ Notes:
   boot; any Route 3 process, unit, linger file, sudoers entry, SA-2 artifact or
   state directory present; any file in `/run/polkit-1/rules.d`; any drift in the
   held packages; or anything that suggests the reboot started something.
-- Out of scope and unauthorized here: S3.1 through S3.5, S4.1, the installer
-  `install`, enabling linger, creating the sudoers drop-in, activation,
+- Out of scope and unauthorized here: S4.1, activation (S3.1 through S3.5 were run under the
+  separate authorization recorded in handback §16.3; they are not part of this document's procedure),
   migration or cutover, RB-1, and a reboot at any point between a future S3.5
   and S4 or R3 (the unit would be enabled and a boot would start it; runbook
   P.2 and P.6).
@@ -174,7 +189,7 @@ Notes:
 ## 7. Related records
 
 - [Provisioning runbook](executor-supervisor-provisioning-runbook.md): P.1
-  stages, P.2 STOP-A, blocks D, F, S2 and R; S3 onward is a later, separate
+  stages, P.2 STOP-A, blocks D, F, S2, S3 and R/R3; S3 has been run (STOP-B), S4 is a later, separate
   decision.
 - [Cumulative handback](../review/route-3-production-readiness-handback.md):
   §6 checklist and §16 for the S1 result and post-reboot results.

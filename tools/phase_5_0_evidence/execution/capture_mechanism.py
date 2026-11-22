@@ -122,13 +122,14 @@ from ..capture_contract import (
     parse_capture_root,
     record_name,
     require_identifier,
+    require_invocation_id,
     require_sha256,
     staging_name,
     stream_name,
     validate_argv,
 )
 from ..errors import HarnessError
-from .boundary import CAPTURE_DRAIN_SECONDS, StreamCaptureResult, StreamSink
+from .boundary import CAPTURE_DRAIN_SECONDS, StreamCaptureResult, StreamSink, valid_timeout_seconds
 from .capture_store import (
     ADVANCE_STAGES,
     CLEANUP_STAGE,
@@ -216,6 +217,7 @@ class ProcessLauncher(Protocol):
         stdout: StreamSink,
         stderr: StreamSink,
         stream_bound_bytes: int,
+        timeout_seconds: float,
         drain_seconds: float = ...,
     ) -> StreamCaptureResult: ...
 
@@ -225,7 +227,13 @@ class GenesisRequest:
     capture_root: str
     pass_id: str
     tool_sha256: str
+    #: The start's systemd InvocationID, validated by `IndexState` at genesis.
+    invocation_id: str
     policy: RootPolicy
+
+    def __post_init__(self) -> None:
+        # Before any filesystem effect: a bad value must not leave a root behind.
+        require_invocation_id(self.invocation_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,6 +242,9 @@ class ActRequest:
     argv: tuple[str, ...]
     environment: Mapping[str, str]
     stream_bound_bytes: int
+    #: Required, positive and finite. No default exists and none is chosen here:
+    #: the Pass A plan supplies it for every command.
+    timeout_seconds: float
     drain_seconds: float = CAPTURE_DRAIN_SECONDS
 
 
@@ -366,6 +377,7 @@ class CaptureSession:
                 raise CaptureRefused("the pass has not ended; there is nothing to bind")
             return HandbackBinding(
                 pass_id=self._request.pass_id,
+                invocation_id=self._request.invocation_id,
                 capture_root=self._request.capture_root,
                 x3_outcome=X3_NOT_MADE,
                 x4_validity=X4_INCONCLUSIVE,
@@ -375,6 +387,7 @@ class CaptureSession:
         succeeded = outcome.x3_outcome == X3_SUCCEEDED
         return HandbackBinding(
             pass_id=self._request.pass_id,
+            invocation_id=self._request.invocation_id,
             capture_root=self._request.capture_root,
             x3_outcome=outcome.x3_outcome,
             x4_validity=outcome.x4_validity,
@@ -391,6 +404,7 @@ class CaptureSession:
                 pass_id=self._request.pass_id,
                 capture_root=self._request.capture_root,
                 tool_sha256=self._request.tool_sha256,
+                invocation_id=self._request.invocation_id,
                 owner_uid=self._store.owner_uid,
                 state_number=0,
                 previous=None,
@@ -472,6 +486,8 @@ class CaptureSession:
                 raise CaptureContractRefused("malformed-argv", "stream bound")
         except CaptureContractRefused as refusal:
             raise _ActFailed(ActFailure(REQUEST_STAGE, f"request-{refusal.classification}", False))
+        if not valid_timeout_seconds(request.timeout_seconds):
+            raise _ActFailed(ActFailure(REQUEST_STAGE, "request-malformed-timeout", False))
 
         store = self._store
         names = {stream: stream_name(capture_seq, stream) for stream in (STDOUT, STDERR)}
@@ -493,11 +509,14 @@ class CaptureSession:
                 stdout=_FileSink(store, write_fds[STDOUT], "P-1:write-stdout"),
                 stderr=_FileSink(store, write_fds[STDERR], "P-1:write-stderr"),
                 stream_bound_bytes=request.stream_bound_bytes,
+                timeout_seconds=request.timeout_seconds,
                 drain_seconds=request.drain_seconds,
             )
             ended = format_utc(self._clock.now())
             if not result.started:
                 raise _ActFailed(ActFailure(LAUNCH_STAGE, result.failure or "start-failed", False))
+            if result.timed_out:
+                raise _ActFailed(ActFailure(LAUNCH_STAGE, "command-timeout", True))
             if result.bound_exceeded:
                 raise _ActFailed(ActFailure(LAUNCH_STAGE, "stream-bound-exceeded", True))
             if not result.streams_complete:
@@ -554,6 +573,7 @@ class CaptureSession:
                 pass_id=self._request.pass_id,
                 capture_root=self._request.capture_root,
                 tool_sha256=self._request.tool_sha256,
+                invocation_id=self._request.invocation_id,
                 owner_uid=store.owner_uid,
                 state_number=capture_seq,
                 previous=previous.link(),
@@ -618,6 +638,7 @@ class CaptureSession:
                 pass_id=self._request.pass_id,
                 capture_root=self._request.capture_root,
                 tool_sha256=self._request.tool_sha256,
+                invocation_id=self._request.invocation_id,
                 owner_uid=self._store.owner_uid,
                 state_number=number,
                 previous=last.link(),
@@ -697,6 +718,7 @@ class CaptureSession:
             final_state=outcome.final_state,
             final_sha256=outcome.final_state_sha256,
             pass_id=self._request.pass_id,
+            invocation_id=self._request.invocation_id,
         )
         if result.passed:
             return _replace_x4(outcome, X4_VALID, "valid")

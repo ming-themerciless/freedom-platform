@@ -1985,7 +1985,7 @@
   "harness_name": "phase-5-0-evidence-harness",
   "harness_version": "0.7.0-pre-execution",
   "manifest_schema": "phase-5-0-evidence-review-manifest",
-  "manifest_version": 31,
+  "manifest_version": 32,
   "materializations": [
     {
       "after_step_id": "B6-03",
@@ -2729,7 +2729,7 @@
         "jne"
       ],
       "execve_argv": [
-        "/usr/bin/python3.12",
+        "/usr/bin/python3.14",
         "-I",
         "-S",
         "/usr/local/libexec/freedom-blades-rp11/rp11_entry.py",
@@ -2741,7 +2741,7 @@
         "LC_ALL=C",
         "PATH=/usr/bin"
       ],
-      "execve_path": "/usr/bin/python3.12",
+      "execve_path": "/usr/bin/python3.14",
       "expected_frame": 200,
       "frame_bound": 512,
       "functions": [
@@ -2821,7 +2821,7 @@
     },
     "execve": {
       "argv": [
-        "/usr/bin/python3.12",
+        "/usr/bin/python3.14",
         "-I",
         "-S",
         "/usr/local/libexec/freedom-blades-rp11/rp11_entry.py",
@@ -2838,13 +2838,13 @@
         "LC_ALL=C",
         "PATH=/usr/bin"
       ],
-      "path": "/usr/bin/python3.12"
+      "path": "/usr/bin/python3.14"
     },
     "expected_sha256": {
       "build_root_manifest": "f08ba9de4374374fa91012021ce12fb83f6370be5547ee4e214232100c38e76f",
-      "image": "04218ed2d834c1c7abe417a850831d8956f087711befd692eefc2e61b2668572",
-      "launch_s": "b37280d53eecce690210021a793cde5d5b73a8f9c027d187e4bd1338e7e27706",
-      "listing": "8c1fedee1c717b17a14d7c746669ffcec3c41d155e5cc4c63d24a5f2527cd188",
+      "image": "7e2b7bde86a5ec8aaf112c3377fbdb3c862ffcb7acfff944c965b1aa0fddc67e",
+      "launch_s": "3d65779e718d2cd1e8d199fd1db619712237613df975992ade1b8d48cd57786e",
+      "listing": "498108223928ddaa1eb5d57cca15c7628f5bd30f331bb1930f10a68dcf7cdfc9",
       "map": "5a8b058084edcb1e3f6f7ddea13b60da6af71102300ea276225ae4ab0e8bc34d",
       "toolchain_lock": "f704c0f4f0ddbe9de92da9812dde6929f681ba778263746a603bde8b4b3563d6"
     },
@@ -3132,11 +3132,11 @@
     },
     {
       "path": "tools/phase_5_0_evidence/review_manifest.py",
-      "sha256": "09983ff782eef3be420994f165e3168eee9682f6da8481e0427a31a481007dd7"
+      "sha256": "8ac85add33bad4d5ec0e65433870979a2ca748b2434fac07af775dfa7b960290"
     },
     {
       "path": "tools/phase_5_0_evidence/rp11_launch.py",
-      "sha256": "0d4ece459dbffac790e3a1f7d61e0c83efe270825e0d874cded48e759f626a08"
+      "sha256": "a51bacda94ef5ed2fe1bea6a7e90bc7c94925237bd6f72f518f7ef0c338381ed"
     },
     {
       "path": "tools/phase_5_0_evidence/sudoers.py",
@@ -3160,11 +3160,11 @@
     },
     {
       "path": "infra/rp11-launch/expected.sha256",
-      "sha256": "6e87a54207f7f7aa3392fcd61f2f1c3303c0c7823fb1ef746dd28f5527a83625"
+      "sha256": "651ff85df120a6b8bddfff7b359074b4c239e94988544c9ef60af7c3af28dd16"
     },
     {
       "path": "infra/rp11-launch/launch.c",
-      "sha256": "6810bcd0dd9567c9ee49a2b7f0dd7bfe2d69148eaba3d3d5caea3aa0983fa6fe"
+      "sha256": "62050b5dc1816f4f673b8c49b94c7463391edb6dbed9f69459f0bc6c5f1dc2a7"
     },
     {
       "path": "infra/rp11-launch/rp11-launch.ld",
@@ -3172,7 +3172,7 @@
     },
     {
       "path": "infra/rp11-launch/rp11-launch.x86_64.listing",
-      "sha256": "8c1fedee1c717b17a14d7c746669ffcec3c41d155e5cc4c63d24a5f2527cd188"
+      "sha256": "498108223928ddaa1eb5d57cca15c7628f5bd30f331bb1930f10a68dcf7cdfc9"
     },
     {
       "path": "infra/rp11-launch/select.h",

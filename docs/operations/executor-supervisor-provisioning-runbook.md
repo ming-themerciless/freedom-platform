@@ -1,14 +1,22 @@
 # Executor supervisor — provisioning runbook (Route 3 executor OC)
 
-**Execution state (2026-11-18; later than the dated text below, which is retained as history).**
+**Execution state (updated 2026-11-21; dated text below is retained as history).**
 Block F is complete (2026-11-15), and S1 inert provisioning was executed on production on 2026-11-18 under
 Peter's written provisioning authorization: S1.0-S1.4 rc 0, S2.1 rc 0 (`STOP-A verified`), S2.2 rc 12 (the
-status P.2 expects before the first post-S1 boot). S3 and S4 have not been run and remain separately
-unauthorized. The next production action is an attended reboot followed by read-only verification; its
+status P.2 expects before the first post-S1 boot). The attended reboot and read-only verification (G1 to G6) then passed; its
 procedure is the
 [reboot and continuation runbook](production-reboot-and-route-3-continuation-runbook.md), which defines no
-block of its own. The statements below that "nothing in this runbook has been run on production", that
+block of its own. **S3 was executed on 2026-11-18 (S3.1 to S3.5 each rc 0). S4.1 was executed on 2026-11-20 under Peter's explicit, attended authorization: the trusted gate passed, the supervisor started, and `verify-ready` returned `ready` rc 0. Acceptance probes 1 and 4 passed; probes 2 and 6 are blocked by the absent production capture unit and valid consume evidence; probes 3 and 5 remain incomplete.** See handback §16.4. The statements below that "nothing in this runbook has been run on production", that
 release identities remain `UNSET` or that provisioning is unauthorized describe earlier dates.
+
+**Defect found by the first S3 attempt (2026-11-18, corrected in this text; the corrected S3 was then run on production and reached STOP-B, handback §16.3).**
+After the reboot and G1-G6, S3.1 returned rc 0 and S3.2 returned rc 2 (`parent untrusted or destination
+exists`) *before* `begin-C6`, because S3.2 assumed `/usr/local/libexec` pre-exists and a stock host does not have
+it; R3 then returned rc 0 and production is back at STOP-A. S3.2 now validates `/usr/local` (a real root-owned
+directory, not group/other writable), accepts a trusted pre-existing `/usr/local/libexec` and preserves it, or
+creates exactly that one directory (`root:root` `0755`) behind the durable markers `begin-C6p` (intent) and
+`done-C6p` (confirmed); R3 removes it with `rmdir` only when `done-C6p` is the last parent marker. See the S3.2
+and R3 blocks and the C6p row of the P.6 matrix.
 
 **Status: accepted on 2026-10-22 for continued non-production development as
 part of the cumulative executor OC R6 candidate. Nothing in this runbook has
@@ -51,7 +59,7 @@ production values called out as "production-specific" were not.
 
 ## P. Production provisioning plan (R6 remediation, 2026-11-02) — NO-GO until every field in block F is supplied
 
-*Update 2026-11-18: block F is complete and S1 has been executed to STOP-A on production (see the execution state at the top of this document); S3 and S4 are not authorized. The remainder of this paragraph is the 2026-11-03 position.* **Status of this plan: accepted 2026-11-03; it authorizes nothing.** Peter decided on 2026-10-31 that `/etc/sudoers.d/zz-claude-window` is absent
+*Update 2026-11-21: block F is complete; S1, S3 and S4.1 have been executed on production (see the execution state at the top of this document). S4 acceptance probes remain incomplete. The remainder of this paragraph is the 2026-11-03 position.* **Status of this plan: accepted 2026-11-03; it authorizes nothing.** Peter decided on 2026-10-31 that `/etc/sudoers.d/zz-claude-window` is absent
 and accepted the Phase A stop/order deviation; both blockers are closed. Codex's independent R6/R7 re-review found no remaining issue, and Peter accepted part P. Provisioning, installation and activation remain **unauthorized**:
 every release field is still `UNSET`, S1 requires a later written decision after the exact release record is supplied and reviewed, and activation is a separate later decision. Every block
 below is for a **future** operator under that future written authority; none has been run on production or staging. Rehearsed only on `oracle-test`.
@@ -101,7 +109,7 @@ group/other-writable) and S0.2/S0.3/S1.2 refuse anything whose SHA-256 differs f
 | Python 3.14 (installed host baseline) | **The attested dependency closure of the three installed roots** `python3.14`, `python3.14-minimal` (owns `/usr/bin/python3.14`) and `python3.14-venv`, split in two: the **pinned set** `ROUTE3_APT_PACKAGES` (members built from source package `python3.14`; exact `name=version`; later held) and the **base set** `ROUTE3_APT_BASE` (every other closure member; exact `name=version`; re-checked, never held). Accepted archive sources: `ROUTE3_APT_ORIGIN`, a sorted, comma-separated list of `<url> <suite>/<component>` entries. Interpreter identity: `ROUTE3_PY_SHA256` (independent reference, below). Binding: `ROUTE3_BASELINE_SHA256`, the SHA-256 of the reviewed baseline record file | **Set (2026-11-15), committed candidate record.** Fields `ROUTE3_APT_PACKAGES`, `ROUTE3_APT_BASE`, `ROUTE3_APT_ORIGIN`, `ROUTE3_PY_SHA256` (`52e0a13e...`, plain `amd64`) and `ROUTE3_BASELINE_SHA256` (`cf9931cd...`) come from the read-only S0.A attestation of the production host's own installed packages (`docs/operations/route3-baseline-record.txt`; no install, no simulation; no third-party repository, no `deadsnakes`, no build from source). `oracle-test` is `amd64v3` and is **not** a production value. A set field is not a GO: S0.2/S0.3 re-check the host against this record and remain separately authorized |
 | Signed-archive payload reference | `reference.record`: for every closure member the SHA-256 the archive's **signed index** states for exactly that package file, a digest of the package's own metadata (control fields, conffile list with packaged md5s, maintainer scripts, `md5sums`) and a digest of its non-conffile payload (content, mode and owner of every file, every symlink target). Identity: `ROUTE3_REFERENCE_SHA256`. Delivered as `<ART>/<REV>/reference.record`; committed as `docs/operations/route3-payload-reference.txt` | **Set (2026-11-15), committed candidate record** `docs/operations/route3-payload-reference.txt`; `ROUTE3_REFERENCE_SHA256` = `31d744c7...`, derived by `reference-payload` on non-production `oracle-test` from the committed baseline record (no production download, no production mutation). Delivery of `reference.record` to production and its acceptance by S0.3 remain gated on Peter's separate authorization. This is the only thing that binds the installed bytes to the archive: `dpkg --verify` and `apt-cache madison` compare the host with itself and with what an archive *offers* |
 | Jeepney wheel | `jeepney-0.9.0-py3-none-any.whl`, SHA-256 `97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683` (the accepted pin, `infra/rp11-h1/requirements.lock`; the same wheel builds SA-2 and the venv) | **fixed**. Custody: obtained once, off production, by `pip download --no-deps --only-binary=:all: --require-hashes -r infra/rp11-h1/requirements.lock` and delivered to `<ART>/<REV>/wheelhouse/`. Installed only with `--no-index --no-deps --require-hashes` (S1.2) |
-| SA-2 artifact | built **from the deployed, verified code and the same wheel** by `infra/rp11-h1/build.py` into `/usr/local/libexec/freedom-blades-rp11` (root-owned, directories `0755`, files `0644`); identity `ROUTE3_SA2_TREE_SHA256` = SHA-256 of the sorted `sha256␣␣path` listing of that tree (S3.2 computes it) | **reference digest set (2026-11-15)**: `sa2-reference` built the tree twice from that archive and the pinned wheel on `oracle-test` and agreed (`5e195c40...`); the tree is still built on production only in S3 |
+| SA-2 artifact | built **from the deployed, verified code and the same wheel** by `infra/rp11-h1/build.py` into `/usr/local/libexec/freedom-blades-rp11` (root-owned, directories `0755`, files `0644`; the parent `/usr/local/libexec` is accepted if trusted and pre-existing, otherwise created by S3.2 as `root:root` `0755` and removed again by R3); identity `ROUTE3_SA2_TREE_SHA256` = SHA-256 of the sorted `sha256␣␣path` listing of that tree (S3.2 computes it) | **reference digest set (2026-11-15)**: `sa2-reference` built the tree twice from that archive and the pinned wheel on `oracle-test` and agreed (`5e195c40...`); the tree is still built on production only in S3 |
 | `tmpfiles.d` prerequisite | `infra/tmpfiles.d/freedom-blades-rp11-polkit-rules.conf` from the manifest, installed by the reviewed tool to `/usr/lib/tmpfiles.d/` root-owned `0644`; S2.1 compares it byte-for-byte with the manifest copy | covered by the manifest |
 | Service fragment | `infra/executor/freedom-blades-executor-supervisor.service`, from the manifest; placed only by installer `install` in S3 | covered by the manifest |
 
@@ -892,7 +900,7 @@ Failure of a step, or success followed by a decision to withdraw, takes the same
 
 ### S3 — arming and install (a SEPARATE authorization; nothing in S0–S2 authorizes it)
 
-S3 creates the privileged route's parts in the order *linger → SA-2 artifact → sudoers (last)* and installs the unit. **`install` enables the unit**: after S3.5 the supervisor is enabled but not
+S3 creates the privileged route's parts in the order *linger → SA-2 artifact (and, only when a stock host lacks it, its parent `/usr/local/libexec`) → sudoers (last)* and installs the unit. **`install` enables the unit**: after S3.5 the supervisor is enabled but not
 started, and a boot would start it. The interval from S3.5 to S4 (or to R3) therefore forbids a reboot. If S3 is authorized, S4 should follow in the same window; otherwise run R3.
 
 ```bash
@@ -912,12 +920,29 @@ started, and a boot would start it. The interval from S3.5 to S4 (or to R3) ther
 
 ```bash
 # S3.2 — AUTHORITY: Peter's separate written S3 authorization. Builds the SA-2 artifact from the verified deployed code and the pinned wheel into /usr/local/libexec/freedom-blades-rp11 (new, root-owned).
+# /usr/local must already be a trusted directory and is never created or changed. /usr/local/libexec may be absent (a stock host): then S3.2 creates exactly that one directory, root:root 0755, after a durable intent marker (begin-C6p)
+# and records the confirmed creation (done-C6p); a trusted pre-existing /usr/local/libexec is recorded (kept-C6p) and is never removed. R3 reads only the LAST of these three markers.
 # Identity: SHA-256 of `find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum` run inside the artifact directory must equal ROUTE3_SA2_TREE_SHA256.
-( umask 022; set -o pipefail; export PATH="$ROUTE3_PATH"; cd / || exit 1; DEST=/usr/local/libexec/freedom-blades-rp11; W="$ROUTE3_ART/$ROUTE3_RELEASE_REV/wheelhouse/$ROUTE3_WHEEL"
+( umask 022; set -o pipefail; export PATH="$ROUTE3_PATH"; cd / || exit 1; DEST=/usr/local/libexec/freedom-blades-rp11; PAR=/usr/local/libexec; W="$ROUTE3_ART/$ROUTE3_RELEASE_REV/wheelhouse/$ROUTE3_WHEEL"
   route3_fields_ok && route3_tree_ok && route3_gate || exit 1
   grep -qx done-C5 "$ROUTE3_EVID/checkpoints" || { echo "NO-GO: S3.1 has not completed"; exit 2; }
   sha256sum --check --status <(printf '%s  %s\n' "$ROUTE3_WHEEL_SHA256" "$W") || { echo "NO-GO: the wheel differs from the pin"; exit 2; }
-  [ "$(stat -c %u "/usr/local/libexec")" = 0 ] && [ $(( 0$(stat -c %a /usr/local/libexec) & 022 )) -eq 0 ] && [ ! -e "$DEST" ] && [ ! -L "$DEST" ] || { echo "NO-GO: parent untrusted or destination exists"; exit 2; }
+  trusted() { [ -d "$1" ] && [ ! -L "$1" ] && [ "$(stat -c %u -- "$1")" = 0 ] && [ $(( 0$(stat -c %a -- "$1") & 022 )) -eq 0 ]; }   # a real root-owned directory that group and others cannot write
+  trusted /usr/local || { echo "NO-GO: /usr/local is not a real root-owned directory that group and others cannot write; nothing was changed"; exit 2; }
+  made=0
+  if [ -L "$PAR" ]; then echo "NO-GO: $PAR is a link; nothing was changed"; exit 2
+  elif [ -e "$PAR" ]; then trusted "$PAR" || { echo "NO-GO: $PAR exists but is not a real root-owned directory that group and others cannot write; nothing was changed"; exit 2; }
+  else made=1; fi
+  [ ! -e "$DEST" ] && [ ! -L "$DEST" ] || { echo "NO-GO: destination exists; nothing was changed"; exit 2; }
+  if [ "$made" -eq 1 ]; then
+    route3_cp begin-C6p || exit 2                                                  # intent is durable BEFORE the directory exists
+    mkdir -m 0755 -- "$PAR" || exit 7                                              # fails on any existing path, a link included; it never follows one
+    chown -h root:root -- "$PAR" || exit 7
+    [ "$(stat -c %u:%g:%a -- "$PAR")" = 0:0:755 ] && trusted "$PAR" || { echo "NO-GO: the created $PAR is not exactly root:root 0755"; exit 7; }
+    route3_cp done-C6p || exit 8                                                   # creation is confirmed; only now may anything be built under it
+  else
+    route3_cp kept-C6p || exit 2                                                   # the trusted pre-existing parent: R3 preserves it
+  fi
   route3_cp begin-C6 || exit 2
   /usr/bin/env -i PATH=/usr/bin:/bin "$ROUTE3_PY" -I -S -B "$ROUTE3_BASE/code/infra/rp11-h1/build.py" --wheel "$W" --dest "$DEST" || exit 3
   [ -z "$(find "$DEST" \( ! -user root -o -perm /022 -o -type l \) -print)" ] || { echo "NO-GO: artifact ownership, mode or link"; exit 4; }
@@ -995,7 +1020,7 @@ refuses when the unit is running. Never delete ownership records by hand and nev
 
 ```bash
 # R3 — AUTHORITY: Peter's separate S3 authorization, or the operator's duty to restore STOP-A. Idempotent. Status 0 only when the S3 objects are gone and STOP-A is re-established.
-( umask 022; export PATH="$ROUTE3_PATH"; cd / || exit 1; esc=0; DEST=/usr/local/libexec/freedom-blades-rp11; F=/etc/sudoers.d/freedom-executor-sa2; N=/etc/sudoers.d/.freedom-executor-sa2.new
+( umask 022; export PATH="$ROUTE3_PATH"; cd / || exit 1; esc=0; DEST=/usr/local/libexec/freedom-blades-rp11; PAR=/usr/local/libexec; F=/etc/sudoers.d/freedom-executor-sa2; N=/etc/sudoers.d/.freedom-executor-sa2.new
   route3_evid_ok || { echo "ESCALATE: no verified recorded pre-state"; exit 20; }
   has() { grep -qx -- "$1" "$ROUTE3_EVID/checkpoints"; }
   pre() { grep -qxF -- "absent $1" "$ROUTE3_EVID/prestate.objects"; }
@@ -1021,6 +1046,17 @@ refuses when the unit is running. Never delete ownership records by hand and nev
     if pre "$DEST" && [ "$DEST" = /usr/local/libexec/freedom-blades-rp11 ] && [ -d "$DEST" ] && [ ! -L "$DEST" ] && ! mountpoint -q -- "$DEST"; then rm -r --one-file-system -- "$DEST" || esc=24
     else echo "ESCALATE: refusing to remove $DEST"; esc=24; fi
   fi
+  # the parent /usr/local/libexec: only the LAST parent marker of S3.2 counts (an earlier attempt's marker never decides a later one)
+  last=$(grep -E '^(begin|done|kept)-C6p$' "$ROUTE3_EVID/checkpoints" | tail -n 1)
+  if [ "$esc" -eq 0 ]; then
+    case $last in
+      done-C6p) if [ -e "$PAR" ] || [ -L "$PAR" ]; then   # S3 created it (confirmed): remove it, and only it, once it holds nothing
+          if [ -d "$PAR" ] && [ ! -L "$PAR" ] && ! mountpoint -q -- "$PAR" && [ "$(stat -c %u:%g:%a -- "$PAR")" = 0:0:755 ] && [ -z "$(find "$PAR" -mindepth 1 -print -quit)" ]; then rmdir -- "$PAR" || esc=29
+          else echo "ESCALATE: refusing to remove $PAR (not a real, unmounted, empty root:root 0755 directory)"; esc=29; fi
+        fi;;
+      begin-C6p) if [ -e "$PAR" ] || [ -L "$PAR" ]; then echo "ESCALATE: the creation of $PAR was begun but never confirmed: it is not removed on a guess"; esc=29; fi;;
+    esac
+  fi
   uid=
   if [ "$esc" -eq 0 ]; then
     route3_id passwd "$ROUTE3_ACCOUNT"; ps=$?
@@ -1042,6 +1078,10 @@ refuses when the unit is running. Never delete ownership records by hand and nev
     for p in "$F" "$N" "$DEST" /var/lib/systemd/linger/freedom-executor /etc/systemd/system/freedom-blades-executor-supervisor.service /etc/systemd/system/multi-user.target.wants/freedom-blades-executor-supervisor.service; do
       if [ -e "$p" ] || [ -L "$p" ]; then echo "ESCALATE: still present: $p"; esc=26; fi
     done
+    case $last in
+      kept-C6p) { [ -d "$PAR" ] && [ ! -L "$PAR" ]; } || { echo "ESCALATE: the preserved parent $PAR is missing or no longer a real directory"; esc=26; };;
+      begin-C6p|done-C6p) if [ -e "$PAR" ] || [ -L "$PAR" ]; then echo "ESCALATE: still present: $PAR"; esc=26; fi;;
+    esac
     [ "$(route3_loadstate freedom-blades-executor-supervisor.service)" = not-found ] || { echo "ESCALATE: the manager does not report the supervisor unit as not-found"; esc=27; }
     [ -z "$uid" ] || [ "$(route3_unit "user@$uid.service")" = inactive ] || { echo "ESCALATE: the account's user manager is not inactive"; esc=27; }
   fi
@@ -1055,6 +1095,7 @@ refuses when the unit is running. Never delete ownership records by hand and nev
 |---|---|---|---|---|---|---|
 | C5 linger | S3.1 | `loginctl disable-linger`; wait until `user@<uid>.service` is `inactive` | 0 | linger file absent, manager inactive, supervisor `LoadState=not-found` | linger pre-existed; manager still running after 60 s; **the manager or the account cannot be queried (27)** — R3 never reports STOP-A on an unanswered query | none |
 | C6 SA-2 artifact | S3.2 | remove the fixed destination only if absent in the pre-state, a real directory, not a link or mount | 0 | destination absent | pre-existed, link or mount | none |
+| C6p parent `/usr/local/libexec` | S3.2 | decided by the **last** parent marker only. `done-C6p` (S3 created it, confirmed): after the SA-2 child is removed, `rmdir` it, and only after proving it a real, unmounted, empty `root:root` `0755` directory. `kept-C6p` (a trusted pre-existing parent): **never removed**. `begin-C6p` without `done-C6p`: nothing to remove if the path is absent | 0 | `done-C6p` / `begin-C6p`: the parent is absent; `kept-C6p`: the parent still exists as a real directory | `begin-C6p` without `done-C6p` and the path exists (creation unconfirmed: refused, never guessed); not empty, a link, a mount or not exactly `root:root` `0755`; a preserved parent that has vanished (29, or 26 at the final check) | none |
 | C7 sudoers | S3.3 | remove the drop-in and its dot-named temporary only if absent in the pre-state; `visudo -c` afterwards | 0 | both absent, `visudo -c` ok | pre-existed; `visudo -c` fails (keep the second root session) | none |
 | C8 install | S3.5 | `installer remove` (supervisor never started: no drain needed) | 0 | fragment, wants link absent; manager `LoadState=not-found` | status 14 or 15 (section 8b); never edit records by hand | **forbidden** between S3.5 and R3/S4 while the unit is enabled |
 | partial first `install` | S3.5 | R3 starts with `remove`; a root-owned fragment left by a failed first install is removed by it or completed by a rerun only under the section 8b procedure | 0 | as C8 | `recovery-incomplete` (15) | forbidden until resolved |

@@ -417,9 +417,11 @@ class World:
         self.stubs = self.top / "stubs"; self.stubs.mkdir()
         self.art = Path(f"/root/{self.tag}-art"); self.evid = Path(f"/root/{self.tag}-evid")
         self.home = Path(f"/opt/{self.tag}-home")
-        self.sys = {k: self.top / k for k in ("tmpfiles", "units", "sudoers", "libexec", "linger", "state", "run", "dpkg", "aptlists", "aptarch")}
+        self.sys = {k: self.top / k for k in ("tmpfiles", "units", "sudoers", "usrlocal", "linger", "state", "run", "dpkg", "aptlists", "aptarch")}
         for k, v in self.sys.items():
             v.mkdir()
+        # a stock host has /usr/local but NOT /usr/local/libexec (the 2026-11-18 production defect): the world starts like production, and a test that wants the parent calls make_parent()
+        self.sys["libexec"] = self.sys["usrlocal"] / "libexec"
         for d in self.top.iterdir():
             d.chmod(0o755)
         self.top.chmod(0o755)
@@ -513,7 +515,7 @@ class World:
     def localize(self, text: str) -> str:
         reps = [("/opt/freedom-route3", str(self.base)), ("/root/route3-artifacts", str(self.art)), ("/root/route3-evidence", str(self.evid)),
                 ("/home/freedom-executor", str(self.home)), ("/usr/lib/tmpfiles.d", str(self.sys["tmpfiles"])), ("/etc/systemd/system", str(self.sys["units"])),
-                ("/etc/sudoers.d", str(self.sys["sudoers"])), ("/usr/local/libexec", str(self.sys["libexec"])), ("/var/lib/systemd/linger", str(self.sys["linger"])),
+                ("/etc/sudoers.d", str(self.sys["sudoers"])), ("/usr/local/libexec", str(self.sys["libexec"])), ("/usr/local", str(self.sys["usrlocal"])), ("/var/lib/systemd/linger", str(self.sys["linger"])),
                 ("/var/lib/freedom-blades-executor", str(self.sys["state"] / "freedom-blades-executor")), ("/run/freedom-blades-executor", str(self.sys["run"] / "freedom-blades-executor")),
                 ("/run/user/", str(self.sys["run"]) + "/user/"), ("/var/lib/dpkg", str(self.sys["dpkg"])), ("/var/lib/apt/lists", str(self.sys["aptlists"])),
                 ("/var/cache/apt/archives", str(self.sys["aptarch"])), ("/usr/bin/dpkg-query", str(self.stubs / "dpkg-query"))]
@@ -572,8 +574,17 @@ class World:
         st = self.load_state()
         paths = [self.base, Path(str(self.base) + ".stage"), self.home, self.sys["tmpfiles"] / TMPFILES_FRAGMENT, self.sys["units"] / "freedom-blades-executor-supervisor.service",
                  self.sys["units"] / "wants/freedom-blades-executor-supervisor.service", self.sys["sudoers"] / "freedom-executor-sa2", self.sys["sudoers"] / ".freedom-executor-sa2.new",
-                 self.sys["libexec"] / "freedom-blades-rp11", self.sys["linger"] / "freedom-executor"]
+                 self.sys["libexec"], self.sys["libexec"] / "freedom-blades-rp11", self.sys["linger"] / "freedom-executor"]
         return {"paths": {str(p): (p.exists() or p.is_symlink()) for p in paths}, "pkgs": st["pkgs"], "holds": st["holds"], "users": sorted(st["users"]), "groups": sorted(st["groups"])}
+
+    def make_parent(self, mode: int = 0o755) -> Path:
+        """A pre-existing /usr/local/libexec (root-owned, as the test runs as root)."""
+        self.sys["libexec"].mkdir(); self.sys["libexec"].chmod(mode)
+        return self.sys["libexec"]
+
+    def markers(self) -> list[str]:
+        p = self.evid / "checkpoints"
+        return p.read_text().splitlines() if p.exists() else []
 
     def destroy(self):
         for p in self.cleanup:
@@ -722,7 +733,7 @@ def test_provisioning_reaches_stop_a_without_install_enable_start_reboot_sa2_or_
     for p in (w.base, w.base / "code", w.base / "venv", w.base / "code/tools"):
         assert p.stat().st_uid == 0 and not p.stat().st_mode & 0o022
     # a reboot at STOP-A has nothing to start: no unit file, no wants link, no linger, no SA-2, no sudoers, no loaded unit
-    assert not list(w.sys["units"].iterdir()) and not list(w.sys["sudoers"].iterdir()) and not list(w.sys["linger"].iterdir()) and not list(w.sys["libexec"].iterdir())
+    assert not list(w.sys["units"].iterdir()) and not list(w.sys["sudoers"].iterdir()) and not list(w.sys["linger"].iterdir()) and not w.sys["libexec"].exists()
     assert w.load_state()["active"] == {}
 
 
@@ -1060,13 +1071,219 @@ def test_r3_refuses_when_the_supervisor_is_running_and_when_remove_fails(world):
 @host
 def test_s3_refuses_a_pre_existing_sudoers_file_or_sa2_directory(world):
     w = world(); w.release(); provision(w); (w.top / "booted").write_text(""); ok(w.run("S3.1"), "S3.1")
-    (w.sys["libexec"] / "freedom-blades-rp11").mkdir()
+    w.make_parent(); (w.sys["libexec"] / "freedom-blades-rp11").mkdir()
     failed(w.run("S3.2"), "S3.2")
     (w.sys["libexec"] / "freedom-blades-rp11").rmdir()
     ok(w.run("S3.2"), "S3.2")
     (w.sys["sudoers"] / "freedom-executor-sa2").write_text("mine")
     failed(w.run("S3.3"), "S3.3")
     assert (w.sys["sudoers"] / "freedom-executor-sa2").read_text() == "mine"
+
+
+# ---- S3.2 / R3 and the parent /usr/local/libexec (2026-11-18 production defect: S3.2 assumed the parent pre-exists) -------------------------
+
+PARENT_MARKERS = ("begin-C6p", "done-C6p", "kept-C6p")
+
+
+def ready_for_s3_2(w: World) -> dict:
+    """STOP-A, one boot later, then S3.1: the state in which production stood when S3.2 failed. Returns the snapshot of STOP-A taken BEFORE S3.1, which R3 must restore (it also undoes S3.1's linger)."""
+    w.release(); provision(w); (w.top / "booted").write_text("")
+    stop_a = w.objects()
+    ok(w.run("S3.1"), "S3.1")
+    return stop_a
+
+
+def parent_markers(w: World) -> list[str]:
+    return [m for m in w.markers() if m in PARENT_MARKERS]
+
+
+def stat_ugm(p: Path) -> tuple[int, int, int]:
+    st = p.lstat()
+    return st.st_uid, st.st_gid, stat.S_IMODE(st.st_mode)
+
+
+@host
+def test_s3_2_creates_a_missing_parent_exactly_and_records_intent_before_creation_and_confirmation_after(world):
+    w = world(); entry = ready_for_s3_2(w)
+    assert not w.sys["libexec"].exists() and w.sys["usrlocal"].is_dir(), "the world starts like production: /usr/local exists, /usr/local/libexec does not"
+    ok(w.run("S3.2"), "S3.2")
+    assert w.sys["libexec"].is_dir() and not w.sys["libexec"].is_symlink() and stat_ugm(w.sys["libexec"]) == (0, 0, 0o755)
+    assert (w.sys["libexec"] / "freedom-blades-rp11/rp11_h1.py").exists()
+    assert w.markers()[-4:] == ["begin-C6p", "done-C6p", "begin-C6", "done-C6"], w.markers()
+    assert stat_ugm(w.sys["usrlocal"]) == (0, 0, 0o755) and w.objects() != entry, "/usr/local itself is neither created nor changed, and S3.2 changed the host"
+    # the intent is durable before the directory exists: killed right after the intent marker, the parent is still absent and only the intent exists
+    w2 = world(); ready_for_s3_2(w2)
+    done = w2.run("S3.2", mutate=w2.inject("S3.2", "route3_cp begin-C6p", "kill")); failed(done, "S3.2"); assert done.returncode == 137
+    assert parent_markers(w2) == ["begin-C6p"] and not w2.sys["libexec"].exists()
+
+
+@host
+@pytest.mark.parametrize("prior", ["none", "pre-existing"])
+def test_r3_removes_a_parent_s3_created_and_only_that_and_returns_to_the_exact_stop_a(world, prior):
+    w = world(); w.release(); provision(w); (w.top / "booted").write_text("")
+    if prior == "pre-existing":
+        w.make_parent()
+    stop_a = w.objects()
+    for i in ("S3.1", "S3.2", "S3.3", "S3.4", "S3.5"):
+        ok(w.run(i), i)
+    done = w.run("R3"); ok(done, "R3")
+    assert w.objects() == stop_a, {"before": stop_a, "after": w.objects()}
+    assert w.sys["libexec"].exists() == (prior == "pre-existing")
+    assert parent_markers(w) == (["begin-C6p", "done-C6p"] if prior == "none" else ["kept-C6p"]), parent_markers(w)
+    ok(w.run("R3"), "R3")                                                             # idempotent
+    assert w.objects() == stop_a
+    ok(w.run("S2.1"), "S2.1")
+
+
+@host
+def test_a_trusted_pre_existing_parent_is_kept_even_when_empty_and_a_stale_marker_of_an_earlier_attempt_never_decides(world):
+    w = world(); ready_for_s3_2(w)
+    ok(w.run("S3.2"), "S3.2"); assert parent_markers(w) == ["begin-C6p", "done-C6p"]
+    ok(w.run("R3"), "R3"); assert not w.sys["libexec"].exists()                        # attempt 1: created by S3, removed by R3
+    w.make_parent()                                                                    # a maintainer (not S3) creates the directory
+    ok(w.run("S3.1"), "S3.1"); ok(w.run("S3.2"), "S3.2")                               # attempt 2 finds it trusted and records only that
+    assert parent_markers(w) == ["begin-C6p", "done-C6p", "kept-C6p"] and w.markers().count("begin-C6p") == 1
+    before = w.objects()
+    ok(w.run("R3"), "R3")
+    assert w.sys["libexec"].is_dir() and not (w.sys["libexec"] / "freedom-blades-rp11").exists() and stat_ugm(w.sys["libexec"]) == (0, 0, 0o755), "the earlier attempt's done-C6p must not make R3 remove a parent it did not create"
+    assert before["paths"][str(w.sys["libexec"])] and w.objects()["paths"][str(w.sys["libexec"])]
+    # and the preserved parent is part of the expected STOP-A: if it vanishes R3 does not report STOP-A
+    w.sys["libexec"].rmdir()
+    done = w.run("R3"); assert done.returncode == 26 and "preserved parent" in done.stdout and "STOP-A re-established" not in done.stdout, done.stdout
+
+
+UNTRUSTED_PARENT = ["parent is a link", "parent is a link to a trusted directory", "parent is a file", "parent group-writable", "parent other-writable", "parent owned by another user",
+                    "/usr/local group-writable", "/usr/local other-writable", "/usr/local owned by another user", "/usr/local is a link", "/usr/local is a file"]
+
+
+@host
+@pytest.mark.parametrize("label", UNTRUSTED_PARENT)
+def test_s3_2_refuses_an_untrusted_or_linked_parent_or_usr_local_before_any_mutation(world, label):
+    w = world(); w.release(); provision(w); (w.top / "booted").write_text(""); ok(w.run("S3.1"), "S3.1")
+    elsewhere = w.top / "elsewhere"; elsewhere.mkdir()
+    ul, par = w.sys["usrlocal"], w.sys["libexec"]
+    if label == "parent is a link":
+        par.symlink_to(w.top / "nowhere")
+    elif label == "parent is a link to a trusted directory":
+        par.symlink_to(elsewhere)
+    elif label == "parent is a file":
+        par.write_text("x")
+    elif label == "parent group-writable":
+        w.make_parent(0o775)
+    elif label == "parent other-writable":
+        w.make_parent(0o757)
+    elif label == "parent owned by another user":
+        w.make_parent(); os.chown(par, 65534, 65534)
+    elif label == "/usr/local group-writable":
+        ul.chmod(0o775)
+    elif label == "/usr/local other-writable":
+        ul.chmod(0o757)
+    elif label == "/usr/local owned by another user":
+        os.chown(ul, 65534, 65534)
+    elif label == "/usr/local is a link":
+        real = w.top / "usrlocal.real"; ul.rename(real); ul.symlink_to(real)
+    else:
+        ul.rmdir(); ul.write_text("x")
+    before, markers, calls = w.objects(), w.markers(), len(w.calls())
+    seen = {p: sorted(x.name for x in p.iterdir()) for p in (elsewhere, ul, par) if p.is_dir() and not p.is_symlink()}
+    done = w.run("S3.2")
+    failed(done, "S3.2"); assert done.returncode == 2 and "NO-GO" in done.stdout and "nothing was changed" in done.stdout, (done.returncode, done.stdout)
+    assert w.markers() == markers, "no marker, not even the intent, was written"
+    assert w.objects() == before and not (elsewhere / "freedom-blades-rp11").exists()
+    assert seen == {p: sorted(x.name for x in p.iterdir()) for p in seen}, "nothing was created under any directory involved"
+    assert not [c for c in w.calls()[calls:] if c.split()[0] in ("useradd", "loginctl", "visudo")]
+    assert not (w.top / "usrlocal.real" / "libexec").exists()
+
+
+@host
+@pytest.mark.parametrize("fail_at", ["tree digest after creation", "exit right after done-C6p", "exit right after the build starts"])
+def test_a_failure_after_the_parent_was_created_is_rolled_back_cleanly_by_r3_including_the_parent(world, fail_at):
+    w = world(); entry = ready_for_s3_2(w); stop_a = entry
+    kw: dict = {}
+    if fail_at == "tree digest after creation":
+        kw["fields"] = {"SA2_TREE_SHA256": "0" * 64}
+    elif fail_at == "exit right after done-C6p":
+        kw["mutate"] = w.inject("S3.2", "route3_cp done-C6p", "exit")
+    else:
+        kw["mutate"] = w.inject("S3.2", "route3_cp begin-C6 ||", "exit")
+    done = w.run("S3.2", **kw); failed(done, "S3.2")
+    assert "STOP: run block R3" in done.stdout and w.sys["libexec"].is_dir() and "done-C6p" in w.markers(), "the parent exists and its creation is confirmed"
+    r3 = w.run("R3"); ok(r3, "R3")
+    assert not w.sys["libexec"].exists() and w.objects() == stop_a, {"before": stop_a, "after": w.objects()}
+    ok(w.run("R3"), "R3")
+
+
+@host
+@pytest.mark.parametrize("how", ["exit", "kill"])
+@pytest.mark.parametrize("anchor", ["mkdir -m 0755", "chown -h root:root"])
+def test_an_interrupted_parent_creation_is_never_removed_on_a_guess_and_r3_escalates_without_reporting_stop_a(world, anchor, how):
+    w = world(); ready_for_s3_2(w)
+    done = w.run("S3.2", mutate=w.inject("S3.2", anchor, how)); failed(done, "S3.2"); assert done.returncode in (77, 137)
+    assert parent_markers(w) == ["begin-C6p"] and w.sys["libexec"].is_dir(), "intent exists, creation was never confirmed, and the directory is there"
+    for _ in range(2):                                                                 # refused every time, never guessed
+        r3 = w.run("R3")
+        assert r3.returncode == 29 and "ESCALATE" in r3.stdout and "never confirmed" in r3.stdout and "STOP-A re-established" not in r3.stdout, (r3.returncode, r3.stdout)
+        assert w.sys["libexec"].is_dir(), "an unconfirmed parent is left for the maintainer"
+    assert not (w.sys["libexec"] / "freedom-blades-rp11").exists()
+
+
+@host
+def test_an_interrupted_creation_before_the_directory_exists_leaves_nothing_and_r3_is_clean(world):
+    w = world(); stop_a = ready_for_s3_2(w)
+    done = w.run("S3.2", mutate=w.inject("S3.2", "route3_cp begin-C6p", "exit")); failed(done, "S3.2")
+    assert parent_markers(w) == ["begin-C6p"] and not w.sys["libexec"].exists()
+    ok(w.run("R3"), "R3"); assert w.objects() == stop_a and not w.sys["libexec"].exists()
+    # a later clean attempt is not poisoned by the stale intent
+    ok(w.run("S3.2"), "S3.2"); assert parent_markers(w)[-2:] == ["begin-C6p", "done-C6p"]
+    ok(w.run("R3"), "R3"); assert w.objects() == stop_a
+
+
+@host
+@pytest.mark.parametrize("label", ["parent holds another entry", "parent replaced by a link", "parent mode changed", "parent owner changed"])
+def test_r3_refuses_to_remove_a_created_parent_that_is_not_the_empty_root_0755_directory_it_made(world, label):
+    w = world(); ready_for_s3_2(w); ok(w.run("S3.2"), "S3.2")
+    par, precious = w.sys["libexec"], w.top / "precious"
+    if label == "parent holds another entry":
+        (par / "someone-elses").write_text("keep")
+    elif label == "parent replaced by a link":
+        shutil.rmtree(par); precious.mkdir(); par.symlink_to(precious)
+    elif label == "parent mode changed":
+        par.chmod(0o775)
+    else:
+        os.chown(par, 65534, 65534)
+    done = w.run("R3")
+    assert done.returncode == 29 and "ESCALATE: refusing to remove" in done.stdout and "STOP-A re-established" not in done.stdout, (done.returncode, done.stdout)
+    assert par.exists() or par.is_symlink()
+    if label == "parent holds another entry":
+        assert (par / "someone-elses").read_text() == "keep" and not (par / "freedom-blades-rp11").exists(), "the SA-2 child was removed first, nothing else"
+    if label == "parent replaced by a link":
+        assert precious.is_dir() and par.is_symlink()
+
+
+@host
+def test_r3_does_not_report_stop_a_when_the_parent_it_must_remove_is_still_there(world):
+    """Mutation: an R3 whose rmdir silently does nothing is caught by the final STOP-A verification, so the equality tests above are not vacuous."""
+    w = world(); ready_for_s3_2(w); ok(w.run("S3.2"), "S3.2")
+    done = w.run("R3", mutate=lambda b: b.replace('rmdir -- "$PAR" || esc=29', ': # rmdir removed'))
+    assert done.returncode == 26 and "still present" in done.stdout and "STOP-A re-established" not in done.stdout and w.sys["libexec"].is_dir(), (done.returncode, done.stdout)
+    # and an S3.2 that skipped creation would be caught by the build, not hidden: the parent test above is the positive control
+    ok(w.run("R3"), "R3"); assert not w.sys["libexec"].exists()
+
+
+def test_the_parent_is_created_and_removed_only_by_the_one_exact_directory_operation_each():
+    s32, r3 = block("S3.2"), block("R3")
+    lines = [l for l in s32.splitlines() if not l.lstrip().startswith("#")]
+    first_trust = next(i for i, l in enumerate(lines) if "trusted /usr/local" in l)
+    first_mut = next(i for i, l in enumerate(lines) if FIRST_MUTATION.search(l))
+    assert first_trust < first_mut, "/usr/local is validated before the first marker, creation or build"
+    mk = [l.strip() for l in lines if re.search(r"\bmkdir\b", l)]
+    assert len(mk) == 1 and mk[0].startswith('mkdir -m 0755 -- "$PAR" || exit 7'), mk
+    assert not re.search(r"\brm\b|\bmv\b|\bln\b|install\s+-d|mkdir\s+-p|mkdir\s+--parents", s32)
+    assert 'route3_cp begin-C6p || exit 2' in s32 and s32.index("route3_cp begin-C6p") < s32.index("mkdir -m 0755") < s32.index("route3_cp done-C6p") < s32.index("route3_cp begin-C6 ||") < s32.index("build.py")
+    r3_par = [l for l in r3.splitlines() if "$PAR" in l and not l.lstrip().startswith("#")]
+    assert any('rmdir -- "$PAR"' in l for l in r3_par) and not [l for l in r3_par if re.search(r"\brm\b\s|-rf|--recursive|rm -r", l)], r3_par
+    assert re.search(r"mountpoint -q -- \"\$PAR\"", r3) and "-mindepth 1" in r3 and "0:0:755" in r3
+    assert "last=$(grep -E '^(begin|done|kept)-C6p$'" in r3 and "done-C6p)" in r3 and "begin-C6p)" in r3 and "kept-C6p)" in r3
 
 
 # ---- the installer invocation --------------------------------------------------------------------------------------------------------
@@ -1988,7 +2205,7 @@ def test_real_systemctl_status_and_state_pairs_are_the_ones_the_helper_accepts()
 REMOVED_INSTALL_MACHINERY = ("route3_apt_install", "route3_apt_sim", "route3_apt_parse", "route3_hook_text", "route3_effects_hook_text", "route3_apt_hook_write", "route3_txn_rows", "route3_effects_rows",
                              "route3_observe_resolve", "route3_observed_write", "route3_delta_ok", "ROUTE3_TODO", "apt.intent", "apt.txn", "apt.effects", "observed.pkgs", "apt-get install", "DPkg::")
 GATED_BLOCKS = ["S1.0", "S1.1", "S1.2", "S1.3", "S1.4", "S3.1", "S3.2", "S3.3", "S3.5", "S4.1"]
-FIRST_MUTATION = re.compile(r"route3_cp |\binstall\s+-[dm]|apt-mark\s+hold|\buseradd\b|loginctl\s+enable|\bmv\s|route3_installer\s+install|systemctl\s+start|build\.py|route3_pkgs\s*>|printf\b[^\n]*>\s*\"\$N\"|polkit|ROUTE3_TMPFILES\"\s+install")
+FIRST_MUTATION = re.compile(r"route3_cp |\binstall\s+-[dm]|\bmkdir\s+-m|apt-mark\s+hold|\buseradd\b|loginctl\s+enable|\bmv\s|route3_installer\s+install|systemctl\s+start|build\.py|route3_pkgs\s*>|printf\b[^\n]*>\s*\"\$N\"|polkit|ROUTE3_TMPFILES\"\s+install")
 
 
 def test_the_runbook_has_no_package_install_path_at_all():

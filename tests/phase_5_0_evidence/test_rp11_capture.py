@@ -30,15 +30,20 @@ import ast
 import errno
 import hashlib
 import os
+import signal
 import stat
+import time
 from pathlib import Path
 
 import pytest
 
 from tests.phase_5_0_evidence.rp11_fixtures import (
     INERT_ENVIRONMENT,
+    INVOCATION_ID,
+    OTHER_INVOCATION_ID,
     PASS_A,
     PASS_B,
+    TEST_TIMEOUT_SECONDS,
     TOOL_SHA256,
     CountingLauncher,
     FaultFilesystem,
@@ -79,10 +84,12 @@ from tools.phase_5_0_evidence.capture_contract import (
 )
 from tools.phase_5_0_evidence.execution import capture_mechanism as mechanism_module
 from tools.phase_5_0_evidence.execution import descriptors
+from tools.phase_5_0_evidence.execution import boundary as boundary_module
 from tools.phase_5_0_evidence.execution.boundary import (
     CAPTURE_ARGV_REFUSED,
     CAPTURE_NOT_ARMED,
     CAPTURE_START_FAILED,
+    CAPTURE_TIMEOUT_REFUSED,
     StreamCaptureLauncher,
 )
 from tools.phase_5_0_evidence.execution.capture_mechanism import (
@@ -208,6 +215,7 @@ def test_roots_overlap_when_equal_or_nested_in_either_direction() -> None:
 def test_the_binding_block_round_trips_and_nothing_else_is_read() -> None:
     binding = HandbackBinding(
         pass_id=PASS_A,
+        invocation_id=INVOCATION_ID,
         capture_root="/srv/capture/a",
         x3_outcome="succeeded",
         x4_validity="valid",
@@ -228,7 +236,7 @@ def test_the_binding_block_round_trips_and_nothing_else_is_read() -> None:
         (lambda block: block.replace("x4_validity: valid", "x4_validity: valid "), "malformed-binding"),
         (lambda block: block.replace("x4_validity: valid", "x4_validity:  valid"), "malformed-binding"),
         (lambda block: block.replace("\n```\n", "\n"), "malformed-binding"),
-        (lambda block: block.replace("rp11-capture-binding/1", "rp11-capture-binding/2"), "malformed-binding"),
+        (lambda block: block.replace("rp11-capture-binding/2", "rp11-capture-binding/1"), "malformed-binding"),
         (lambda block: block.replace("x3_outcome: succeeded", "x3_outcome: ok"), "malformed-binding"),
         (lambda block: block.replace("/srv/capture/a", "/srv/capture/a/"), "malformed-root"),
     ],
@@ -236,6 +244,7 @@ def test_the_binding_block_round_trips_and_nothing_else_is_read() -> None:
 def test_the_binding_block_refuses_every_other_shape(mutation, classification) -> None:
     block = HandbackBinding(
         pass_id=PASS_A,
+        invocation_id=INVOCATION_ID,
         capture_root="/srv/capture/a",
         x3_outcome="succeeded",
         x4_validity="valid",
@@ -267,6 +276,7 @@ def _open(number: int, records: tuple[IndexEntry, ...]) -> IndexState:
         pass_id=PASS_A,
         capture_root="/c/a",
         tool_sha256=TOOL_SHA256,
+        invocation_id=INVOCATION_ID,
         owner_uid=1000,
         state_number=number,
         previous=None if number == 0 else _link(number - 1),
@@ -277,12 +287,13 @@ def _open(number: int, records: tuple[IndexEntry, ...]) -> IndexState:
 
 def test_an_index_state_refuses_a_gap_and_a_final_state_its_own_shape() -> None:
     with pytest.raises(CaptureContractRefused) as refusal:
-        IndexState(PASS_A, "/c/a", TOOL_SHA256, 1000, 2, _link(1), "open", (_entry(1), _entry(3)))
+        IndexState(PASS_A, "/c/a", TOOL_SHA256, INVOCATION_ID, 1000, 2, _link(1), "open", (_entry(1), _entry(3)))
     assert refusal.value.classification == "record-list-gap"
     base = dict(
         pass_id=PASS_A,
         capture_root="/c/a",
         tool_sha256=TOOL_SHA256,
+        invocation_id=INVOCATION_ID,
         owner_uid=1000,
         state_number=2,
         previous=_link(1),
@@ -327,7 +338,7 @@ def test_a_name_in_two_categories_is_refused_when_r_is_formed() -> None:
     chain = [_open(0, ()), _open(1, (_entry(1),))]
     for reused in ("records/000001.json", "records/000001.json.staging", "index/000000.open.json.staging"):
         final = IndexState(
-            PASS_A, "/c/a", TOOL_SHA256, 1000, 2, _link(1), "final", (_entry(1),),
+            PASS_A, "/c/a", TOOL_SHA256, INVOCATION_ID, 1000, 2, _link(1), "final", (_entry(1),),
             Terminal("completed"), tuple(sorted(LAYOUT)),
             (UnadmittedObject(reused, ObjectType.REGULAR),), _self(2),
         )
@@ -461,12 +472,12 @@ def test_the_launcher_is_unarmed_by_default_and_refuses_a_relative_vector() -> N
             sink.append(data)
 
     result = StreamCaptureLauncher().launch(
-        ("/bin/true",), environment={}, stdout=Sink(), stderr=Sink(), stream_bound_bytes=1
+        ("/bin/true",), environment={}, stdout=Sink(), stderr=Sink(), stream_bound_bytes=1, timeout_seconds=1.0
     )
     assert (result.started, result.failure) == (False, CAPTURE_NOT_ARMED)
     for argv in (("true",), (), ("/bin/true", "a\0b")):
         result = StreamCaptureLauncher(armed=True).launch(
-            argv, environment={}, stdout=Sink(), stderr=Sink(), stream_bound_bytes=1
+            argv, environment={}, stdout=Sink(), stderr=Sink(), stream_bound_bytes=1, timeout_seconds=1.0
         )
         assert (result.started, result.failure) == (False, CAPTURE_ARGV_REFUSED)
     assert sink == []
@@ -516,6 +527,347 @@ def test_a_channel_held_open_past_the_drain_limit_is_an_incomplete_stream(tmp_pa
     outcome = session.run_act(act("A1-10", python_argv(program), drain=0.2))
     assert (outcome.failure.stage, outcome.failure.classification) == (LAUNCH_STAGE, "stream-incomplete")
     assert outcome.failure.host_act_may_have_run
+
+
+# ---------------------------------------------------------------------------
+# A finite deadline for every child command
+# ---------------------------------------------------------------------------
+
+INVALID_TIMEOUTS = (0, 0.0, -1, -0.5, float("nan"), float("inf"), float("-inf"), True, False, "1", None, b"1")
+
+#: Prints its own pid and a descendant's, then stays alive past any test deadline.
+_HANGING_TREE = (
+    "import os, sys, time\n"
+    "child = os.fork()\n"
+    "if child == 0:\n"
+    "    time.sleep(60); os._exit(0)\n"
+    "sys.stdout.buffer.write(b'%d %d' % (os.getpid(), child)); sys.stdout.flush()\n"
+    "sys.stderr.buffer.write(b'partial-err'); sys.stderr.flush()\n"
+    "time.sleep(60)\n"
+)
+
+
+class _Collect:
+    def __init__(self) -> None:
+        self.data = b""
+
+    def write(self, data: bytes) -> None:
+        self.data += data
+
+
+def _gone(pid: int) -> bool:
+    """True once `pid` is no longer a live process (a zombie awaiting init is dead)."""
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        try:
+            state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+        except (FileNotFoundError, ProcessLookupError):
+            return True
+        if state in ("Z", "X"):
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def _launch_hanging(program: str, timeout: float, drain: float = 2.0):  # type: ignore[no-untyped-def]
+    out, err = _Collect(), _Collect()
+    started = time.monotonic()
+    result = StreamCaptureLauncher(armed=True).launch(
+        python_argv(program),
+        environment=dict(INERT_ENVIRONMENT),
+        stdout=out,
+        stderr=err,
+        stream_bound_bytes=4096,
+        timeout_seconds=timeout,
+        drain_seconds=drain,
+    )
+    return result, out.data, err.data, time.monotonic() - started
+
+
+@pytest.mark.parametrize("timeout", INVALID_TIMEOUTS, ids=repr)
+def test_the_launcher_refuses_a_timeout_that_is_not_positive_and_finite(timeout) -> None:  # type: ignore[no-untyped-def]
+    sink = _Collect()
+    result = StreamCaptureLauncher(armed=True).launch(
+        ("/bin/true",),
+        environment={},
+        stdout=sink,
+        stderr=sink,
+        stream_bound_bytes=1,
+        timeout_seconds=timeout,
+    )
+    assert (result.started, result.failure, result.timed_out) == (False, CAPTURE_TIMEOUT_REFUSED, False)
+    assert result.returncode is None and sink.data == b""
+
+
+def test_the_launcher_has_no_default_timeout() -> None:
+    with pytest.raises(TypeError):
+        StreamCaptureLauncher(armed=True).launch(  # type: ignore[call-arg]
+            ("/bin/true",), environment={}, stdout=_Collect(), stderr=_Collect(), stream_bound_bytes=1
+        )
+
+
+def test_an_act_request_has_no_default_timeout() -> None:
+    with pytest.raises(TypeError):
+        mechanism_module.ActRequest(  # type: ignore[call-arg]
+            step_or_case_id="A1-T0", argv=("/bin/true",), environment={}, stream_bound_bytes=1
+        )
+
+
+@pytest.mark.parametrize("timeout", INVALID_TIMEOUTS, ids=repr)
+def test_an_invalid_timeout_stops_the_pass_before_any_file_or_process(tmp_path: Path, timeout) -> None:  # type: ignore[no-untyped-def]
+    host = Host.under(tmp_path)
+    launcher = CountingLauncher()
+    session = open_session(host, launcher=launcher)
+    before = names_under(host.root())
+    outcome = session.run_act(act("A1-T1", writes(b"", b""), timeout=timeout))
+    assert (outcome.failure.stage, outcome.failure.classification) == (REQUEST_STAGE, "request-malformed-timeout")
+    assert not outcome.failure.host_act_may_have_run
+    assert launcher.calls == []
+    assert names_under(host.root()) - before == {outcome.stop.final_state, outcome.stop.final_state + ".staging"}
+
+
+def test_a_healthy_child_under_the_deadline_is_admitted_and_not_timed_out(tmp_path: Path) -> None:
+    host = Host.under(tmp_path)
+    session = open_session(host, launcher=CountingLauncher())
+    outcome = session.run_act(act("A1-T2", writes(b"fine", b""), timeout=TEST_TIMEOUT_SECONDS))
+    assert outcome.admitted and outcome.failure is None
+
+
+def test_a_child_past_its_deadline_is_killed_with_its_whole_group_and_reaped() -> None:
+    result, out, err, elapsed = _launch_hanging(_HANGING_TREE, timeout=0.5)
+    assert result.started and result.timed_out
+    assert result.returncode == -signal.SIGKILL
+    assert not result.bound_exceeded
+    assert elapsed < 10.0
+    child, grandchild = (int(item) for item in out.split())
+    assert _gone(grandchild), "the descendant outlived its group's kill"
+    # Reaped: the launcher waited, so this process has no such child left.
+    with pytest.raises(ChildProcessError):
+        os.waitpid(child, os.WNOHANG)
+
+
+def test_output_written_before_the_deadline_is_drained_untruncated() -> None:
+    result, out, err, _ = _launch_hanging(_HANGING_TREE, timeout=0.5)
+    assert result.timed_out and result.streams_complete
+    assert out.split() and err == b"partial-err"
+    assert (result.stdout_bytes, result.stderr_bytes) == (len(out), len(err))
+
+
+def test_a_child_that_closes_both_channels_but_keeps_running_is_still_bounded() -> None:
+    program = "import os, time\nos.close(1); os.close(2)\ntime.sleep(60)\n"
+    result, out, err, elapsed = _launch_hanging(program, timeout=0.5)
+    assert result.timed_out and result.streams_complete
+    assert (out, err) == (b"", b"")
+    assert elapsed < 10.0
+
+
+def test_a_child_that_exits_in_time_is_not_timed_out_even_if_a_descendant_holds_a_channel() -> None:
+    program = (
+        "import os, sys, time\n"
+        "if os.fork() == 0:\n"
+        "    time.sleep(1.5); os._exit(0)\n"
+        "sys.stdout.buffer.write(b'parent'); sys.stdout.flush()\n"
+    )
+    result, out, _, _ = _launch_hanging(program, timeout=30.0, drain=0.2)
+    assert not result.timed_out and not result.streams_complete
+    assert out == b"parent" and result.returncode == 0
+
+
+class _FakeClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+class _FakeChild:
+    """A child whose exit is first observed, by `poll`, at a chosen clock reading."""
+
+    pid = 424242
+
+    def __init__(self, clock: _FakeClock, observed_at: float) -> None:
+        self._clock, self._observed_at = clock, observed_at
+        self.returncode: int | None = None
+        pipes = [os.pipe(), os.pipe()]
+        for _, write_end in pipes:
+            os.close(write_end)  # both channels are at end-of-file at once
+        self.stdout = os.fdopen(pipes[0][0], "rb", buffering=0)
+        self.stderr = os.fdopen(pipes[1][0], "rb", buffering=0)
+
+    def poll(self) -> int | None:
+        if self.returncode is None:
+            self._clock.now = self._observed_at
+            self.returncode = 0
+        return self.returncode
+
+    def wait(self) -> int:
+        return self.poll() or 0
+
+
+@pytest.mark.parametrize(
+    ("offset", "expected"),
+    [(-0.001, False), (0.0, True), (0.001, True), (100.0, True)],
+    ids=["just-before", "exactly-at", "just-after", "long-after"],
+)
+def test_an_exit_first_observed_at_or_after_the_deadline_is_a_timeout(monkeypatch, offset, expected) -> None:  # type: ignore[no-untyped-def]
+    clock = _FakeClock()
+    killed: list[tuple[int, int]] = []
+    monkeypatch.setattr(boundary_module.os, "killpg", lambda pgid, sig: killed.append((pgid, sig)))
+    result = StreamCaptureLauncher(
+        armed=True, clock=clock, spawn=lambda *a, **k: _FakeChild(clock, 10.0 + offset)
+    ).launch(
+        ("/bin/true",),
+        environment={},
+        stdout=_Collect(),
+        stderr=_Collect(),
+        stream_bound_bytes=1,
+        timeout_seconds=10.0,
+    )
+    assert result.started and result.streams_complete and result.returncode == 0
+    assert result.timed_out is expected
+    # The group is killed on the way out whatever the verdict; a late exit is
+    # classified timed_out and its group is terminated, not trusted.
+    assert killed and all(item == (_FakeChild.pid, 9) for item in killed)
+
+
+def _pids(*, parent_tail: str, bound_chunk: str = "") -> str:
+    """Parent forks a descendant that holds both channels, reports both pids, then runs `parent_tail`."""
+    return (
+        "import os, sys, time\n"
+        "child = os.fork()\n"
+        "if child == 0:\n"
+        "    time.sleep(60); os._exit(0)\n"
+        "sys.stdout.buffer.write(b'%d %d\\n' % (os.getpid(), child)); sys.stdout.flush()\n"
+        + bound_chunk
+        + parent_tail
+    )
+
+
+def _pid_pair(data: bytes) -> tuple[int, int]:
+    first, second = data.split()[:2]
+    return int(first), int(second)
+
+
+def test_a_clean_short_child_with_no_descendant_is_unchanged_by_the_group_kill() -> None:
+    result, out, err, _ = _launch_hanging(
+        "import sys\nsys.stdout.buffer.write(b'ok'); sys.stderr.buffer.write(b'e')\n", timeout=30.0
+    )
+    assert (result.started, result.returncode, result.timed_out, result.bound_exceeded) == (True, 0, False, False)
+    assert result.streams_complete and (out, err) == (b"ok", b"e")
+
+
+def test_stream_bound_overflow_kills_the_whole_group() -> None:
+    program = _pids(
+        bound_chunk="sys.stdout.buffer.write(b'x' * 20000); sys.stdout.flush()\n", parent_tail="time.sleep(60)\n"
+    )
+    result, out, _, elapsed = _launch_hanging(program, timeout=30.0)
+    assert result.bound_exceeded and not result.timed_out and result.streams_complete
+    assert result.returncode == -signal.SIGKILL and elapsed < 10.0
+    leader, descendant = _pid_pair(out)
+    assert _gone(descendant), "the descendant outlived a stream-bound overflow"
+    assert _gone(leader)
+
+
+def test_stream_bound_overflow_after_the_leader_exited_still_kills_the_descendant() -> None:
+    program = _pids(bound_chunk="sys.stdout.buffer.write(b'x' * 20000); sys.stdout.flush()\n", parent_tail="")
+    result, out, _, _ = _launch_hanging(program, timeout=30.0, drain=2.0)
+    assert result.bound_exceeded and not result.timed_out
+    assert _gone(_pid_pair(out)[1])
+
+
+def test_a_raising_sink_kills_the_whole_group_and_propagates() -> None:
+    seen: list[bytes] = []
+
+    class Failing:
+        def write(self, data: bytes) -> None:
+            seen.append(data)
+            raise OSError("sink failed")
+
+    program = _pids(parent_tail="time.sleep(60)\n")
+    with pytest.raises(OSError, match="sink failed"):
+        StreamCaptureLauncher(armed=True).launch(
+            python_argv(program),
+            environment=dict(INERT_ENVIRONMENT),
+            stdout=Failing(),
+            stderr=_Collect(),
+            stream_bound_bytes=4096,
+            timeout_seconds=30.0,
+        )
+    leader, descendant = _pid_pair(b"".join(seen))
+    assert _gone(descendant), "the descendant outlived a sink failure"
+    assert _gone(leader)
+
+
+def test_drain_expiry_kills_a_descendant_that_kept_a_channel_open() -> None:
+    program = _pids(parent_tail="")
+    result, out, _, elapsed = _launch_hanging(program, timeout=30.0, drain=0.2)
+    assert result.returncode == 0 and not result.timed_out and not result.streams_complete
+    assert elapsed < 10.0
+    assert _gone(_pid_pair(out)[1]), "the descendant outlived drain expiry"
+
+
+def test_drain_expiry_and_overflow_are_not_retried_by_the_session(tmp_path: Path) -> None:
+    for step, program, drain in (
+        ("A1-D1", _pids(parent_tail=""), 0.2),
+        ("A1-D2", _pids(bound_chunk="sys.stdout.buffer.write(b'x' * 20000); sys.stdout.flush()\n", parent_tail="time.sleep(60)\n"), 2.0),
+    ):
+        (tmp_path / step).mkdir()
+        host = Host.under(tmp_path / step)
+        launcher = CountingLauncher()
+        session = open_session(host, launcher=launcher)
+        outcome = session.run_act(act(step, python_argv(program), timeout=30.0, drain=drain))
+        assert outcome.failure.classification in {"stream-incomplete", "stream-bound-exceeded"}
+        assert not outcome.admitted and len(launcher.calls) == 1
+        with pytest.raises(CaptureRefused):
+            session.run_act(act(step + "x", writes(b"", b"")))
+        assert len(launcher.calls) == 1
+
+
+def test_a_timeout_stops_the_pass_with_unadmitted_residue_and_exactly_one_x3(tmp_path: Path) -> None:
+    host = Host.under(tmp_path)
+    launcher = CountingLauncher()
+    session = open_session(host, launcher=launcher)
+    outcome = session.run_act(act("A1-T3", python_argv(_HANGING_TREE), timeout=0.5, drain=2.0))
+    assert not outcome.admitted and outcome.record_sha256 is None and outcome.exit is None
+    assert (outcome.failure.stage, outcome.failure.classification) == (LAUNCH_STAGE, "command-timeout")
+    assert outcome.failure.host_act_may_have_run
+    assert outcome.stop.x3_outcome == "succeeded" and outcome.stop.x4_validity == "valid"
+    assert outcome.stop.admitted_records == 0
+    assert session.state is SessionState.SEALED
+    _, final = _final(host.root())  # exactly one final state
+    assert final.records == () and final.terminal.reason == "command-timeout"
+    assert {item.name for item in final.unadmitted} == {"streams/stdout/000001", "streams/stderr/000001"}
+    assert _read(host.root(), "streams/stderr/000001") == b"partial-err"
+    assert not (Path(host.root()) / "records" / "000001.json").exists()
+
+
+def test_a_timeout_is_never_retried_and_issues_no_further_command(tmp_path: Path) -> None:
+    host = Host.under(tmp_path)
+    launcher = CountingLauncher()
+    session = open_session(host, launcher=launcher)
+    first = session.run_act(act("A1-T4", python_argv(_HANGING_TREE), timeout=0.5, drain=2.0))
+    assert first.failure.classification == "command-timeout"
+    with pytest.raises(CaptureRefused):
+        session.run_act(act("A1-T5", writes(b"", b"")))
+    with pytest.raises(CaptureRefused):
+        session.complete()
+    assert len(launcher.calls) == 1
+    _final(host.root())
+
+
+def test_the_session_hands_the_request_timeout_to_the_launcher_and_classifies_a_reported_timeout(
+    tmp_path: Path,
+) -> None:
+    host = Host.under(tmp_path)
+    launcher = ScriptedLauncher(timed_out=True)
+    session = open_session(host, launcher=launcher)
+    outcome = session.run_act(act("A1-T6", writes(b"", b""), timeout=12.5))
+    assert launcher.timeouts == [12.5]
+    assert (outcome.failure.stage, outcome.failure.classification) == (LAUNCH_STAGE, "command-timeout")
+    assert outcome.failure.host_act_may_have_run and not outcome.admitted
+    assert outcome.stop.x3_outcome == "succeeded"
+    _final(host.root())
 
 
 def test_a_malformed_request_stops_the_pass_before_any_file_or_process(tmp_path: Path) -> None:
@@ -1464,3 +1816,138 @@ def test_the_store_links_only_through_the_shared_named_primitive() -> None:
     assert len(links) == 1
     flags = PosixCaptureFilesystem.create_exclusive.__code__.co_names
     assert {"O_WRONLY", "O_CREAT", "O_EXCL", "O_NOFOLLOW", "O_CLOEXEC"} <= set(flags)
+
+
+# ===========================================================================
+# G11 — systemd InvocationID as pass-level provenance (index/3, binding/2)
+# ===========================================================================
+
+_BAD_INVOCATION_IDS = [
+    "",
+    "0123456789ABCDEF0123456789ABCDEF",  # uppercase
+    "0123456789abcdef0123456789abcde",  # 31
+    "0123456789abcdef0123456789abcdef0",  # 33
+    "0123456789abcdef0123456789abcdef\n",  # trailing newline
+    " 0123456789abcdef0123456789abcdef",
+    "0123456789abcdef-123456789abcdef",  # a dashed UUID shape
+    "0123456789abcdeg0123456789abcdef",
+    "absent",
+    None,
+    1234,
+    b"0123456789abcdef0123456789abcdef",
+]
+
+
+def test_the_invocation_id_grammar_equals_the_launchers() -> None:
+    from tools.phase_5_0_evidence import rp11_launch
+
+    assert contract.INVOCATION_ID_PATTERN.pattern == rp11_launch.INVOCATION_ID_GRAMMAR
+
+
+def test_the_schema_versions_moved_and_the_record_schema_did_not() -> None:
+    assert contract.INDEX_SCHEMA == "rp11-capture-index/3"
+    assert contract.BINDING_FORMAT == "rp11-capture-binding/2"
+    assert contract.RECORD_SCHEMA == "rp11-capture-record/1"
+    assert "invocation_id" not in contract._RECORD_KEYS
+    assert contract._RECORD_KEYS == (
+        "argv", "capture_seq", "clock_source", "ended_utc", "exit", "pass_id", "schema",
+        "shell", "started_utc", "stderr", "stdout", "step_or_case_id", "stream_bound_bytes",
+    )
+
+
+def test_genesis_and_every_later_state_carry_the_invocation_id(tmp_path: Path) -> None:
+    host = Host.under(tmp_path)
+    session = open_session(host)
+    session.run_act(act("A1-01", python_argv_ok()))
+    session.run_act(act("A1-02", python_argv_ok()))
+    session.complete()
+    root = host.root()
+    states = [IndexState.from_bytes(_read(root, f"index/00000{n}.open.json")) for n in range(3)]
+    name, final = _final(root)
+    assert {state.invocation_id for state in [*states, final]} == {INVOCATION_ID}
+    assert session.binding().invocation_id == INVOCATION_ID
+    assert IndexState.from_bytes(states[0].to_bytes()) == states[0]
+    assert b'"invocation_id":"' + INVOCATION_ID.encode() + b'"' in _read(root, "index/000000.open.json")
+    # no per-record copy
+    assert b"invocation_id" not in _read(root, "records/000001.json")
+
+
+@pytest.mark.parametrize("value", _BAD_INVOCATION_IDS, ids=repr)
+def test_a_malformed_invocation_id_is_refused_before_any_root_exists(tmp_path: Path, value) -> None:
+    host = Host.under(tmp_path)
+    with pytest.raises(CaptureContractRefused):
+        open_session(host, invocation_id=value)
+    assert not os.path.lexists(host.root())
+
+
+@pytest.mark.parametrize("value", _BAD_INVOCATION_IDS, ids=repr)
+def test_index_state_and_binding_refuse_a_malformed_invocation_id(value) -> None:
+    with pytest.raises(CaptureContractRefused):
+        IndexState(**{**_state_fields(), "invocation_id": value})
+    with pytest.raises(CaptureContractRefused) as refusal:
+        HandbackBinding(
+            pass_id=PASS_A, invocation_id=value, capture_root="/srv/capture/a",
+            x3_outcome="succeeded", x4_validity="valid",
+            final_state="index/000003.final.json", capture_index_sha256="c" * 64,
+        )
+    assert refusal.value.classification == "malformed-binding"
+
+
+def _state_fields() -> dict:
+    state = _open(0, ())
+    return {name: getattr(state, name) for name in state.__dataclass_fields__}
+
+
+def test_a_parsed_index_state_refuses_a_missing_or_malformed_invocation_id() -> None:
+    document = parse_canonical(_open(0, ()).to_bytes())
+    for mutate in (
+        lambda d: d.pop("invocation_id"),
+        lambda d: d.__setitem__("invocation_id", "A" * 32),
+        lambda d: d.__setitem__("invocation_id", 7),
+        lambda d: d.__setitem__("invocation_id", None),
+        lambda d: d.__setitem__("extra", 1),
+    ):
+        copy = dict(document)
+        mutate(copy)
+        with pytest.raises(CaptureContractRefused):
+            IndexState.from_bytes(canonical_bytes(copy))
+
+
+def test_old_index_and_binding_schemas_are_refused_and_new_ones_refused_by_the_old_shape() -> None:
+    document = parse_canonical(_open(0, ()).to_bytes())
+    old = dict(document, schema="rp11-capture-index/2")
+    del old["invocation_id"]
+    for candidate in (old, dict(document, schema="rp11-capture-index/2"), dict(document, schema="rp11-capture-index/4")):
+        with pytest.raises(CaptureContractRefused) as refusal:
+            IndexState.from_bytes(canonical_bytes(candidate))
+        assert refusal.value.classification == "schema-mismatch"
+    block = HandbackBinding(
+        pass_id=PASS_A, invocation_id=INVOCATION_ID, capture_root="/srv/capture/a",
+        x3_outcome="succeeded", x4_validity="valid",
+        final_state="index/000003.final.json", capture_index_sha256="c" * 64,
+    ).render()
+    old_block = block.replace("rp11-capture-binding/2", "rp11-capture-binding/1").replace(
+        f"invocation_id: {INVOCATION_ID}\n", ""
+    )
+    for text in (old_block, block.replace("binding/2", "binding/1")):
+        with pytest.raises(CaptureContractRefused) as refusal:
+            parse_handback_binding(text.encode())
+        assert refusal.value.classification == "malformed-binding"
+    # a binding without the invocation line, or with it elsewhere, is refused
+    with pytest.raises(CaptureContractRefused):
+        parse_handback_binding(block.replace(f"invocation_id: {INVOCATION_ID}\n", "").encode())
+    assert parse_handback_binding(block.encode()).invocation_id == INVOCATION_ID
+
+
+def test_the_state_digest_chain_binds_the_invocation_id() -> None:
+    a = _open(0, ())
+    b = _open(0, ())
+    c = IndexState(**{**_state_fields(), "invocation_id": OTHER_INVOCATION_ID})
+    assert a.to_bytes() == b.to_bytes()
+    assert hashlib.sha256(a.to_bytes()).digest() != hashlib.sha256(c.to_bytes()).digest()
+
+
+def python_argv_ok() -> tuple[str, ...]:
+    from tests.phase_5_0_evidence.rp11_fixtures import writes
+
+    return writes(b"", b"")

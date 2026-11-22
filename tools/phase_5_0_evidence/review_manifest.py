@@ -601,7 +601,25 @@ MANIFEST_SCHEMA = "phase-5-0-evidence-review-manifest"
 #: `is_executable` remains `False`, PO-9 and PO-14 remain open, and RP-11
 #: remains unwired and unmet. A digest remains review input, not execution
 #: approval.
-MANIFEST_VERSION = 31
+#: **32** is the RP-11 launcher Python 3.14 contract and artifact refresh,
+#: 2026-11-21 (design proposal §4 step 1). The launcher's two `execve` literals
+#: and the `rp11_launch` contract's `EXECVE_PATH`/`EXECVE_ARGV[0]` move from
+#: `/usr/bin/python3.12` to `/usr/bin/python3.14`; the committed listing,
+#: `expected.sha256` and the image, listing and `launch.s` digests are
+#: re-derived from a real `oracle-test` build of this tree.
+#:
+#: What does **not** move at 32: `cc1.v.baseline` (byte-identical, 5305 bytes),
+#: the linker map digest, the agreed XD stream digest (the decoder passes
+#: unchanged on the rebuilt image and listing) and every vector, step,
+#: mutation, materialization, expectation, target fact, required case,
+#: unresolved entry, schema, executable and verb table. The argv still names
+#: the nonexistent `rp11_entry.py`. The section still records `installed:
+#: false` and `wired: false`. C-7's three cases and C-S4-3 remain unresolved,
+#: `is_executable` remains `False`, PO-9 and PO-14 remain open, and RP-11
+#: remains unwired and unmet. No product requirement changes. A digest remains
+#: review input, not execution approval, and this tree awaits Codex
+#: independent review.
+MANIFEST_VERSION = 32
 
 #: **27.** The `infra/rp11-launch/` files whose bytes the manifest pins
 #: (proposal §5.2, §5.11): image source, build definition, toolchain and

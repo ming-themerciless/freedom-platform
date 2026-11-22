@@ -1,0 +1,117 @@
+
+Merging object attributes
+
+
+Discarded input sections
+
+ .note.GNU-stack
+                0x0000000000000000        0x0 start.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 launch.o
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+*default*        0x0000000000000000 0xffffffffffffffff
+
+Linker script and memory map
+
+                0x00000000004000b0                . = (0x400000 + SIZEOF_HEADERS)
+
+.text           0x00000000004000b0      0x50f
+ *(.text .text.*)
+ .text          0x00000000004000b0       0x1b start.o
+                0x00000000004000b0                _start
+ .text          0x00000000004000cb      0x4f4 launch.o
+                0x00000000004000cb                rp11_main
+
+.iplt           0x00000000004005bf        0x0
+ .iplt          0x00000000004005bf        0x0 start.o
+
+.rodata         0x00000000004005bf      0x156
+ *(.rodata .rodata.*)
+ .rodata.str1.1
+                0x00000000004005bf      0x156 launch.o
+
+/DISCARD/
+ *(.note.*)
+ *(.comment)
+ *(.eh_frame)
+ *(.eh_frame_hdr)
+ *(.eh_frame.*)
+
+.interp
+ *(.interp)
+
+.dynamic
+ *(.dynamic)
+
+.rela.dyn       0x0000000000400718        0x0
+ *(.rela.*)
+ .rela.got      0x0000000000400718        0x0 start.o
+ .rela.iplt     0x0000000000400718        0x0 start.o
+
+.got            0x0000000000400718        0x0
+ *(.got)
+ .got           0x0000000000400718        0x0 start.o
+
+.got.plt        0x0000000000400718        0x0
+ *(.got.plt)
+ .got.plt       0x0000000000400718        0x0 start.o
+
+.plt
+ *(.plt)
+ *(.plt.*)
+
+.init_array
+ *(.init_array .init_array.*)
+
+.fini_array
+ *(.fini_array .fini_array.*)
+
+.preinit_array
+ *(.preinit_array)
+
+.ctors
+ *(.ctors .ctors.*)
+
+.dtors
+ *(.dtors .dtors.*)
+
+.tdata
+ *(.tdata .tdata.*)
+
+.tbss
+ *(.tbss .tbss.*)
+
+.data           0x0000000000400715        0x0
+ *(.data .data.*)
+ .data          0x0000000000400715        0x0 start.o
+ .data          0x0000000000400715        0x0 launch.o
+
+.igot.plt       0x0000000000400718        0x0
+ .igot.plt      0x0000000000400718        0x0 start.o
+
+.bss            0x0000000000400715        0x0
+ *(.bss .bss.*)
+ .bss           0x0000000000400715        0x0 start.o
+ .bss           0x0000000000400715        0x0 launch.o
+ *(COMMON)
+                0x0000000000000001                ASSERT ((SIZEOF (.interp) == 0x0), rp11-launch: .interp must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.dynamic) == 0x0), rp11-launch: .dynamic must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.rela.dyn) == 0x0), rp11-launch: .rela.* must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.got) == 0x0), rp11-launch: .got must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.got.plt) == 0x0), rp11-launch: .got.plt must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.plt) == 0x0), rp11-launch: .plt must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.init_array) == 0x0), rp11-launch: .init_array must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.fini_array) == 0x0), rp11-launch: .fini_array must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.preinit_array) == 0x0), rp11-launch: .preinit_array must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.ctors) == 0x0), rp11-launch: .ctors must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.dtors) == 0x0), rp11-launch: .dtors must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.tdata) == 0x0), rp11-launch: .tdata must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.tbss) == 0x0), rp11-launch: .tbss must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.data) == 0x0), rp11-launch: .data must be absent)
+                0x0000000000000001                ASSERT ((SIZEOF (.bss) == 0x0), rp11-launch: .bss must be absent)
+LOAD start.o
+LOAD launch.o
+OUTPUT(rp11-launch elf64-x86-64)

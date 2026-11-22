@@ -5,8 +5,10 @@
 Layout of ``<dir>`` (installed as ``/usr/local/libexec/freedom-blades-rp11``):
 
     rp11_h1.py                     the role entry point
+    rp11_entry.py                  the Pass A capture entry (inert; same lib/)
     lib/application/...            the application boundary (unit_control only)
     lib/adapters/systemd/...       the Route 3 adapter
+    lib/tools/phase_5_0_evidence/...   the capture entry's fixed dependency closure
     lib/rp11_roles.py              role behaviour (``--roles`` replaces it)
     lib/jeepney/, lib/jeepney-<v>.dist-info/   the D-Bus client, licence included
 
@@ -93,6 +95,34 @@ SOURCES = (
     "adapters/rp11/stop_post.py",
     "adapters/rp11/start.py",
     "adapters/rp11/stop.py",
+)
+
+# The capture entry (``rp11_entry.py``) loads the RP-11 capture mechanism. These are
+# its complete, mechanically computed dependency closure outside ``SOURCES``: every
+# repository module ``tools.phase_5_0_evidence.execution.capture_mechanism``
+# imports, with its package ``__init__`` files, and nothing third-party. A test
+# computes the closure from the entry's imports by AST and keeps this equal to it.
+# ``execution/start_binding.py`` (the G11 InvocationID/consume ``run-start`` pairing)
+# is not imported by the entry yet; the test adds it as a second closure root so the
+# future entry finds it, and the journal modules it uses, already in ``lib/``.
+ENTRY_SOURCES = (
+    "application/idempotency.py",
+    "tools/__init__.py",
+    "tools/phase_5_0_evidence/__init__.py",
+    "tools/phase_5_0_evidence/capability.py",
+    "tools/phase_5_0_evidence/capture.py",
+    "tools/phase_5_0_evidence/capture_contract.py",
+    "tools/phase_5_0_evidence/durability_model.py",
+    "tools/phase_5_0_evidence/errors.py",
+    "tools/phase_5_0_evidence/execution/__init__.py",
+    "tools/phase_5_0_evidence/execution/boundary.py",
+    "tools/phase_5_0_evidence/execution/capture_mechanism.py",
+    "tools/phase_5_0_evidence/execution/capture_store.py",
+    "tools/phase_5_0_evidence/execution/descriptors.py",
+    "tools/phase_5_0_evidence/execution/retention_check.py",
+    "tools/phase_5_0_evidence/execution/start_binding.py",
+    "tools/phase_5_0_evidence/identity.py",
+    "tools/phase_5_0_evidence/records.py",
 )
 
 _PIN = re.compile(r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.]+) \\ --hash=sha256:([0-9a-f]{64})")
@@ -254,10 +284,11 @@ def build(wheel: Path, dest: Path, roles: Path | None = None) -> Path:
         lib = staging / "lib"
         lib.mkdir()
         _unpack(data, lib, _wheel_namespaces(wheel.name))
-        for source in SOURCES:
+        for source in (*SOURCES, *ENTRY_SOURCES):
             _write_new(lib / source, (ROOT / source).read_bytes())
         _write_new(lib / "rp11_roles.py", (roles or HERE / "rp11_roles.py").read_bytes())
         _write_new(staging / "rp11_h1.py", (HERE / "rp11_h1.py").read_bytes())
+        _write_new(staging / "rp11_entry.py", (HERE / "rp11_entry.py").read_bytes())
         for directory, _dirnames, filenames in os.walk(staging):
             os.chmod(directory, 0o755)
             for name in filenames:

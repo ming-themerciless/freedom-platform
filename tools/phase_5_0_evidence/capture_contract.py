@@ -107,8 +107,8 @@ from .errors import HarnessError
 # ---------------------------------------------------------------------------
 
 RECORD_SCHEMA = "rp11-capture-record/1"
-INDEX_SCHEMA = "rp11-capture-index/2"
-BINDING_FORMAT = "rp11-capture-binding/1"
+INDEX_SCHEMA = "rp11-capture-index/3"
+BINDING_FORMAT = "rp11-capture-binding/2"
 TOOL_DIGEST_SCHEMA = "rp11-capture-tool/1"
 
 #: The opening line of the handback binding block, exactly. It may occur once.
@@ -249,6 +249,19 @@ def require_identifier(value: object, what: str) -> str:
         what,
     )
     return value  # type: ignore[return-value]
+
+
+#: systemd `INVOCATION_ID`: exactly 32 lowercase hexadecimal characters. Equal to
+#: `rp11_launch.INVOCATION_ID_GRAMMAR` (a test keeps them equal); not imported,
+#: so the capture mechanism's closure does not grow by the launcher module.
+INVOCATION_ID_PATTERN = re.compile(r"[0-9a-f]{32}")
+
+
+def require_invocation_id(value: object, what: str = "invocation_id") -> str:
+    """A strict systemd InvocationID: `str`, 32 lowercase hex, nothing around it."""
+    if not isinstance(value, str) or INVOCATION_ID_PATTERN.fullmatch(value) is None:
+        raise CaptureContractRefused("malformed-document", what)
+    return value
 
 
 def require_sha256(value: object, what: str) -> str:
@@ -935,6 +948,7 @@ class UnadmittedObject:
 
 _OPEN_KEYS = (
     "capture_root",
+    "invocation_id",
     "owner_uid",
     "pass_id",
     "previous_state",
@@ -955,6 +969,9 @@ class IndexState:
     pass_id: str
     capture_root: str
     tool_sha256: str
+    #: systemd InvocationID of the start that made this pass; fixed at genesis and
+    #: equal in every state, so the `previous` digest chain binds it (G11).
+    invocation_id: str
     owner_uid: int
     state_number: int
     previous: StateLink | None
@@ -969,6 +986,7 @@ class IndexState:
         require_identifier(self.pass_id, "pass_id")
         parse_capture_root(self.capture_root)
         require_sha256(self.tool_sha256, "tool_sha256")
+        require_invocation_id(self.invocation_id)
         _require(
             isinstance(self.owner_uid, int)
             and not isinstance(self.owner_uid, bool)
@@ -1039,6 +1057,7 @@ class IndexState:
             "pass_id": self.pass_id,
             "capture_root": self.capture_root,
             "tool_sha256": self.tool_sha256,
+            "invocation_id": self.invocation_id,
             "owner_uid": self.owner_uid,
             "state_number": self.state_number,
             "previous_state": None if self.previous is None else self.previous.as_document(),
@@ -1133,6 +1152,7 @@ class IndexState:
             pass_id=document["pass_id"],  # type: ignore[arg-type]
             capture_root=document["capture_root"],  # type: ignore[arg-type]
             tool_sha256=document["tool_sha256"],  # type: ignore[arg-type]
+            invocation_id=document["invocation_id"],  # type: ignore[arg-type]
             owner_uid=document["owner_uid"],  # type: ignore[arg-type]
             state_number=document["state_number"],  # type: ignore[arg-type]
             previous=previous,
@@ -1268,6 +1288,7 @@ NONE = "none"
 _BINDING_KEYS = (
     "format",
     "pass_id",
+    "invocation_id",
     "capture_root",
     "x3_outcome",
     "x4_validity",
@@ -1281,6 +1302,7 @@ class HandbackBinding:
     """The fixed contract fields B0-RA takes from the Pass A handback."""
 
     pass_id: str
+    invocation_id: str
     capture_root: str
     x3_outcome: str
     x4_validity: str
@@ -1289,6 +1311,10 @@ class HandbackBinding:
 
     def __post_init__(self) -> None:
         require_identifier(self.pass_id, "pass_id")
+        try:
+            require_invocation_id(self.invocation_id)
+        except CaptureContractRefused:
+            raise CaptureContractRefused("malformed-binding", "invocation_id") from None
         parse_capture_root(self.capture_root)
         _require(
             self.x3_outcome in (X3_SUCCEEDED, X3_FAILED, X3_NOT_MADE),
@@ -1305,6 +1331,7 @@ class HandbackBinding:
         values = (
             BINDING_FORMAT,
             self.pass_id,
+            self.invocation_id,
             self.capture_root,
             self.x3_outcome,
             self.x4_validity,
@@ -1321,7 +1348,7 @@ def parse_handback_binding(data: bytes) -> HandbackBinding:
     """The one binding block of an authenticated handback, and nothing else.
 
     Exactly one line equal to `BINDING_FENCE`, and the fence text nowhere else;
-    exactly the seven keys in their fixed order, each `key: value` with one
+    exactly the eight keys in their fixed order, each `key: value` with one
     space; the closing fence immediately after. No other line of the handback is
     read.
     """
@@ -1344,7 +1371,7 @@ def parse_handback_binding(data: bytes) -> HandbackBinding:
         start + len(_BINDING_KEYS) < len(lines)
         and lines[start + len(_BINDING_KEYS)] == BINDING_FENCE_CLOSE,
         "malformed-binding",
-        "the block closes after its seven fields",
+        "the block closes after its eight fields",
     )
     values: dict[str, str] = {}
     for key, line in zip(_BINDING_KEYS, body):
@@ -1360,6 +1387,7 @@ def parse_handback_binding(data: bytes) -> HandbackBinding:
     _require(values["format"] == BINDING_FORMAT, "malformed-binding", "format")
     return HandbackBinding(
         pass_id=values["pass_id"],
+        invocation_id=values["invocation_id"],
         capture_root=values["capture_root"],
         x3_outcome=values["x3_outcome"],
         x4_validity=values["x4_validity"],
@@ -1406,6 +1434,7 @@ __all__ = [
     "DIRECTORY_MODE",
     "FILE_MODE",
     "INDEX_DIRECTORY",
+    "INVOCATION_ID_PATTERN",
     "MAX_STREAM_BOUND_BYTES",
     "RECORDS_DIRECTORY",
     "ROLE_FINAL",
@@ -1453,6 +1482,7 @@ __all__ = [
     "parse_handback_binding",
     "record_name",
     "require_identifier",
+    "require_invocation_id",
     "require_sha256",
     "role_of",
     "roots_overlap",

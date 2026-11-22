@@ -149,6 +149,7 @@ reaches a `CommandResult`.
 from __future__ import annotations
 
 import grp
+import math
 import os
 import pwd
 import stat
@@ -156,7 +157,7 @@ import subprocess  # noqa: S404 - the single, declared process boundary
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Mapping, Protocol, Sequence, TypeVar
+from typing import TYPE_CHECKING, Callable, Mapping, Protocol, Sequence, TypeVar
 
 from ..capture import CapturePolicy, CatalogQuestion, sanitize
 from ..errors import HarnessError
@@ -1104,6 +1105,9 @@ CAPTURE_DRAIN_SECONDS = 5.0
 #: How long the copy loop sleeps when neither channel had data.
 CAPTURE_POLL_SECONDS = 0.005
 CAPTURE_READ_CHUNK = 65536
+#: SIGKILL's number, fixed at 9 by POSIX. `signal` is outside the execution tier's
+#: permitted imports (`test_no_execution`), so the number is named here instead.
+_SIGKILL = 9
 
 #: The launcher's refusals and failures. A closed vocabulary like
 #: `LAUNCH_FAILURES`, and deliberately not part of it: these never reach a
@@ -1112,12 +1116,14 @@ CAPTURE_NOT_ARMED = "capture-launcher-not-armed"
 CAPTURE_ARGV_REFUSED = "capture-argv-refused"
 CAPTURE_ENVIRONMENT_REFUSED = "capture-environment-refused"
 CAPTURE_START_FAILED = "capture-start-failed"
+CAPTURE_TIMEOUT_REFUSED = "capture-timeout-refused"
 CAPTURE_FAILURES: frozenset[str] = frozenset(
     {
         CAPTURE_NOT_ARMED,
         CAPTURE_ARGV_REFUSED,
         CAPTURE_ENVIRONMENT_REFUSED,
         CAPTURE_START_FAILED,
+        CAPTURE_TIMEOUT_REFUSED,
     }
 )
 
@@ -1137,6 +1143,9 @@ class StreamCaptureResult:
     `bound_exceeded` is true when either channel delivered more bytes than the
     declared bound; every byte delivered was still passed to its sink, so the
     sink holds the stream untruncated, and the act is not admissible.
+    `timed_out` is true when the deadline expired while the child still ran: the
+    child's whole process group was killed and reaped, and the act is not
+    admissible. It is never inferred from `returncode`.
     """
 
     started: bool
@@ -1146,6 +1155,17 @@ class StreamCaptureResult:
     stderr_bytes: int
     bound_exceeded: bool
     streams_complete: bool
+    timed_out: bool
+
+
+def valid_timeout_seconds(value: object) -> bool:
+    """A positive, finite, real number of seconds. `bool` is not a number here."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value > 0
+    )
 
 
 def _capture_refusal(classification: str) -> StreamCaptureResult:
@@ -1157,6 +1177,7 @@ def _capture_refusal(classification: str) -> StreamCaptureResult:
         stderr_bytes=0,
         bound_exceeded=False,
         streams_complete=False,
+        timed_out=False,
     )
 
 
@@ -1171,21 +1192,39 @@ class StreamCaptureLauncher:
       separately, so nothing is merged or interleaved; each chunk is passed to
       its own sink as raw bytes, never decoded.
     * **Bounded without truncation.** When a channel exceeds the declared bound
-      the child is killed and both channels are still drained into their sinks
+      the child's group is killed and both channels are still drained into their sinks
       until end-of-file or the drain limit. Nothing is dropped; the result says
       the bound was exceeded.
+    * **Conservative deadline.** A child whose exit was first observed at or
+      after the deadline is `timed_out`, as is one still running then.
+    * **A finite deadline, always.** `timeout_seconds` is required — there is no
+      default — and is measured on the monotonic clock from the moment the child
+      starts. The child runs in its own process group; if it is still running
+      when the deadline passes, the whole group is killed, both channels are
+      drained into their sinks for at most `drain_seconds`, the child is reaped
+      and the result says `timed_out`. A child that closes both channels but
+      keeps running is still subject to the deadline.
     * **`stdin` is `/dev/null`** and the working directory is `/`.
     * **An explicit environment.** The caller passes the exact mapping; nothing
       is inherited, and there is no default.
     * **Unarmed by default**, like `SubprocessBoundary`.
 
-    A sink that raises stops the copy: the child is killed, the channels are
+    On every terminal path — normal end, stream-bound overflow, drain expiry,
+    deadline or a raising sink — the whole process group is killed, never only
+    the child, and the child is reaped. Nothing is retried.
+
+    A sink that raises stops the copy: the group is killed, the channels are
     closed and the exception propagates to the caller, which treats it as a
     capture failure.
     """
 
     armed: bool = False
     poll_seconds: float = CAPTURE_POLL_SECONDS
+    #: The monotonic clock. Injected so the deadline boundary is testable.
+    clock: Callable[[], float] = time.monotonic
+    #: How the child is started. Injected only so tests can script exit timing
+    #: without a process; the default is the one declared `Popen` call.
+    spawn: Callable[..., "subprocess.Popen[bytes]"] = subprocess.Popen
 
     def launch(
         self,
@@ -1195,6 +1234,7 @@ class StreamCaptureLauncher:
         stdout: StreamSink,
         stderr: StreamSink,
         stream_bound_bytes: int,
+        timeout_seconds: float,
         drain_seconds: float = CAPTURE_DRAIN_SECONDS,
     ) -> StreamCaptureResult:
         if not self.armed:
@@ -1208,6 +1248,8 @@ class StreamCaptureLauncher:
             or stream_bound_bytes <= 0
         ):
             return _capture_refusal(CAPTURE_ARGV_REFUSED)
+        if not valid_timeout_seconds(timeout_seconds):
+            return _capture_refusal(CAPTURE_TIMEOUT_REFUSED)
         if not all(
             isinstance(key, str)
             and isinstance(value, str)
@@ -1219,7 +1261,7 @@ class StreamCaptureLauncher:
         ):
             return _capture_refusal(CAPTURE_ENVIRONMENT_REFUSED)
         try:
-            child = subprocess.Popen(  # noqa: S603 - argv only, shell=False
+            child = self.spawn(  # noqa: S603 - argv only, shell=False
                 list(argv),
                 shell=False,
                 stdin=subprocess.DEVNULL,
@@ -1229,9 +1271,11 @@ class StreamCaptureLauncher:
                 cwd="/",
                 close_fds=True,
                 bufsize=0,
+                process_group=0,
             )
         except (OSError, ValueError):
             return _capture_refusal(CAPTURE_START_FAILED)
+        deadline = self.clock() + timeout_seconds
         channels = {
             child.stdout.fileno(): stdout,  # type: ignore[union-attr]
             child.stderr.fileno(): stderr,  # type: ignore[union-attr]
@@ -1239,12 +1283,13 @@ class StreamCaptureLauncher:
         out_fd = child.stdout.fileno()  # type: ignore[union-attr]
         counts = {fd: 0 for fd in channels}
         exceeded = False
+        timed_out = False
         exited_at: float | None = None
         try:
             for fd in channels:
                 os.set_blocking(fd, False)
             open_channels = dict(channels)
-            while open_channels:
+            while True:
                 progressed = False
                 for fd, sink in list(open_channels.items()):
                     try:
@@ -1259,18 +1304,32 @@ class StreamCaptureLauncher:
                     counts[fd] += len(chunk)
                     if counts[fd] > stream_bound_bytes and not exceeded:
                         exceeded = True
-                        if child.poll() is None:
-                            child.kill()
-                if exited_at is None and child.poll() is not None:
-                    exited_at = time.monotonic()
-                if exited_at is not None and time.monotonic() - exited_at > drain_seconds:
-                    break
+                        self._kill_group(child)
+                if exited_at is None:
+                    if child.poll() is not None:
+                        # Conservative deadline rule: completion counts as in
+                        # time only if it was *observed* strictly before the
+                        # deadline. The observation, not the exit, is stamped.
+                        exited_at = self.clock()
+                        if exited_at >= deadline and not timed_out:
+                            timed_out = True
+                    elif not timed_out and self.clock() >= deadline:
+                        timed_out = True
+                    if timed_out:
+                        self._kill_group(child)
+                if exited_at is not None:
+                    if not open_channels:
+                        break
+                    if self.clock() - exited_at > drain_seconds:
+                        break
                 if not progressed:
                     time.sleep(self.poll_seconds)
+            # Every normal terminal path, drain expiry included: nothing in the
+            # group outlives the call. The leader is reaped only afterwards.
+            self._kill_group(child)
             child.wait()
         except BaseException:
-            if child.poll() is None:
-                child.kill()
+            self._kill_group(child)
             child.wait()
             raise
         finally:
@@ -1285,7 +1344,16 @@ class StreamCaptureLauncher:
             stderr_bytes=counts[err_fd],
             bound_exceeded=exceeded,
             streams_complete=not open_channels,
+            timed_out=timed_out,
         )
+
+    @staticmethod
+    def _kill_group(child: "subprocess.Popen[bytes]") -> None:
+        """SIGKILL the child's process group. The child is its group's leader."""
+        try:
+            os.killpg(child.pid, _SIGKILL)
+        except ProcessLookupError:
+            pass
 
 
 __all__ = [
@@ -1295,9 +1363,11 @@ __all__ = [
     "CAPTURE_FAILURES",
     "CAPTURE_NOT_ARMED",
     "CAPTURE_START_FAILED",
+    "CAPTURE_TIMEOUT_REFUSED",
     "StreamCaptureLauncher",
     "StreamCaptureResult",
     "StreamSink",
+    "valid_timeout_seconds",
     "AccountDatabase",
     "CommandResult",
     "DEFAULT_TIMEOUT_SECONDS",

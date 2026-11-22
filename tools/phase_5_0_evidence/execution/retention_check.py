@@ -443,6 +443,7 @@ class _Verifier:
         final_state: str,
         final_sha256: str,
         pass_id: str,
+        invocation_id: str,
         bidirectional: bool,
     ) -> None:
         self.open_root(capture_root)
@@ -475,6 +476,7 @@ class _Verifier:
             or final.state_number != final_state_number(final_state)
             or final.capture_root != capture_root
             or final.pass_id != pass_id
+            or final.invocation_id != invocation_id
         ):
             raise _Stop(CONDITION_X4, "final-state-does-not-match-its-binding")
 
@@ -497,6 +499,7 @@ class _Verifier:
                 or state.pass_id != final.pass_id
                 or state.capture_root != final.capture_root
                 or state.tool_sha256 != final.tool_sha256
+                or state.invocation_id != final.invocation_id
                 or state.owner_uid != final.owner_uid
                 or state.records != final.records[:number]
             ):
@@ -661,6 +664,7 @@ def _run_verifier(
     final_state: str,
     final_sha256: str,
     pass_id: str,
+    invocation_id: str,
     bidirectional: bool,
 ) -> RetentionResult:
     verifier = _Verifier(filesystem)
@@ -670,6 +674,7 @@ def _run_verifier(
             final_state=final_state,
             final_sha256=final_sha256,
             pass_id=pass_id,
+            invocation_id=invocation_id,
             bidirectional=bidirectional,
         )
     except _Stop as stop:
@@ -692,6 +697,7 @@ def verify_final_state(
     final_state: str,
     final_sha256: str,
     pass_id: str,
+    invocation_id: str,
 ) -> RetentionResult:
     """X-4 over a pass's own root, after its X-3 attempt succeeded.
 
@@ -710,6 +716,7 @@ def verify_final_state(
         final_state=final_state,
         final_sha256=final_sha256,
         pass_id=pass_id,
+        invocation_id=invocation_id,
         bidirectional=False,
     )
 
@@ -782,6 +789,7 @@ class RetentionCheck:
             final_state=binding.final_state,
             final_sha256=binding.capture_index_sha256,
             pass_id=binding.pass_id,
+            invocation_id=binding.invocation_id,
             bidirectional=True,
         )
 

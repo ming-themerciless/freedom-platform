@@ -1,4 +1,4 @@
-# Active handover — Route 3 S1 inert provisioning complete on production at STOP-A; attended reboot next — 2026-11-18
+# Active handover — Route 3 S4.1 ready; acceptance probes incomplete — 2026-11-22
 
 **IMPLEMENTATION AND FULL DISPOSABLE-SERVER TESTING AUTHORIZED**
 
@@ -6,7 +6,81 @@ Production and staging mutation, real secrets and real player data remain
 outside that authority and need Peter's separate explicit, attended
 authorization.
 
-## Current state
+## Current implementation resume — 2026-11-22
+
+The production runtime is intended to run on production Ubuntu. `oracle-test`
+is only for proof of concept, feasibility and testing; it has no ongoing or
+production role. The runtime-host clarification does not authorize production
+installation, activation, real evidence capture or production testing.
+
+The accepted RP-11 direction is in non-production implementation. The launcher
+Python 3.14 rebase and prior G11/G12 bootstrap/provenance slice have their own
+review handbacks. The latest G11 start-binding helper
+(`tools/phase_5_0_evidence/execution/start_binding.py`) is implemented, inert
+and unwired. Claude remediated Codex findings about lifecycle wording and the
+journal-size cap; Codex's follow-up source review found no remaining blocking
+finding. Syntax parsing and `git diff --check` pass. **Its behavioral tests
+passed on `oracle-test`: 421 passed, 3 identity-specific skips in the four
+focused helper/entry/artifact modules. The first run used `/tmp` as root's
+pytest basetemp and had 272 passed, 2 failures, 150 setup errors because the
+artifact builder correctly refused that unsafe parent; the prescribed rerun
+under `/root` passed. Its temporary test directory was removed. No SA-2 build,
+systemd operation, production operation or operational Pass A occurred for
+this slice. Full details and limitations are in the
+[G11/G12 handback](rp11-g11-g12-implementation-handback.md).
+
+### Immediate next action
+
+The focused helper and entry/artifact tests have now run on `oracle-test` using
+the documented secret-excluding rsync, at Peter's explicit request to run these
+tests. This development sync did not acquire source from the canonical GitHub
+remote and does not authorize the G1/OP1 source-acquisition or operational
+topology. The next action is to continue the accepted non-production RP-11
+implementation loop with Claude; retain the test command and rerun the focused
+suite after related changes:
+
+```text
+tests/test_rp11_start_binding.py
+tests/test_rp11_entry.py
+tests/test_rp11_entry_artifact.py
+tests/test_rp11_h1_artifact.py
+```
+
+Do not use this development sync to infer G1 approval, run tests on production,
+or invent a different source-transfer route. After each change, have Claude
+remediate failures and Codex review again, repeating until the authorized slice
+is clear. The workflow is specified in
+[implementation-plan §16.4](../implementation-plan.md#164-claude-implementation-and-codex-review-loop).
+
+### Claude/Codex continuation procedure
+
+For each authorized implementation slice, check that Claude Code is available,
+give Claude the bounded implementation task, and independently inspect the
+diff and tests as Codex. Send concrete findings to Claude, review its
+remediation, and repeat implementation/review/test cycles until no blocking
+finding remains and required tests pass. Do not ask Peter to proceed between
+steps already authorized within the slice. Keep the work inside the accepted
+scope and host boundary. If a real authority or external dependency blocks a
+step, finish independent authorized work and record the exact blocker and next
+action; never bypass the gate or acquire source through an unapproved route.
+Continue across authorized non-production slices until that implementation
+task and its required tests are complete. If Claude is unavailable, record it
+as a blocker and continue independent documentation/review work; do not
+silently substitute another implementation owner.
+
+Current gates remain: G1 NOT ACCEPTED; no A-2; AUTH-SYNC, AUTH-READ and
+AUTH-DBREAD ungranted; operational Pass A not implemented or run; SA-2 not
+rebuilt; no production installation or activation; S4 probes 2, 3, 5 and 6
+remain incomplete. G8 safety sentinel is unchanged. Preserve the dirty working
+tree and unrelated in-progress changes; do not reset or clean it.
+
+**New-session resume:** when Peter starts a new session with “proceed,” resume
+from the immediate next action above, read the governing docs listed in
+`AGENTS.md`, and continue authorized work without asking whether to proceed.
+The focused-test sync above does not grant G1 exact-source acquisition or any
+production gate; those remain separately governed.
+
+## State at STOP-A (before the reboot; historical S1 record)
 
 **Route 3 S1 inert provisioning was executed on production on 2026-11-18, under
 Peter's written provisioning authorization, and stopped at STOP-A.** Deployable
@@ -23,32 +97,86 @@ What now exists: the five reviewed Python 3.14 packages are held;
 account exists without linger; one `tmpfiles.d` fragment is installed. At
 STOP-A there is no supervisor unit or enablement, no Route 3 process, no linger
 or user manager, no sudoers grant, no SA-2 artifact, no state or runtime
-directory, and no activation or cutover. **S3 and S4 have not been run.** An
-ordinary reboot cannot start Route 3, because nothing exists for the boot to
-start.
+directory, and no activation or cutover. **S3 and S4 had not been run at that point.** An
+ordinary reboot could not start Route 3, because nothing existed for the boot to
+start. (This section is the pre-reboot S1 record; the reboot and S3 have since happened,
+see the next sections. After S3 the unit is enabled and a reboot would start it.)
 
 The outer `/tmp/route3-s1-terminal.rc` is empty only because the caller's final
 `printf` was mangled after the wrapper printed its complete result;
 `/tmp/route3-s1-terminal.log` is complete.
 
+## Current state: post-reboot verification — 2026-11-18
+
+The production reboot has happened (new boot `7414d026-f72c-4461-ba00-0cee1c14f275`;
+pre-reboot boot `09238f67-3a8c-418b-91af-9b9ac4ffc2a4` ended). **G1 to G6 have all
+passed** (G1 to G5 read-only, G6 Codex independent review, 2026-11-18): G1 new boot; G2 service health, the 31-sample
+observation and the root evaluation of the current-boot warning-priority journal
+(11 benign system entries, none from the four services or Route 3, no failed
+unit); G3 block D, block F and S2.1 in one root shell, `[S2.1 rc=0]` and `STOP-A
+verified` (run twice); G4 S2.2 `[rc=0]`, `verify: ok`; G5 the §6 v2 checklist with
+its sudoers enumeration helper and the account-dependent checks, every item
+matching STOP-A (no linger, user manager, runtime directory or process of the
+account; no sudoers grant reaching `freedom-executor`; no supervisor unit, SA-2
+artifact or state directory; Polkit not authorizing the account, `pkcheck` rc 2
+`auth_admin`, with an empty `/run/polkit-1/rules.d`). Nothing was mutated and block R
+was not needed. Record and the few documented deviations: handback §16.1.
+**G6 passed:** Codex independently reverified the extracted blocks, reran S2.1 (rc 0,
+`STOP-A verified`) and S2.2 (rc 0, `verify: ok`), reproduced the 11 warning-or-higher
+journal entries and matched the targeted live STOP-A facts; no blocking operational
+finding and no rollback need.
+
+**Disclosure.** `/etc/sudoers.d/x` was a temporary maintainer-installed NOPASSWD
+grant for account `foundry` only (the attending operator account). It was not a
+Route 3 or executor grant, did not reach `freedom-executor`, and was not created or
+altered by the verification. It was removed after G6 and the final diff review
+(Codex root shell; `visudo -c` parsed OK, rc 0). An unprivileged test then confirmed
+the file absent and `sudo -n true` returned "interactive authentication required",
+rc 1, so general passwordless sudo is no longer available.
+
+## S3 — first attempt, correction and corrected rerun, 2026-11-18
+
+**First attempt.** S3.1 returned rc 0 and S3.2 returned rc 2 on production (`/usr/local/libexec` was assumed to exist and does not), before `begin-C6`; R3 returned rc 0 and the host was back at STOP-A. The correction (S3.2, R3, rollback matrix row C6p, `tests/test_provisioning_plan.py`) was independently approved by Codex. Record: [handback §16.2](route-3-production-readiness-handback.md).
+
+**Corrected rerun — executed.** On the maintainer's explicit S3 authorization to the implementing session, block D, block F, then S3.1 to S3.5 were extracted mechanically from the current runbook and run sequentially in one root shell on production (about 22:58 UTC). **Each returned rc 0**: S3.1 linger and user manager; S3.2 SA-2 artifact (tree digest equal to `ROUTE3_SA2_TREE_SHA256`; `/usr/local/libexec` created by S3.2, markers `begin-C6p`/`done-C6p`); S3.3 sudoers drop-in `/etc/sudoers.d/freedom-executor-sa2` (`visudo -c` OK); S3.4 installer verify status 12 (`not-installed`, as expected); S3.5 installer install status 0. R3 was not needed. **STOP-B reached:** `freedom-blades-executor-supervisor.service` is `LoadState=loaded`, `UnitFileState=enabled`, `ActiveState=inactive`, `MainPID=0`; no supervisor process; no `/run/freedom-blades-executor` or `/var/lib/freedom-blades-executor`; the only process of the `freedom-executor` account is its lingering user manager; bot, worker, PostgreSQL and Caddy active, `freedom-web` inactive; boot id unchanged, no reboot. Record: [handback §16.3](route-3-production-readiness-handback.md).
+
+**Independent review — passed, 2026-11-19.** Codex independently matched the extracted blocks to the current runbook and verified the recorded statuses and live STOP-B state: exact SA-2 digest and one-command sudoers rule, unit enabled but inactive, no supervisor or executor workload process, no Route 3 state/runtime directory, unchanged boot id and no failed unit. The temporary broad `/etc/sudoers.d/x` grant was removed afterwards; `visudo -c` passed and the file is absent. No production-state remediation was required. Record: [handback §16.3](route-3-production-readiness-handback.md).
+
 ## Authority and the next action
 
-- Peter has authorized **preparation and documentation** of a production reboot.
-  The reboot itself has **not** been authorized or executed by that work.
-- **The next production action is an explicitly attended production reboot**
-  (named operator, window, escalation contact), followed by read-only
-  verification: new boot, service health, S2.2 at rc 0, S2.3 and the
-  account-dependent checks, then independent review. The procedure and exact
-  gate order are in the
-  [reboot and continuation runbook](../operations/production-reboot-and-route-3-continuation-runbook.md);
-  every executable command remains in the accepted
-  [provisioning runbook](../operations/executor-supervisor-provisioning-runbook.md).
-- **S3 (arming and install) and S4 (activation) remain separately
-  unauthorized.** Passing the post-reboot checks is a precondition for Peter's
-  S3 decision, not that decision. A reboot between a future S3.5 and S4 or R3
-  stays forbidden.
+- The production reboot is **done**; G1 to G6 **passed**; **S3 is done** (STOP-B). The explicit S3 authorization of 2026-11-18 superseded G7. Every executable command remains in the accepted
+  [provisioning runbook](../operations/executor-supervisor-provisioning-runbook.md); the gate order is in the
+  [reboot and continuation runbook](../operations/production-reboot-and-route-3-continuation-runbook.md).
+- **S4.1 was authorized and executed on 2026-11-20**; the supervisor is active and ready. Probes 1 and 4 passed. Probes 2 and 6 require an active production capture service and matching consume evidence; that service is absent. Probe 3 (reboot) and probe 5 remain unrun. See handback §16.4.
+- Do not reboot casually: probe 3 requires a controlled stop/reboot/readiness sequence. The unit is enabled and currently active.
+- The production capture-unit installer was explicitly outside the accepted executor OC implementation. Its design/deployment is separate work; no dummy capture unit or evidence has been created.
+- **Update 2026-11-21:** the repository now has a tested reusable installer mechanics slice, with no production fragment or policy. The production service definition and deployment/activation procedure remain unimplemented; this does not change S4 acceptance or production state. See [installer handback](rp11-capture-unit-installer-handback.md).
+- **Update 2026-11-21 (direction accepted):** Peter accepted the [capture service design proposal](rp11-capture-service-design-proposal.md)'s implementation direction (static C launcher re-based to Python 3.14, entrypoint, SA-2 build inclusion, reviewed fragment). Implementation starts on non-production hosts, Claude implementing with a Codex review/remediation loop. Still open and separately gated: production service identity, a proven timeout/finalization contract (no whole-service runtime bound is claimed), the production fragment, the SA-2 artifact rebuild, production install, activation and probes 2, 3, 5 and 6. No production or staging action is authorized by this.
+- **Update 2026-11-21 (launcher rebase):** the launcher Python 3.14 rebase slice and the regenerated review manifest (version 32) are complete and **passed Codex independent review with no blocking findings**; see the [handback](rp11-launcher-py314-rebase-handback.md). The entrypoint contract source audit is done and the G11/G12 slice is implemented (see below); the full capture service is not complete. Codex's broad suite had 4 environment sentinel failures from the pre-existing `/run/freedom-blades/laboratory.lock` (not removed or changed). No SA-2 fragment or production step exists or is authorized; the only entry artifact is the inert bootstrap recorded below. Production is untouched and S4 probe status is unchanged.
+- **Update 2026-11-21 (entry-contract decisions):** Peter decided two points of the [Pass A entry contract](rp11-pass-a-entry-contract-proposal.md) (G11, G12): (1) systemd `INVOCATION_ID` is **retained as capture provenance**, recorded once per pass in the capture index state chain and the handback binding, **not** in every `CaptureRecord` (schema consequence: `rp11-capture-index/3`, `rp11-capture-binding/2`; record schema unchanged; exact-schema readers, no migration because no real pass exists; tests listed in the contract §3 item 5); (2) the entrypoint **may load tested Python modules under the isolated Python 3.14 launcher**. After inspecting `infra/rp11-h1/build.py`, `infra/rp11-h1/rp11_h1.py` and `python3.14 -I -S` (stdlib-only `sys.path`, no script directory, `PYTHONPATH` ignored), the contract §3a selects the existing SA-2 mechanism: a fixed, root-owned, digest-bound dependency closure in `lib/` beside the entry, named by the entry itself after the root tree check, with no cwd, environment, site or repository lookup. **Scope:** these decisions authorize reversible implementation and testing on `oracle-test` only. They do **not** accept or authorize the DRAFT Pass A operational commands (G1), an operational run, any production or staging mutation, the production service identity, sandbox or timeout, the SA-2 rebuild or install, activation, or S4 probes 2, 3, 5 and 6. **Implemented (2026-11-22); independent Codex review passed (final review of the G11/G12 code and tests, no remaining blocking findings):** G11 `INVOCATION_ID` provenance is in the tree (`rp11-capture-index/3`, `rp11-capture-binding/2`, genesis/advance/final states, binding, X-4; `CaptureRecord` unchanged). G12 is an **inert** bootstrap `infra/rp11-h1/rp11_entry.py` plus a digest-bound `ENTRY_SOURCES` closure in `infra/rp11-h1/build.py` (root-owned tree check before any import, exit 77/64/69; `INVOCATION_ID` read only from the raw `/proc/self/environ`, failing closed when unreadable). See the [G11/G12 handback](../review/rp11-entry-bootstrap-g11-g12-handback.md). **Boundaries unchanged:** no operational Pass A, no safety-sentinel (G8) amendment, no SA-2 production rebuild or install, no production or staging access, no activation. **Final evidence (post-remediation; independent Codex review of the code and final tests passed, no blocking findings; focused runs, not the canonical full suites):** local Python 3.14.4 repository `venv-web`, unprivileged: entry/artifact/H1/install tests **520 passed, 2 skipped** (`RLIMIT_NOFILE` cannot be raised above the hard limit); capture/retention/cleanup **696 passed, 0 skipped**. `oracle-test`, root, Python 3.14.4 `venv-web`, pytest basetemp under protected `/root`: `tests/test_rp11_entry.py tests/test_rp11_entry_artifact.py tests/test_rp11_h1_artifact.py` **354 passed, 3 skipped** (each an expected identity-specific case: root-owned objects accepted, a tree-root-owned case, a non-root marker control). `oracle-test`, unprivileged `ubuntu`, grammar-compatible `/tmp` basetemp: capture/retention/cleanup **696 passed, 0 skipped**. Failed exploratory runs (wrong basetemp or identity) are disclosed and dispositioned in the handback. `rp11_h1.py` source changed, but the installed production SA-2 artifact was **not** changed or rebuilt; any future bundle use needs the separately authorized and reviewed artifact rebuild and digest update. Host activity was `oracle-test` testing only; no production or staging action. G1–G10 stay open.
+- The temporary broad sudo grant used in the S4 window is not confirmed removed; verify and remove it through the documented sudoers-safe process before closing the window.
 - Route 3 is bounded to explicitly authorized, attended migration/cutover
   evidence activations; it is not a general maintenance facility.
+
+## Pass A G1 candidate-command review — 2026-11-22
+
+**Disposition: NOT ACCEPTED; G1 has not passed.** Codex reviewed the candidate
+commands in the [operational evidence prompt](phase-5-0-p5-r5-operational-evidence-authorization-prompt.md).
+Claude corrected the draft documentation and Codex reviewed the remediation.
+The draft's repository host is the production Ubuntu server, so its local A0
+tests, capture-root creation and `rsync`/`ssh` activity cannot run under the
+current boundary. No commands were run or authorized by this review.
+
+Before G1 can be reconsidered, document a maintainer-approved execution and
+capture topology with an approved source-delivery method; re-pin the harness
+and review manifest to current Python 3.14, PostgreSQL 18 and kernel facts; and
+resolve RP-11, C-11, the child environment, A-6, clean pinned-tree and owner
+inputs. This review grants no AUTH-SYNC, AUTH-READ, AUTH-DBREAD or A-2
+authority. See the [entry-contract proposal §0a](rp11-pass-a-entry-contract-proposal.md).
+
+**Update 2026-11-22 (proposal only):** the recommended single-host `oracle-test` topology is now documented as an **unaccepted proposal** in [entry-contract proposal §0b](rp11-pass-a-entry-contract-proposal.md#0b-g4-topology-proposal--single-host-oracle-test-2026-11-22); it was reviewed by Codex on 2026-11-22 with no blocking documentation finding, but it is not accepted by Peter and not authorized. Acceptance and re-derivation remain open: its acceptance, the checkout and capture-root path values, source-publication/acquisition authorization (exact-source acquisition from the canonical GitHub remote is **not** authorized by OP1 or A-2; it is a separately controlled pre-pass action), re-derivation of the sync row, C-11, the child environment and the AUTH rows, and G1 itself. G1 stays NOT ACCEPTED; no A-2; AUTH-SYNC, AUTH-READ and AUTH-DBREAD remain ungranted; nothing runs on production.
+
+**Owner clarification 2026-11-22 (runtime host; scope only):** Peter clarified that production runtime must run on the production Ubuntu server; `oracle-test` is proof-of-concept, feasibility passes and testing only and has **no ongoing or production role**. The eventual production RP-11 capture runtime therefore belongs on production Ubuntu, but this clarifies scope only: production installation, access, activation and any real pass remain **unauthorized and separately gated** (identity, sandbox, timeout, SA-2 build, installation, activation and real-run gates all open). The §0b topology applies to the disposable feasibility exercise only and cannot decide or move a production runtime onto `oracle-test` ([entry-contract proposal §0b](rp11-pass-a-entry-contract-proposal.md#0b-g4-topology-proposal--single-host-oracle-test-2026-11-22)). G1 stays NOT ACCEPTED; no A-2; AUTH-SYNC, AUTH-READ and AUTH-DBREAD remain ungranted; the source-acquisition authorization boundary is unchanged (exact-source acquisition is not authorized by OP1 or A-2).
 
 ## Production baseline (unchanged by S1)
 

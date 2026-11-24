@@ -37,7 +37,7 @@ from tools.phase_5_0_evidence.execution.boundary import (
     IdentityAbsent,
     DEFAULT_TIMEOUT_SECONDS,
     MINIMAL_ENVIRONMENT,
-    POSTGRES_16_BIN,
+    POSTGRES_18_BIN,
     CommandResult,
     RecordingBoundary,
     SubprocessBoundary,
@@ -284,7 +284,7 @@ def test_the_executor_refuses_a_plan_whose_target_is_not_the_approved_one() -> N
         postgres_socket_directory="/var/run/postgresql",
         confirmed_disposable=True,
         disposability_evidence="a synthetic sibling target nobody confirmed",
-        postgres_config_directory="/etc/postgresql/16/main",
+        postgres_config_directory="/etc/postgresql/18/main",
     )
     mutations = build_mutations(other)
     plan = ConcretePlan(
@@ -655,7 +655,7 @@ def test_the_environment_is_minimal_and_fixed() -> None:
 
 def test_psql_gets_the_explicit_postgresql_16_path() -> None:
     env = environment_for("/usr/bin/psql")
-    assert env["PATH"].startswith(POSTGRES_16_BIN + ":")
+    assert env["PATH"].startswith(POSTGRES_18_BIN + ":")
     assert env["PGCONNECT_TIMEOUT"] == "10"
 
 
@@ -1121,7 +1121,7 @@ def test_a_materialization_whose_destination_drifted_is_refused_twice_over() -> 
 
     with pytest.raises(PlanRefused) as swapped:
         dataclasses.replace(
-            item, destination="/etc/postgresql/16/main/pg_ident.conf"
+            item, destination="/etc/postgresql/18/main/pg_ident.conf"
         )
     assert "name the same file" in str(swapped.value)
 

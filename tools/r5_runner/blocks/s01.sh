@@ -52,16 +52,16 @@ sys.exit(28 if r.stdout else 0)'
   sha256sum --strict -c <<'SUMS'
 f704c0f4f0ddbe9de92da9812dde6929f681ba778263746a603bde8b4b3563d6  infra/rp11-launch/toolchain.lock
 f08ba9de4374374fa91012021ce12fb83f6370be5547ee4e214232100c38e76f  infra/rp11-launch/build-root.manifest
-6e87a54207f7f7aa3392fcd61f2f1c3303c0c7823fb1ef746dd28f5527a83625  infra/rp11-launch/expected.sha256
+651ff85df120a6b8bddfff7b359074b4c239e94988544c9ef60af7c3af28dd16  infra/rp11-launch/expected.sha256
 e99cee65a228339e304d4e578643de409961539a8240230d4e41bb1baf6bb13a  infra/rp11-launch/verify/fixtures/cc1.v.baseline
-b9f03a4791448c029b9a1eccc50416818893294357fa9f6182f85610ed14817a  docs/review/phase-5-0-evidence-harness-review-manifest.json
-2ac6e5e7721bf73347ffcc73281152f6cbec40fd2ff7167ff554ad9b2b11c64f  docs/review/phase-5-0-evidence-harness-concrete-plan.md
+fe0cff8a8e6160bc6e1187d182b33461b318c99dddfaf04acf53f95f17520e29  docs/review/phase-5-0-evidence-harness-review-manifest.json
+ff17aa3da5fce67da8f62d06c727d3e5147484679868c09de55933c26e5964a9  docs/review/phase-5-0-evidence-harness-concrete-plan.md
 87e318cdd77f1fae0a354f707d9fe32d163ba48b708bb455c670f6d4d333cfd1  infra/rp11-launch/build.sh
-6810bcd0dd9567c9ee49a2b7f0dd7bfe2d69148eaba3d3d5caea3aa0983fa6fe  infra/rp11-launch/launch.c
+62050b5dc1816f4f673b8c49b94c7463391edb6dbed9f69459f0bc6c5f1dc2a7  infra/rp11-launch/launch.c
 34b56cfc1adb4f14f2e09c740e5e25915194778ebf73c74c1d24502121425c4b  infra/rp11-launch/select.h
 ca631f087ad09c16d5e45d2088c7be81593f2fb8efb805b66ed65aff0a1a5139  infra/rp11-launch/start.s
 ed5519ef1994d4b32eb92f754f008a5aeb88e08d5194ede92491ddda1ac95326  infra/rp11-launch/rp11-launch.ld
-8c1fedee1c717b17a14d7c746669ffcec3c41d155e5cc4c63d24a5f2527cd188  infra/rp11-launch/rp11-launch.x86_64.listing
+498108223928ddaa1eb5d57cca15c7628f5bd30f331bb1930f10a68dcf7cdfc9  infra/rp11-launch/rp11-launch.x86_64.listing
 40496661f5d7e251b557b6d4f9f13a1d76e59619a608c39e576424352d0c0300  infra/rp11-launch/buildroot/provision.py
 cf467c17df4135cc5f431a3ffe5c86afef930df3b880ae4425ad6209e397807a  infra/rp11-launch/buildroot/enter.py
 16b784622d46150dee768e399d3e89ddb8a996111af5264928761a5bc08a4b72  infra/rp11-launch/verify/cc1check.py
@@ -76,8 +76,8 @@ f0e811a4bd61782789b66f31ab4401797e52b8ac00ffeebb984bfcd71afb4a8a  infra/rp11-lau
 8c4ad99c0a1f3452923dab46149e7f4b202060ef5bf981b732ec9e9724dd91fd  infra/rp11-launch/test-harness/select_shim.c
 ff3d458cabae91512562cca6143542337b1306dc3df791da505c51a9519ab76f  tests/test_rp11_launch_toolchain.py
 bc24c0ee7b0c9f58853479adc908c60cf013b9652409e3d5cee0d710074a18b6  tests/rp11_launch_support.py
-0d4ece459dbffac790e3a1f7d61e0c83efe270825e0d874cded48e759f626a08  tools/phase_5_0_evidence/rp11_launch.py
-09983ff782eef3be420994f165e3168eee9682f6da8481e0427a31a481007dd7  tools/phase_5_0_evidence/review_manifest.py
+a51bacda94ef5ed2fe1bea6a7e90bc7c94925237bd6f72f518f7ef0c338381ed  tools/phase_5_0_evidence/rp11_launch.py
+072dbdb6fac9668a39e058e09ede0ea6761fb325bf313ca519098151200cd3fb  tools/phase_5_0_evidence/review_manifest.py
 SUMS
   status=$?
   printf 'S1.5 sha256sum-check exit=%s\n' "$status"
@@ -130,16 +130,16 @@ print("launcher_tree files",len(got_files),"dirs",len(got_dirs))
 sys.exit(27 if (got_files!=want_files or got_dirs!=want_dirs or odd) else 0)' <<'LIST'
 f704c0f4f0ddbe9de92da9812dde6929f681ba778263746a603bde8b4b3563d6 16769 infra/rp11-launch/toolchain.lock
 f08ba9de4374374fa91012021ce12fb83f6370be5547ee4e214232100c38e76f 381913 infra/rp11-launch/build-root.manifest
-6e87a54207f7f7aa3392fcd61f2f1c3303c0c7823fb1ef746dd28f5527a83625 328 infra/rp11-launch/expected.sha256
+651ff85df120a6b8bddfff7b359074b4c239e94988544c9ef60af7c3af28dd16 328 infra/rp11-launch/expected.sha256
 e99cee65a228339e304d4e578643de409961539a8240230d4e41bb1baf6bb13a 5305 infra/rp11-launch/verify/fixtures/cc1.v.baseline
-b9f03a4791448c029b9a1eccc50416818893294357fa9f6182f85610ed14817a 377250 docs/review/phase-5-0-evidence-harness-review-manifest.json
-2ac6e5e7721bf73347ffcc73281152f6cbec40fd2ff7167ff554ad9b2b11c64f 178810 docs/review/phase-5-0-evidence-harness-concrete-plan.md
+fe0cff8a8e6160bc6e1187d182b33461b318c99dddfaf04acf53f95f17520e29 377527 docs/review/phase-5-0-evidence-harness-review-manifest.json
+ff17aa3da5fce67da8f62d06c727d3e5147484679868c09de55933c26e5964a9 178764 docs/review/phase-5-0-evidence-harness-concrete-plan.md
 87e318cdd77f1fae0a354f707d9fe32d163ba48b708bb455c670f6d4d333cfd1 3254 infra/rp11-launch/build.sh
-6810bcd0dd9567c9ee49a2b7f0dd7bfe2d69148eaba3d3d5caea3aa0983fa6fe 6314 infra/rp11-launch/launch.c
+62050b5dc1816f4f673b8c49b94c7463391edb6dbed9f69459f0bc6c5f1dc2a7 6314 infra/rp11-launch/launch.c
 34b56cfc1adb4f14f2e09c740e5e25915194778ebf73c74c1d24502121425c4b 2187 infra/rp11-launch/select.h
 ca631f087ad09c16d5e45d2088c7be81593f2fb8efb805b66ed65aff0a1a5139 857 infra/rp11-launch/start.s
 ed5519ef1994d4b32eb92f754f008a5aeb88e08d5194ede92491ddda1ac95326 2321 infra/rp11-launch/rp11-launch.ld
-8c1fedee1c717b17a14d7c746669ffcec3c41d155e5cc4c63d24a5f2527cd188 21742 infra/rp11-launch/rp11-launch.x86_64.listing
+498108223928ddaa1eb5d57cca15c7628f5bd30f331bb1930f10a68dcf7cdfc9 21742 infra/rp11-launch/rp11-launch.x86_64.listing
 40496661f5d7e251b557b6d4f9f13a1d76e59619a608c39e576424352d0c0300 15106 infra/rp11-launch/buildroot/provision.py
 cf467c17df4135cc5f431a3ffe5c86afef930df3b880ae4425ad6209e397807a 14521 infra/rp11-launch/buildroot/enter.py
 16b784622d46150dee768e399d3e89ddb8a996111af5264928761a5bc08a4b72 6021 infra/rp11-launch/verify/cc1check.py
@@ -154,8 +154,8 @@ f0e811a4bd61782789b66f31ab4401797e52b8ac00ffeebb984bfcd71afb4a8a 14292 infra/rp1
 8c4ad99c0a1f3452923dab46149e7f4b202060ef5bf981b732ec9e9724dd91fd 950 infra/rp11-launch/test-harness/select_shim.c
 ff3d458cabae91512562cca6143542337b1306dc3df791da505c51a9519ab76f 12326 tests/test_rp11_launch_toolchain.py
 bc24c0ee7b0c9f58853479adc908c60cf013b9652409e3d5cee0d710074a18b6 8045 tests/rp11_launch_support.py
-0d4ece459dbffac790e3a1f7d61e0c83efe270825e0d874cded48e759f626a08 16942 tools/phase_5_0_evidence/rp11_launch.py
-09983ff782eef3be420994f165e3168eee9682f6da8481e0427a31a481007dd7 75172 tools/phase_5_0_evidence/review_manifest.py
+a51bacda94ef5ed2fe1bea6a7e90bc7c94925237bd6f72f518f7ef0c338381ed 16942 tools/phase_5_0_evidence/rp11_launch.py
+072dbdb6fac9668a39e058e09ede0ea6761fb325bf313ca519098151200cd3fb 78666 tools/phase_5_0_evidence/review_manifest.py
 LIST
   status=$?
   printf 'S1.6 hashlib-and-tree-check exit=%s\n' "$status"
@@ -181,7 +181,7 @@ b=m.serialize()
 f=open("docs/review/phase-5-0-evidence-harness-review-manifest.json","rb").read()
 r=(MANIFEST_VERSION, m.digest(), b==f, hashlib.sha256(b).hexdigest(), p.is_executable)
 print(*r)
-want=(31,"448f280511fc433a9098b8da278e32277cc108a4eb5c7a29071993b39686a0a3",True,"b9f03a4791448c029b9a1eccc50416818893294357fa9f6182f85610ed14817a",False)
+want=(34,"2abad1191770e423df28bd2a2b82d76d44df5e69c6989d2dce147ea0935224cf",True,"fe0cff8a8e6160bc6e1187d182b33461b318c99dddfaf04acf53f95f17520e29",False)
 sys.exit(0 if r==want else 24)'
   status=$?
   printf 'S1.8 in-memory-review-manifest exit=%s\n' "$status"

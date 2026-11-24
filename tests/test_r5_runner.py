@@ -8,7 +8,8 @@ harmless script that is not an R-5 block.
 
 The derivation tests prove the resources are R3's §6 blocks: they extract each
 block from the accepted R3 assignment, pinned below by digest and length, apply
-R5's one declared amendment (S1.8's expected tuple, finding FRESH-R4-HS-1) and
+R5's declared amendments (S1.8's expected tuple, finding FRESH-R4-HS-1, and the
+G1 re-pin's S8 output digests for the launcher image, listing and `launch.s`) and
 exactly R3 §6.0's substitutions except `<RUN>` — with the appendices of the
 controlling assignment, whose values R5 moved — and require byte equality.
 Further tests bind the assignment's pin tables, appendices and command to the
@@ -40,15 +41,32 @@ R3 = ROOT / "docs/review/phase-5-0-p5-r5-rp11-fresh-independent-rebuild-assignme
 R3_SHA256 = "039f68fbe7fc0f572b31879087a2e9d91e2a6b17892a4fca075af1c81b767bac"
 R3_LENGTH = 108733
 ASSIGNMENT = ROOT / R.ASSIGNMENT
-#: R5's only change to R3's command text (§0.1 item 4): S1.8 expects the review
-#: manifest of the `FRESH-R4-HS-1` remediation. Every other moved value is an
-#: appendix value, taken from the controlling assignment's Appendices A and B.
+#: R5's changes to R3's command text: (1) §0.1 item 4: S1.8 expects the review
+#: manifest of the `FRESH-R4-HS-1` remediation; (2) G1 re-pin: S8.3's expected
+#: independent-output digests for `rp11-launch`, its listing and `launch.s`, which
+#: moved with the launcher Python 3.14 rebase (`rp11-launch.map` is unchanged and
+#: is not amended). Every other moved value is an appendix value, taken from the
+#: controlling assignment's Appendices A and B.
 R5_AMENDMENTS = ((
     'want=(30,"28a4f4c2b7596e9042f6b12a34f5684b3499a3fafd997e306fe25f6798e8a526",True,'
     '"c9afaf7cd32a398e9714e39779fef522d6af053ec71cd2c403e0a4c2eaba4b5c",False)',
-    'want=(31,"448f280511fc433a9098b8da278e32277cc108a4eb5c7a29071993b39686a0a3",True,'
-    '"b9f03a4791448c029b9a1eccc50416818893294357fa9f6182f85610ed14817a",False)',
+    'want=(34,"2abad1191770e423df28bd2a2b82d76d44df5e69c6989d2dce147ea0935224cf",True,'
+    '"fe0cff8a8e6160bc6e1187d182b33461b318c99dddfaf04acf53f95f17520e29",False)',
+), (
+    "04218ed2d834c1c7abe417a850831d8956f087711befd692eefc2e61b2668572  rp11-launch\n",
+    "7e2b7bde86a5ec8aaf112c3377fbdb3c862ffcb7acfff944c965b1aa0fddc67e  rp11-launch\n",
+), (
+    "8c1fedee1c717b17a14d7c746669ffcec3c41d155e5cc4c63d24a5f2527cd188  rp11-launch.x86_64.listing\n",
+    "498108223928ddaa1eb5d57cca15c7628f5bd30f331bb1930f10a68dcf7cdfc9  rp11-launch.x86_64.listing\n",
+), (
+    "b37280d53eecce690210021a793cde5d5b73a8f9c027d187e4bd1338e7e27706  launch.s\n",
+    "3d65779e718d2cd1e8d199fd1db619712237613df975992ade1b8d48cd57786e  launch.s\n",
 ),)
+# G1 re-pin (2026-11-23): R5 introduced version 31 here; the launcher Python 3.14 rebase moved the
+# review manifest to version 32, the current-target/G11 source refresh to version 33 and the G8
+# documentation/source-consistency refresh to version 34, so the
+# amendment's replacement tuple is version 34 (version 33 is superseded history). R3's original
+# tuple (the first element above) is unchanged: it is what the R3 derivation is checked against.
 PY = "/opt/freedom-blades/runtime/venv-web/bin/python"
 
 #: R3 §6's sixteen blocks in document order, and the resource that holds each.

@@ -136,7 +136,7 @@ reaches a `CommandResult`.
   `CommandStep`, and `argv[0]` is an absolute path. `PATH` is never consulted to
   find it.
 * **A fixed environment.** The inherited environment is discarded whole. What is
-  passed is `MINIMAL_ENVIRONMENT` plus, for `psql`, the PostgreSQL 16 client
+  passed is `MINIMAL_ENVIRONMENT` plus, for `psql`, the PostgreSQL 18 client
   directory on `PATH` — needed because `psql` looks up its own helpers, not
   because anything here is resolved through it.
 * **A bounded timeout, always non-zero.** On expiry the process is killed and the
@@ -179,10 +179,10 @@ MINIMAL_ENVIRONMENT: Mapping[str, str] = {
     "TERM": "dumb",
 }
 
-#: The PostgreSQL 16 client directory, prepended for `psql` only. The disposable
+#: The PostgreSQL 18 client directory, prepended for `psql` only. The disposable
 #: server documents that there is no global client symlink and that test
 #: invocations prepend this explicitly.
-POSTGRES_16_BIN = "/usr/lib/postgresql/16/bin"
+POSTGRES_18_BIN = "/usr/lib/postgresql/18/bin"
 
 #: Every step gets one. A step with no timeout is a step that can hang a
 #: privileged run on a host nobody is watching.
@@ -202,10 +202,10 @@ def timeout_for(executable: str) -> float:
 
 
 def environment_for(executable: str) -> dict[str, str]:
-    """The fixed environment, plus the PostgreSQL 16 client path for `psql`."""
+    """The fixed environment, plus the PostgreSQL 18 client path for `psql`."""
     env = dict(MINIMAL_ENVIRONMENT)
     if executable == "/usr/bin/psql":
-        env["PATH"] = f"{POSTGRES_16_BIN}:{env['PATH']}"
+        env["PATH"] = f"{POSTGRES_18_BIN}:{env['PATH']}"
         # Bound the connection attempt itself as well as the process. A socket
         # that never answers should fail as a connection error, not as a killed
         # process whose exit status means something else.
@@ -1400,7 +1400,7 @@ __all__ = [
     "MINIMAL_ENVIRONMENT",
     "MembershipRefused",
     "MembershipRule",
-    "POSTGRES_16_BIN",
+    "POSTGRES_18_BIN",
     "PrivilegeUnavailable",
     "ProcessBoundary",
     "RecordingBoundary",

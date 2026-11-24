@@ -221,8 +221,8 @@ class Consumption:
 #: are the recovery inputs, so a reproduction has to be able to say which bytes
 #: reached the live file at the end.
 LIVE_CONFIG_FILES = {
-    "/etc/postgresql/16/main/pg_hba.conf": b"# original pg_hba.conf\n",
-    "/etc/postgresql/16/main/pg_ident.conf": b"# original pg_ident.conf\n",
+    "/etc/postgresql/18/main/pg_hba.conf": b"# original pg_hba.conf\n",
+    "/etc/postgresql/18/main/pg_ident.conf": b"# original pg_ident.conf\n",
 }
 
 

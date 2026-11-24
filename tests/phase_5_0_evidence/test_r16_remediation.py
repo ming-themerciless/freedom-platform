@@ -870,7 +870,7 @@ def test_the_manifest_pins_whether_a_contract_resolves_anything(plan) -> None:
     # listing, `expected.sha256` and image/listing/`launch.s` digests are
     # re-derived from an `oracle-test` build. The cc1.v baseline, linker map
     # digest, XD stream digest and every vector stay unchanged.
-    assert body["manifest_version"] == MANIFEST_VERSION == 32
+    assert body["manifest_version"] == MANIFEST_VERSION == 34
     assert body["supplied_observations"]["schema_version"] == 3
     assert "Band 7 supplied observations only" in (
         body["supplied_observations"]["importer_scope"]

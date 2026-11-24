@@ -262,6 +262,11 @@ EXECUTION_TIER_NAMES = {
     # two durable ledger entries; it starts no process, synchronizes no tree and
     # resets no environment, and every participant's own work is injected.
     "participants",
+    # **RP-11 Pass A, 2026-11-23 (G1 re-derivation).** The inert, unwired Pass A
+    # orchestrator. It is in this tier because it drives a capture session it is
+    # handed. It imports no `subprocess`, constructs no session (no default
+    # factory), reads no environment value and is inert on import.
+    "pass_a",
     # **C-P5.0-LAB-V6-R1.** The r6 §7 directory items, applied. It is in this
     # tier because it is the one module in the repository that creates a
     # provisioned directory: exclusive `mkdirat`, `fchown` and `fchmod` on the
@@ -308,6 +313,10 @@ EXECUTION_TIER_NAMES = {
     # renames, links, truncates, removes and changes nothing, and
     # `test_rp11_capture.py` asserts that against its syntax tree.
     "retention_check",
+    # **RP-11 G11, 2026-11-22.** The pure start-time `INVOCATION_ID` pairing
+    # check. It reads no file, environment or process, starts no session and is
+    # not wired into the entry.
+    "start_binding",
 }
 
 #: The exact standard-library modules the case program may import. It runs under
@@ -323,7 +332,7 @@ CASE_PROGRAM_PERMITTED_IMPORTS = frozenset(
 #:
 #: §2.13.5c's assertion contract requires every `E1 … E8` identity's final
 #: securebits to be observed inside the exec'd process, and the kernel reports
-#: securebits through `prctl(2)` and through no file. Python 3.12 exposes no
+#: securebits through `prctl(2)` and through no file. Python 3.14 exposes no
 #: `prctl` in `os`, so a foreign call is the smallest mechanism that can read it
 #: at all. R11 had none and asserted the value from the presence of a `capsh
 #: --secbits=` option instead, which states an intent rather than observing a

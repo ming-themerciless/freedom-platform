@@ -1463,21 +1463,46 @@ def test_the_rp11_modules_are_inert_on_import_and_have_no_entry_point(path: str)
     assert not imported & {"socket", "ssl", "http", "urllib", "requests", "psycopg", "sqlalchemy", "asyncio", "select"}
 
 
-def test_nothing_outside_tests_arms_the_launcher_or_creates_a_session() -> None:
-    offenders = []
-    for path in sorted((REPOSITORY / "tools").rglob("*.py")):
-        tree_ = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree_):
+#: G8: the one reviewed arming/session construction site outside `tools/`.
+ENTRY_FACTORY = "build_pass_a_session"
+_SENTINEL_NAMES = ("create_capture_session", "StreamCaptureLauncher", "run_pass_a")
+
+
+def _call_sites(path: Path) -> list[tuple[str, int, str]]:
+    """``(called name, line, enclosing top-level function or "")`` for every sentinel call."""
+    tree_ = ast.parse(path.read_text(encoding="utf-8"))
+    found = []
+    for top in tree_.body:
+        owner = top.name if isinstance(top, ast.FunctionDef) else ""
+        for node in ast.walk(top):
             if not isinstance(node, ast.Call):
                 continue
             name = node.func.id if isinstance(node.func, ast.Name) else (
                 node.func.attr if isinstance(node.func, ast.Attribute) else ""
             )
+            if name in _SENTINEL_NAMES:
+                found.append((name, node.lineno, owner))
+    return found
+
+
+def test_nothing_outside_tests_arms_the_launcher_or_creates_a_session() -> None:
+    offenders = []
+    for path in sorted((REPOSITORY / "tools").rglob("*.py")):
+        for name, line, _owner in _call_sites(path):
             if name == "create_capture_session" and path.name != "capture_mechanism.py":
-                offenders.append(f"{path.name}:{node.lineno}")
-            if name == "StreamCaptureLauncher":
-                offenders.append(f"{path.name}:{node.lineno}")
+                offenders.append(f"{path.name}:{line}")
+            if name in ("StreamCaptureLauncher", "run_pass_a"):
+                offenders.append(f"{path.name}:{line}")
     assert offenders == []
+    # The entry has exactly the one named factory: one session call, one armed
+    # launcher, both inside it; and no `run_pass_a` call anywhere.
+    entry_sites = _call_sites(REPOSITORY / "infra/rp11-h1/rp11_entry.py")
+    assert sorted((name, owner) for name, _line, owner in entry_sites) == [
+        ("StreamCaptureLauncher", ENTRY_FACTORY),
+        ("create_capture_session", ENTRY_FACTORY),
+    ]
+    other = [p for p in (REPOSITORY / "infra").rglob("*.py") if p.name != "rp11_entry.py"]
+    assert [p.name for p in other if _call_sites(p)] == []
 
 
 def test_the_harness_cli_does_not_reach_the_capture_mechanism() -> None:

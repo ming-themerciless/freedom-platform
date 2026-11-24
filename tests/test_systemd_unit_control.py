@@ -1700,9 +1700,31 @@ def test_only_the_jeepney_module_imports_the_client_library():
         assert uses == (path.name == "jeepney_bus.py"), path.name
 
 
+# The only statements the scan below tolerates, each tied to one file and written out in full.
+# Both are deliberate, narrow consumers and neither runs a role, opens a bus or arms a unit:
+#   * ``tools/rp11_capture_unit_install.py`` (the accepted operator installer) needs the
+#     manager's fixed artifact and interpreter constants, so the unit it writes names the same
+#     paths the controlled role is pinned to instead of a second copy of them;
+#   * ``start_binding`` (RP-11 G11, a pure helper) must validate the activation id with the one
+#     validator consume applies rather than duplicate it.
+# No dynamic import and no duplicated constant or validation stands in for either. Any other
+# reference in those files, any change to these statements, and the same import in any other
+# file is still an offender; a stale entry (the statement no longer present exactly once) fails
+# too, so an exception cannot outlive its use. This is not a change to the G8 boundary.
+_ADAPTER_REFERENCE_EXCEPTIONS = {
+    "tools/rp11_capture_unit_install.py": (
+        "from adapters.systemd.manager import ROLE_ARTIFACT, ROLE_INTERPRETER\n",
+    ),
+    "tools/phase_5_0_evidence/execution/start_binding.py": (
+        "from application.unit_control import ControlSpecError, validate_activation_id\n",
+    ),
+}
+
+
 def test_only_the_controlled_role_not_a_general_runtime_path_consumes_the_adapter():
     pattern = re.compile(r"(adapters\.systemd|application\.unit_control)")
     offenders = []
+    stale = []
     for base in (
         "main.py",
         "config.py",
@@ -1720,6 +1742,26 @@ def test_only_the_controlled_role_not_a_general_runtime_path_consumes_the_adapte
         target = ROOT / base
         files = [target] if target.is_file() else list(target.rglob("*.py"))
         for f in files:
-            if pattern.search(f.read_text()):
-                offenders.append(str(f.relative_to(ROOT)))
+            relative = str(f.relative_to(ROOT))
+            text = f.read_text()
+            for statement in _ADAPTER_REFERENCE_EXCEPTIONS.get(relative, ()):
+                if text.count(statement) == 1:
+                    text = text.replace(statement, "")
+                else:
+                    stale.append(relative)
+            if pattern.search(text):
+                offenders.append(relative)
     assert offenders == []
+    assert stale == []
+
+
+def test_the_adapter_reference_exceptions_admit_exactly_two_files_and_one_statement_each():
+    assert {path: len(statements) for path, statements in _ADAPTER_REFERENCE_EXCEPTIONS.items()} == {
+        "tools/rp11_capture_unit_install.py": 1,
+        "tools/phase_5_0_evidence/execution/start_binding.py": 1,
+    }
+    for statements in _ADAPTER_REFERENCE_EXCEPTIONS.values():
+        for statement in statements:
+            assert statement.startswith(("from adapters.systemd.", "from application.unit_control "))
+            assert statement.count("\n") == 1 and statement.endswith("\n")
+            assert "import *" not in statement and "__import__" not in statement

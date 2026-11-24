@@ -6,7 +6,25 @@ Production and staging mutation, real secrets and real player data remain
 outside that authority and need Peter's separate explicit, attended
 authorization.
 
-## Current implementation resume — 2026-11-22
+**Owner decisions recorded 2026-11-24.** For disposable feasibility only, use
+single-host `oracle-test`, clean checkout
+`/opt/freedom-blades/rp11-source`, and capture roots
+`/var/lib/fb-rp11-capture-a` and `/var/lib/fb-rp11-capture-b`. The maintainer
+publishes the exact commit to the canonical public remote before any separately
+authorized acquisition. The dedicated service account is `capture`: locked,
+non-login, non-root, no sudo or supplementary groups, and neither `ubuntu` nor
+`freedom-executor`; use the same name on `oracle-test` for fidelity. The intended
+production identity policy is accepted, but no production account may be
+created yet. Peter also accepted measured conservative fixed per-command
+timeouts with safe single-path finalization, and provisionally accepted the
+reviewed capture mechanism, subject to revision before production. Remaining
+technical work is G2/G3 redesign, filesystem acceptance at the selected paths,
+timeout measurement and whole-pass bound, and final capture-tool digest plus
+integrity-pinned SA-2 build review. No A-2/AUTH grant, source acquisition,
+`run_pass_a` call, operational pass, production/staging access, SA-2 build or
+install, activation or probe is authorized.
+
+## Current implementation resume — 2026-11-24
 
 The production runtime is intended to run on production Ubuntu. `oracle-test`
 is only for proof of concept, feasibility and testing; it has no ongoing or
@@ -29,13 +47,90 @@ systemd operation, production operation or operational Pass A occurred for
 this slice. Full details and limitations are in the
 [G11/G12 handback](rp11-g11-g12-implementation-handback.md).
 
+**Update 2026-11-23.** The policy-neutral Pass A orchestrator (never called)
+(`tools/phase_5_0_evidence/execution/pass_a.py`, tests in
+`tests/test_rp11_pass_a.py`) is now implemented and reviewed. Final focused
+`oracle-test` evidence: **1323 passed, 2 `RLIMIT` skips**. The earlier stale-v31 R5-runner test blocker is cleared by the G1 re-derivation below.
+
+**Validation 2026-11-24 (Codex; manifest v34 independently reserialized equal: aggregate `2abad119…24cf`, JSON `fe0cff8a…0e29` 377527 bytes, plan `ff17aa3d…64a9` 178764 bytes).** Local focused final: 863 passed. `oracle-test` canonical **bot, first pass: 8322 passed, 278 skipped, 5 failed — not a green canonical bot result; superseded by the final green rerun below.** Four failures were `test_rotate_test_gate_script` SIGINT waits timing out under CPU starvation (that module then passed 33/33 alone); the fifth was the installed-closure provenance test refusing because tzdata 2026e had vanished from the configured archive (only the disposable host's tzdata was upgraded to signed candidate 2026f; that test then passed alone in 102.20s). These are initial environment/load failures with isolated green reruns, not a canonical pass. **Initial-run web: 2894 passed, 80 skipped; Node: 171 passed.** **Final exact-implementation-tree rerun on `oracle-test` (supersedes the initial bot first pass above): canonical bot 8327 passed, 278 skipped, 6 warnings, 0 failures in 2283.08s (38:03); canonical web 2894 passed, 80 skipped, 1137 warnings, 0 failures in 1202.89s (20:02); Foundry Node 171 passed, 0 failed (~7.3s).** The bot skips are the expected reasons (unprivileged root/ownership/provisioning tests, unprovisioned `RP11_LAUNCH_BUILD_ROOT`, an RLIMIT case, a role-grant check). **Full canonical validation is complete for this slice.** This is validation only: no `run_pass_a` call or operational/production gate is closed, and no A-2, AUTH, source acquisition, operational Pass A, production/staging access, SA-2 build/install, activation or probe is authorized. G2/G3 remain open and technical closure of G4/G6/G7 remains incomplete. Earlier pre-fix bot run (superseded): 2 failed, 8320 passed, 280 skipped. The 2026-11-22
+paragraph above and the figures in it are the earlier helper slice and are kept
+as history.
+
 ### Immediate next action
 
-The focused helper and entry/artifact tests have now run on `oracle-test` using
+### Next clean-session instruction
+
+When Peter says **“Start implementation Loop with Claude, proceed without
+asking until it's finished.”**, start the authorized slice immediately. Do not
+ask Peter to approve ordinary continuation steps inside it. Claude implements
+each change; Codex independently reviews the diff, tests and safety boundaries,
+sends every concrete finding back to Claude, and re-reviews the remediation.
+Repeat until no blocking finding remains and the required tests pass.
+
+The slice is the non-production repository implementation for the accepted
+single-host `oracle-test` design: replace the withdrawn two-host command model
+with a finite local-only Pass A plan; define every fixed argv and its complete
+non-inherited child environment (G2/G3); encode the accepted `capture` identity
+as policy/configuration data without creating the account; measure the
+redesigned command classes on `oracle-test`, select conservative fixed
+per-command timeouts, derive the whole-pass bound, and prove timeout/stop/single-
+finalization behavior (G7); then update affected focused tests, the review
+manifest, generated pins and concise current-state documentation. Keep the
+executable entry path fail-closed: do not call `run_pass_a` and do not execute an
+operational pass.
+
+Use only the existing authorized development synchronization and synthetic
+disposable-host testing. Do not acquire source from the canonical remote,
+create the selected checkout/capture paths or the `capture` account, grant A-2
+or AUTH permissions, build or install SA-2, install or activate a service, run
+acceptance probes, or access production/staging. Those remain separate gates.
+If the repository slice reaches one of those boundaries, finish all independent
+implementation, review and testing first, then record that exact boundary as
+the next action; do not ask Peter merely to continue work already inside this
+slice.
+
+**Update 2026-11-23 (G1 re-derived; accepted for review, NOT authorized to run).**
+Peter approved fully re-deriving and accepting G1 for the current Python 3.14 /
+PostgreSQL 18 disposable target. Claude rebased the approved-target constants from
+the repository's canonical disposable-server record (Python 3.14, PostgreSQL
+`18/main` with `/etc/postgresql/18/main`, kernel `7.0.0-1015-oracle`; no host
+observed), raised the review manifest to **version 33** (the current-target and
+G11 source refresh; 65 covered sources; aggregate `f8dc8d4a…e596`, manifest JSON
+`74dbcc9b…7e97`, concrete plan `924d6054…d087`; now history) and then, for the G8
+documentation/source-consistency fix to `pass_a.py`'s docstring, to **version 34
+(current)**: 65 covered sources including `pass_a.py` (packaged and imported by
+the entry, never called) and `start_binding.py`; aggregate `2abad119…24cf`,
+manifest JSON `fe0cff8a…0e29` (377,527 bytes), concrete plan `ff17aa3d…64a9`
+(178,764 bytes), confirmation token `…#1bf0a32ce925cb85` (unchanged), ran the
+canonical dry-run generator twice to scratch with identical output, and
+re-derived every pin from the bytes: operational prompt §4.3 and status block, the
+R5 assignment's pin tables, appendices and §13, the runner `PINS`, the five
+resources (S8's declared amendments unchanged) and `tests/test_r5_runner.py`.
+The current commands and value layer are **accepted for review only**; Codex's
+independent review of this re-derivation **passed** (against manifest v33, since superseded by v34; current-source equality; focused 4956 passed, 17 skips), so G1 is accepted for review but **not authorized to run**. Author's earlier focused local
+run (Python 3.14.4 `venv-web`): 4957 passed, 16 skipped (unprovisioned
+`RP11_LAUNCH_BUILD_ROOT` toolchain tests); the full bot, web and Node suites were
+not re-run for that slice (see Validation 2026-11-24 above for the later canonical runs). **Not authorized, and no operational or production gate closed:** no A-2, no AUTH-SYNC,
+AUTH-READ or AUTH-DBREAD grant, no source acquisition, no operational Pass A, no
+production or staging access, no SA-2 build or install, no service activation or
+probe. The old two-host commands are withdrawn and must be re-derived for local
+execution on the accepted single-host topology. G2/G3 remain open; G4
+filesystem acceptance, G6/G7 technical evidence, RP-11, A-6 and the clean
+pinned-tree/owner inputs remain incomplete. **G8 entry composition (2026-11-23; implemented; independent Codex review passed after remediation).** `infra/rp11-h1/rp11_entry.py` now holds one factory, `build_pass_a_session(GenesisRequest)`, the single reviewed arming/session construction site (`create_capture_session` over `PosixCaptureFilesystem`, `StreamCaptureLauncher(armed=True)`, `SystemUtcClock`, default read-only verifier). Nothing calls it: `main`/`entry` only import `execution.pass_a` to put it in the build closure (`build.ENTRY_SOURCES`), `run_pass_a` is neither imported by name nor called, and the run path still exits 69 after the protected imports. No act list, capture root, activation id, consume journal, exit policy, child environment, stream bound or timeout is invented; G2/G3 remain open, technical closure of G4/G6/G7 remains incomplete, and A-2 is absent. The safety sentinel scans `tools/` and the entry: no arming/session/`run_pass_a` site under `tools/` except `capture_mechanism`'s own constructor, and exactly the factory's two calls in the entry. **Codex's independent review passed after remediation** (the finding that `pass_a.py`'s docstring still called it unimported/unpackaged is fixed; manifest version 34). Codex focused run: **757 passed**; earlier Claude evidence: 1091 passed, 2 skipped and 4122 passed. Canonical results are recorded under "Validation 2026-11-24" above: web and Node green; the first canonical bot pass had 5 environment/load failures with isolated green reruns (not a green bot result, superseded); the final exact-tree rerun is green: bot 8327 passed, 278 skipped, 0 failures; web 2894 passed, 80 skipped; Node 171 passed; full canonical validation is complete for this slice and closes no operational or production gate. Unchanged: no A-2/AUTH grant, no source acquisition, no operational pass, no production/staging, no SA-2 build/install, no activation or probe.
+
+**As of 2026-11-23 (before the G1 re-derivation and G8 composition; kept as history):** entry wiring and a real Pass A plan could not proceed until
+(a) a separately governed G8 safety-sentinel amendment and (b) a G1 command/value
+re-pin and acceptance. No production, SA-2 or unit work is
+authorized. Authority was then: G1 NOT ACCEPTED, G8 unchanged, no
+A-2 or AUTH-* grant, no production/staging, no SA-2 rebuild or install, no
+operational pass.
+
+*Earlier (2026-11-22) next action, kept as history:* the focused helper and
+entry/artifact tests ran on `oracle-test` using
 the documented secret-excluding rsync, at Peter's explicit request to run these
 tests. This development sync did not acquire source from the canonical GitHub
 remote and does not authorize the G1/OP1 source-acquisition or operational
-topology. The next action is to continue the accepted non-production RP-11
+topology. The next action then was to continue the accepted non-production RP-11
 implementation loop with Claude; retain the test command and rerun the focused
 suite after related changes:
 
@@ -68,10 +163,10 @@ task and its required tests are complete. If Claude is unavailable, record it
 as a blocker and continue independent documentation/review work; do not
 silently substitute another implementation owner.
 
-Current gates remain: G1 NOT ACCEPTED; no A-2; AUTH-SYNC, AUTH-READ and
+Current gates remain: G1 accepted for review only (not authorized to run); no A-2; AUTH-SYNC, AUTH-READ and
 AUTH-DBREAD ungranted; operational Pass A not implemented or run; SA-2 not
 rebuilt; no production installation or activation; S4 probes 2, 3, 5 and 6
-remain incomplete. G8 safety sentinel is unchanged. Preserve the dirty working
+remain incomplete. The G8 entry composition is implemented and its Codex review passed (sentinel amended for exactly the one factory; no run path). Preserve the dirty working
 tree and unrelated in-progress changes; do not reset or clean it.
 
 **New-session resume:** when Peter starts a new session with “proceed,” resume
@@ -160,7 +255,7 @@ rc 1, so general passwordless sudo is no longer available.
 
 ## Pass A G1 candidate-command review — 2026-11-22
 
-**Disposition: NOT ACCEPTED; G1 has not passed.** Codex reviewed the candidate
+**Disposition (2026-11-22, historical; the value layer is superseded by the 2026-11-23 G1 re-derivation above, which is accepted for review only and not authorized to run): NOT ACCEPTED; G1 had not passed.** Codex reviewed the candidate
 commands in the [operational evidence prompt](phase-5-0-p5-r5-operational-evidence-authorization-prompt.md).
 Claude corrected the draft documentation and Codex reviewed the remediation.
 The draft's repository host is the production Ubuntu server, so its local A0
@@ -174,9 +269,9 @@ resolve RP-11, C-11, the child environment, A-6, clean pinned-tree and owner
 inputs. This review grants no AUTH-SYNC, AUTH-READ, AUTH-DBREAD or A-2
 authority. See the [entry-contract proposal §0a](rp11-pass-a-entry-contract-proposal.md).
 
-**Update 2026-11-22 (proposal only):** the recommended single-host `oracle-test` topology is now documented as an **unaccepted proposal** in [entry-contract proposal §0b](rp11-pass-a-entry-contract-proposal.md#0b-g4-topology-proposal--single-host-oracle-test-2026-11-22); it was reviewed by Codex on 2026-11-22 with no blocking documentation finding, but it is not accepted by Peter and not authorized. Acceptance and re-derivation remain open: its acceptance, the checkout and capture-root path values, source-publication/acquisition authorization (exact-source acquisition from the canonical GitHub remote is **not** authorized by OP1 or A-2; it is a separately controlled pre-pass action), re-derivation of the sync row, C-11, the child environment and the AUTH rows, and G1 itself. G1 stays NOT ACCEPTED; no A-2; AUTH-SYNC, AUTH-READ and AUTH-DBREAD remain ungranted; nothing runs on production.
+**Update 2026-11-22 (proposal only):** the recommended single-host `oracle-test` topology is now documented as an **unaccepted proposal** in [entry-contract proposal §0b](rp11-pass-a-entry-contract-proposal.md#0b-g4-topology-proposal--single-host-oracle-test-2026-11-22); it was reviewed by Codex on 2026-11-22 with no blocking documentation finding, but it is not accepted by Peter and not authorized. Acceptance and re-derivation remain open: its acceptance, the checkout and capture-root path values, source-publication/acquisition authorization (exact-source acquisition from the canonical GitHub remote is **not** authorized by OP1 or A-2; it is a separately controlled pre-pass action), re-derivation of the sync row, C-11, the child environment and the AUTH rows, and G1 itself. G1 stayed NOT ACCEPTED then (historical; accepted for review only since 2026-11-23); no A-2; AUTH-SYNC, AUTH-READ and AUTH-DBREAD remain ungranted; nothing runs on production.
 
-**Owner clarification 2026-11-22 (runtime host; scope only):** Peter clarified that production runtime must run on the production Ubuntu server; `oracle-test` is proof-of-concept, feasibility passes and testing only and has **no ongoing or production role**. The eventual production RP-11 capture runtime therefore belongs on production Ubuntu, but this clarifies scope only: production installation, access, activation and any real pass remain **unauthorized and separately gated** (identity, sandbox, timeout, SA-2 build, installation, activation and real-run gates all open). The §0b topology applies to the disposable feasibility exercise only and cannot decide or move a production runtime onto `oracle-test` ([entry-contract proposal §0b](rp11-pass-a-entry-contract-proposal.md#0b-g4-topology-proposal--single-host-oracle-test-2026-11-22)). G1 stays NOT ACCEPTED; no A-2; AUTH-SYNC, AUTH-READ and AUTH-DBREAD remain ungranted; the source-acquisition authorization boundary is unchanged (exact-source acquisition is not authorized by OP1 or A-2).
+**Owner clarification 2026-11-22 (runtime host; scope only):** Peter clarified that production runtime must run on the production Ubuntu server; `oracle-test` is proof-of-concept, feasibility passes and testing only and has **no ongoing or production role**. The eventual production RP-11 capture runtime therefore belongs on production Ubuntu, but this clarifies scope only: production installation, access, activation and any real pass remain **unauthorized and separately gated** (identity, sandbox, timeout, SA-2 build, installation, activation and real-run gates all open). The §0b topology applies to the disposable feasibility exercise only and cannot decide or move a production runtime onto `oracle-test` ([entry-contract proposal §0b](rp11-pass-a-entry-contract-proposal.md#0b-g4-topology-proposal--single-host-oracle-test-2026-11-22)). G1 stayed NOT ACCEPTED then (historical; accepted for review only since 2026-11-23); no A-2; AUTH-SYNC, AUTH-READ and AUTH-DBREAD remain ungranted; the source-acquisition authorization boundary is unchanged (exact-source acquisition is not authorized by OP1 or A-2).
 
 ## Production baseline (unchanged by S1)
 

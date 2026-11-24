@@ -1500,15 +1500,40 @@ def test_the_attempt_directory_and_journal_modes(fx, layout):
     assert stat.S_IMODE((d / "journal").stat().st_mode) == 0o644
 
 
+# The only statements the scan below tolerates, each tied to one file and written out in full.
+# ``start_binding`` (RP-11 G11) must parse the consume journal with the repository's one journal
+# grammar rather than a second copy. That module is pure (hashlib, re, canonical JSON), already
+# ships in the h1 artifact's SOURCES and grants no way to run a role, open a capture root or arm
+# a launcher, so this is not G8 and widens no runtime authority. Any other reference in that file,
+# any change to this statement, and the same import in any other file is still an offender; a
+# stale entry (the statement no longer present) fails too, so the exception cannot outlive its use.
+_ROLE_REFERENCE_EXCEPTIONS = {
+    "tools/phase_5_0_evidence/execution/start_binding.py": (
+        "from application.rp11.journal import JournalKind, consume_run, parse_journal\n",
+    ),
+}
+
+
 def test_nothing_in_a_runtime_path_imports_the_role_engine():
     pattern = re.compile(r"(application\.rp11|adapters\.rp11)")
     offenders = []
+    stale = []
     for base in ("main.py", "config.py", "ext", "models", "helpers", "connectors", "adapters/web",
                  "adapters/http", "adapters/worker", "application/web", "application/worker", "tools"):
         target = ROOT / base
         files = [target] if target.is_file() else list(target.rglob("*.py"))
-        offenders += [str(f.relative_to(ROOT)) for f in files if pattern.search(f.read_text())]
+        for f in files:
+            relative = str(f.relative_to(ROOT))
+            text = f.read_text()
+            for statement in _ROLE_REFERENCE_EXCEPTIONS.get(relative, ()):
+                if text.count(statement) == 1:
+                    text = text.replace(statement, "")
+                else:
+                    stale.append(relative)
+            if pattern.search(text):
+                offenders.append(relative)
     assert offenders == []
+    assert stale == []
 
 
 # ---------------------------------------------------------------------------

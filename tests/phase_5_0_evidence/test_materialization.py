@@ -297,7 +297,7 @@ def test_a_materialization_naming_an_unreviewed_destination_is_refused() -> None
         "/etc/pg_hba.conf",
         "/var/lib/freedom-sheet-writer/pg_hba.conf",
         f"{APPROVED_TARGET.root_path}/pg_hba.conf",
-        "/etc/postgresql/16/main/postgresql.conf",
+        "/etc/postgresql/18/main/postgresql.conf",
     ):
         with pytest.raises(PlanRefused):
             MaterializeStep(
@@ -520,9 +520,9 @@ def test_a_destination_outside_a_postgresql_configuration_directory_is_refused(
         "/etc/passwd",
         "/etc/sudoers.d/pg_hba.conf",
         "/var/lib/freedom-sheet-writer/pg_hba.conf",
-        "/etc/postgresql/16/main/postgresql.conf",
+        "/etc/postgresql/18/main/postgresql.conf",
         "pg_hba.conf",
-        "/etc/postgresql/16/main/../../passwd",
+        "/etc/postgresql/18/main/../../passwd",
     ):
         result = materialize(armed, destination, reviewed)
         assert result.failure == MATERIALIZATION_DESTINATION_NOT_REVIEWED, destination

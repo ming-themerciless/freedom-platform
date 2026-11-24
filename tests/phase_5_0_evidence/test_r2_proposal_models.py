@@ -112,10 +112,10 @@ class Laboratory:
         self.fs.fsync(root_sync)
 
         self.config_path_fd = self.fs.open_directory(
-            self.config_directory, DescriptorMode.O_PATH, "/etc/postgresql/16/main"
+            self.config_directory, DescriptorMode.O_PATH, "/etc/postgresql/18/main"
         ).number
         self.config_sync_fd = self.fs.open_directory(
-            self.config_directory, DescriptorMode.O_RDONLY, "/etc/postgresql/16/main"
+            self.config_directory, DescriptorMode.O_RDONLY, "/etc/postgresql/18/main"
         ).number
 
         config_fd = self.fs.create_file(
@@ -166,7 +166,7 @@ def _publish(
         run_id=run_id,
         source_fd=laboratory.source_fd(),
         source_identity="dev=8:1 ino=4711",
-        destination="/etc/postgresql/16/main/pg_hba.conf",
+        destination="/etc/postgresql/18/main/pg_hba.conf",
     )
 
 
@@ -472,12 +472,12 @@ def test_a_record_naming_another_destination_restores_nowhere():
     )
     copy_bytes = dict(state.data)[state.resolve(run_object, "copy")]
 
-    assert record.destination == "/etc/postgresql/16/main/pg_hba.conf"
+    assert record.destination == "/etc/postgresql/18/main/pg_hba.conf"
     assert digest(copy_bytes) == record.content_digest
 
     elsewhere = RecoveryRecord(
         run_id=record.run_id,
-        destination="/etc/postgresql/16/main/pg_ident.conf",
+        destination="/etc/postgresql/18/main/pg_ident.conf",
         source_identity=record.source_identity,
         content_digest=record.content_digest,
         byte_length=record.byte_length,

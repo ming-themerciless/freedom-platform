@@ -519,7 +519,7 @@ class EffectKind(str, Enum):
 #: than spelling a second copy.
 ROOT_ROLE = "root"
 EVIDENCE_ROLE = "evidence"
-#: The role `/etc/postgresql/16/main` is held under — r6 §1.3.3's D9/D10 pair.
+#: The role `/etc/postgresql/18/main` is held under — r6 §1.3.3's D9/D10 pair.
 #: The two configuration effects resolve their components relative to that held
 #: traversal descriptor, so no pathname under it is re-resolved between the
 #: ownership check and the effect.
@@ -564,7 +564,7 @@ class DescriptorEffect:
     #: The covered source whose reviewed bytes `INSTALL_PAYLOAD` installs.
     payload_source: str = ""
     #: The inventory role the two configuration effects resolve their components
-    #: under — the held `/etc/postgresql/16/main` traversal descriptor.
+    #: under — the held `/etc/postgresql/18/main` traversal descriptor.
     configuration_role: str = ""
     #: The reviewed configuration components the capture and the restoration
     #: bind, in the order the plan lists them.

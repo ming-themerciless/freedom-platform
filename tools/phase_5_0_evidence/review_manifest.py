@@ -619,7 +619,39 @@ MANIFEST_SCHEMA = "phase-5-0-evidence-review-manifest"
 #: remains unwired and unmet. No product requirement changes. A digest remains
 #: review input, not execution approval, and this tree awaits Codex
 #: independent review.
-MANIFEST_VERSION = 32
+#: **33** is the current-target and G11 source refresh, 2026-11-23 (G1
+#: re-derivation for review; not an execution approval). Two things move.
+#: (1) The approved-target facts and their dependent constants follow the
+#: current canonical `oracle-test` record in
+#: `docs/operations/disposable-test-server.md`: Python 3.14
+#: (`INTERPRETER_PYTHON_VERSION`), PostgreSQL `18/main` with
+#: `/etc/postgresql/18/main` (target, facts, `POSTGRES_18_BIN`) and kernel
+#: `7.0.0-1015-oracle`, replacing the Python 3.12, PostgreSQL `16/main` and
+#: `7.0.0-31-generic` that version 32 still carried. The target identity digest
+#: and the confirmation token therefore change. (2) The covered set follows the
+#: tree: `capture_contract.py`, `execution/boundary.py`,
+#: `execution/capture_mechanism.py` and `execution/retention_check.py` changed
+#: after version 32 was generated (G11 provenance), and the inert
+#: `execution/start_binding.py` and `execution/pass_a.py` modules join the
+#: enumeration, 63 covered sources becoming 65.
+#:
+#: What does **not** move at 33: the launcher files and their digests, every
+#: vector, step, mutation, materialization, expectation, required case,
+#: unresolved entry, schema, executable and verb table beyond the target-derived
+#: values above. The section still records `installed: false` and `wired:
+#: false`; `is_executable` remains `False`. Nothing here observes or mutates a
+#: host. A digest remains review input, not execution approval.
+#: **34** is the G8 documentation/source-consistency refresh, 2026-11-23 (not an
+#: execution approval). `execution/pass_a.py`, already covered, had a module
+#: docstring still saying the entry neither imports nor lists it; after approved
+#: G8 the entry imports it into the protected artifact closure and
+#: `build.ENTRY_SOURCES` lists it, and only the `run_pass_a` call stays
+#: unreachable. Only that docstring's bytes move, so the aggregate, the concrete
+#: plan's digest line and the pins derived from them move; no vector, step,
+#: target fact, launcher file, schema or covered-set membership changes.
+#: `is_executable` remains `False`. A digest remains review input, not
+#: execution approval.
+MANIFEST_VERSION = 34
 
 #: **27.** The `infra/rp11-launch/` files whose bytes the manifest pins
 #: (proposal §5.2, §5.11): image source, build definition, toolchain and
@@ -673,11 +705,13 @@ COVERED_SOURCES = (
     "tools/phase_5_0_evidence/execution/lifecycle_record.py",
     "tools/phase_5_0_evidence/execution/materializer.py",
     "tools/phase_5_0_evidence/execution/participants.py",
+    "tools/phase_5_0_evidence/execution/pass_a.py",
     "tools/phase_5_0_evidence/execution/provisioner.py",
     "tools/phase_5_0_evidence/execution/provisioning_cli.py",
     "tools/phase_5_0_evidence/execution/recovery_store.py",
     "tools/phase_5_0_evidence/execution/retention_check.py",
     "tools/phase_5_0_evidence/execution/run_ledger.py",
+    "tools/phase_5_0_evidence/execution/start_binding.py",
     "tools/phase_5_0_evidence/expectations.py",
     "tools/phase_5_0_evidence/feasibility.py",
     "tools/phase_5_0_evidence/filesystem.py",

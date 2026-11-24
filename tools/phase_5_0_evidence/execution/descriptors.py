@@ -71,7 +71,7 @@ Both began as deviations this module reported. Peter approved them as runner
 contract r6 amendments D1 and D2 on 2026-09-15, and r6 now specifies them.
 
 **D1 — exclusive publication is `linkat` + `unlinkat`.** `RENAME_NOREPLACE` is
-not reachable from Python 3.12's `os` module, and `ctypes` is refused outside
+not reachable from Python 3.14's `os` module, and `ctypes` is refused outside
 `case_program.py` by a structural guard that is a stop condition rather than an
 obstacle to route around. `link(2)` fails with `EEXIST` when the destination
 exists, so the exclusivity is the kernel's and not a check this module performs.
@@ -154,7 +154,7 @@ DESCRIPTOR_REFUSALS: frozenset[str] = frozenset(
 EXCLUSIVE_PUBLICATION_SUBSTITUTE = (
     "Runner contract r6 amendment D1, approved 2026-09-15: exclusive "
     "publication is `linkat` followed by `unlinkat` of the temporary, in place "
-    "of `renameat2(…, RENAME_NOREPLACE)`. Python 3.12's `os` module exposes "
+    "of `renameat2(…, RENAME_NOREPLACE)`. Python 3.14's `os` module exposes "
     "`renameat` and not `renameat2`, and the one `ctypes` exception in this "
     "repository is granted to `case_program._prctl_get_securebits` and to "
     "nothing else.",
@@ -250,7 +250,7 @@ LISTING_DESCRIPTOR = (
 #: reaches it first, under pressure, at the moment of execution.
 UNIMPLEMENTED_EXECUTION_ROUTE = (
     "Item: r6 §1.4.4 X1's `execveat(D7, \"\", argv, envp, AT_EMPTY_PATH)`. "
-    "Python 3.12's `os` has no `execveat`. The candidate is `os.execve` on a "
+    "Python 3.14's `os` has no `execveat`. The candidate is `os.execve` on a "
     "descriptor, whose `fexecve(3)` uses `execveat(2)` since glibc 2.27 where "
     "the kernel provides it and otherwise falls back to `/proc` [D]. **X1 is "
     "unimplemented and no route is chosen.**",

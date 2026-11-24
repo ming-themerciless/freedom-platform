@@ -204,8 +204,8 @@ def test_a_replaced_root_no_longer_has_captures_reinstalled_from_under_it() -> N
     ]
     restored = [record for record in host.consumed if record.action == "restore-source"]
     assert {record.path for record in restored} == {
-        "/etc/postgresql/16/main/pg_hba.conf",
-        "/etc/postgresql/16/main/pg_ident.conf",
+        "/etc/postgresql/18/main/pg_hba.conf",
+        "/etc/postgresql/18/main/pg_ident.conf",
     }
 
     # The root guard is unchanged: it still protects exactly one inode, and the
@@ -463,8 +463,8 @@ def test_ordinary_cleanup_still_completes() -> None:
         if record.action == "restore-source"
     }
     assert restored == {
-        "/etc/postgresql/16/main/pg_hba.conf",
-        "/etc/postgresql/16/main/pg_ident.conf",
+        "/etc/postgresql/18/main/pg_hba.conf",
+        "/etc/postgresql/18/main/pg_ident.conf",
     }
 
 
@@ -569,7 +569,7 @@ def test_a_substituted_evidence_copy_is_no_longer_what_the_restore_reads() -> No
     Asserted on **bytes**, not on a command name and not on a state label.
     """
     capture = f"{ROOT}/before/pg_hba.conf"
-    live = "/etc/postgresql/16/main/pg_hba.conf"
+    live = "/etc/postgresql/18/main/pg_hba.conf"
     substituted = b"# substituted authentication configuration\n"
 
     plan = runnable_plan()

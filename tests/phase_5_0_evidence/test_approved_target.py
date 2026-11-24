@@ -31,7 +31,7 @@ def test_the_canonical_target_carries_exactly_the_approved_facts() -> None:
     assert APPROVED_TARGET.root_path == "/var/lib/fb-evidence-p5-0"
     assert APPROVED_TARGET.database_name == "fb_evidence_p5_0"
     assert APPROVED_TARGET.postgres_socket_directory == "/var/run/postgresql"
-    assert APPROVED_TARGET.postgres_config_directory == "/etc/postgresql/16/main"
+    assert APPROVED_TARGET.postgres_config_directory == "/etc/postgresql/18/main"
     assert APPROVED_TARGET.confirmed_disposable is True
 
 
@@ -43,14 +43,14 @@ def test_the_confirmed_environment_is_the_one_peter_named_and_codex_verified() -
         "ipv4": "138.2.182.39",
         "operating_system": "Ubuntu 26.04.1 LTS",
         "architecture": "x86_64",
-        "active_kernel": "7.0.0-31-generic",
+        "active_kernel": "7.0.0-1015-oracle",
         "filesystem_root": "/var/lib/fb-evidence-p5-0",
         "filesystem_type": "ext4",
         "filesystem_device": "/dev/sda1",
-        "postgres_instance": "16/main",
+        "postgres_instance": "18/main",
         "postgres_port": "5432",
         "postgres_socket_directory": "/var/run/postgresql",
-        "postgres_config_directory": "/etc/postgresql/16/main",
+        "postgres_config_directory": "/etc/postgresql/18/main",
         "evidence_database": "fb_evidence_p5_0",
         "confirmed_by": "Peter Duscha, Operations Owner",
         "confirmed_on": "2026-09-05",
@@ -72,7 +72,7 @@ def test_the_disposability_statement_names_the_decision_and_its_owner() -> None:
             postgres_socket_directory="/var/run/postgresql",
             confirmed_disposable=True,
             disposability_evidence="   ",
-            postgres_config_directory="/etc/postgresql/16/main",
+            postgres_config_directory="/etc/postgresql/18/main",
         )
 
 
@@ -105,7 +105,7 @@ DEVIATIONS = {
     "root_path": "/var/lib/fb-evidence-p5-1",
     "database_name": "fb_evidence_p5_1",
     "postgres_socket_directory": "/var/run/postgresql-16",
-    "postgres_config_directory": "/etc/postgresql/18/main",
+    "postgres_config_directory": "/etc/postgresql/16/main",
     "confirmed_disposable": False,
     "disposability_evidence": "Confirmed by someone, at some point.",
 }

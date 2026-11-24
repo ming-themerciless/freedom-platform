@@ -352,7 +352,7 @@ def test_a_target_deviation_is_refused_downstream_of_generation() -> None:
                 postgres_socket_directory="/var/run/postgresql",
                 confirmed_disposable=True,
                 disposability_evidence="synthetic",
-                postgres_config_directory="/etc/postgresql/16/main",
+                postgres_config_directory="/etc/postgresql/18/main",
             )
         )
 

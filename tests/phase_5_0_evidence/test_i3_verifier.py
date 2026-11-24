@@ -258,7 +258,7 @@ class FakeProbe:
         policy: bytes = b"1\n",
         mountinfo: bytes | None = None,
         ids=None,
-        host=("Test", "7.0.0-31-generic", "x86_64"),
+        host=("Test", "7.0.0-1015-oracle", "x86_64"),
     ) -> None:
         self._host = host
         self._statuses = (
@@ -807,12 +807,12 @@ def test_an_occupied_name_refuses_when_the_residue_listing_missed_it(monkeypatch
 @pytest.mark.parametrize(
     "host,expected",
     [
-        (("oracle-test", "7.0.0-31-generic", "x86_64"), "target-mismatch"),
-        (("oracle-prod", "7.0.0-31-generic", "x86_64"), "target-mismatch"),
-        (("test", "7.0.0-31-generic", "x86_64"), "target-mismatch"),
-        (("", "7.0.0-31-generic", "x86_64"), "target-mismatch"),
+        (("oracle-test", "7.0.0-1015-oracle", "x86_64"), "target-mismatch"),
+        (("oracle-prod", "7.0.0-1015-oracle", "x86_64"), "target-mismatch"),
+        (("test", "7.0.0-1015-oracle", "x86_64"), "target-mismatch"),
+        (("", "7.0.0-1015-oracle", "x86_64"), "target-mismatch"),
         (("Test", "7.0.0-32-generic", "x86_64"), "target-mismatch"),
-        (("Test", "7.0.0-31-generic", "aarch64"), "target-mismatch"),
+        (("Test", "7.0.0-1015-oracle", "aarch64"), "target-mismatch"),
         (OSError(errno.EIO, OS_MESSAGE), "target-unobservable"),
     ],
     ids=[
@@ -840,7 +840,7 @@ def test_only_the_approved_target_is_admitted(lab, host, expected) -> None:
         APPROVED_TARGET_FACTS.kernel_nodename,
         APPROVED_TARGET_FACTS.active_kernel,
         APPROVED_TARGET_FACTS.architecture,
-    ) == ("Test", "7.0.0-31-generic", "x86_64")
+    ) == ("Test", "7.0.0-1015-oracle", "x86_64")
     _refuses_before_write(lab, make(lab, probe=FakeProbe(lab, host=host)), expected=expected)
 
 
@@ -852,11 +852,11 @@ def test_the_approved_nodename_passes_the_target_portion_of_admission(lab) -> No
     visible: the approved tuple is not refused for `target-mismatch`, and
     substituting the SSH alias for the nodename is.
     """
-    approved = ("Test", "7.0.0-31-generic", "x86_64")
+    approved = ("Test", "7.0.0-1015-oracle", "x86_64")
     run = make(lab, probe=FakeProbe(lab, host=approved)).run("root")
     assert run.refusal != "target-mismatch"
 
-    alias = ("oracle-test", "7.0.0-31-generic", "x86_64")
+    alias = ("oracle-test", "7.0.0-1015-oracle", "x86_64")
     aliased = make(lab, probe=FakeProbe(lab, host=alias)).run("root")
     assert aliased.refusal == "target-mismatch"
     assert aliased.status is Status.REFUSED_BEFORE_WRITE
@@ -880,14 +880,14 @@ def test_admission_reads_the_nodename_fact_and_never_the_ssh_alias(lab) -> None:
         patch.setattr(
             verifier_module, "APPROVED_TARGET_FACTS", replace(facts, kernel_nodename="Other")
         )
-        moved = make(lab, probe=FakeProbe(lab, host=("Test", "7.0.0-31-generic", "x86_64")))
+        moved = make(lab, probe=FakeProbe(lab, host=("Test", "7.0.0-1015-oracle", "x86_64")))
         assert moved.run("root").refusal == "target-mismatch"
-        admitted = make(lab, probe=FakeProbe(lab, host=("Other", "7.0.0-31-generic", "x86_64")))
+        admitted = make(lab, probe=FakeProbe(lab, host=("Other", "7.0.0-1015-oracle", "x86_64")))
         assert admitted.run("root").refusal != "target-mismatch"
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(verifier_module, "APPROVED_TARGET_FACTS", replace(facts, host="somewhere"))
-        unaffected = make(lab, probe=FakeProbe(lab, host=("Test", "7.0.0-31-generic", "x86_64")))
+        unaffected = make(lab, probe=FakeProbe(lab, host=("Test", "7.0.0-1015-oracle", "x86_64")))
         assert unaffected.run("root").refusal != "target-mismatch"
 
 

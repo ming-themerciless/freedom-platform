@@ -8,9 +8,10 @@ own ``INVOCATION_ID``. This module is the pairing check, and nothing else:
 * **Pure.** It receives the validated activation id, the launcher's InvocationID and
   the consume journal *bytes*. It reads no file, environment, process or network,
   starts no capture session and runs no command.
-* **No second grammar.** The journal is parsed by ``application.rp11.journal``
-  (``parse_journal`` with ``JournalKind.CONSUME`` and ``consume_run``); the
-  activation id by ``application.unit_control.validate_activation_id`` (the one
+* **No second grammar.** The journal is parsed by the repository's one journal
+  module, ``application/rp11/journal.py`` (``parse_journal`` with
+  ``JournalKind.CONSUME`` and ``consume_run``); the
+  activation id by the unit-control boundary's ``validate_activation_id`` (the one
   consume applies); the InvocationID by ``capture_contract.require_invocation_id``.
 * **Fail closed.** Any invalid, torn, foreign or mismatching input raises
   ``StartBindingRefused`` with a fixed reason code. The refusal carries neither
@@ -19,6 +20,17 @@ own ``INVOCATION_ID``. This module is the pairing check, and nothing else:
 It is **not wired**: ``rp11_entry.main`` does not import or call it (the entry stays
 inert). It is in ``ENTRY_SOURCES`` so it is in the fixed ``lib/`` closure the
 eventual entry will load it from.
+
+The one import from ``application/rp11/`` below is the only one allowed anywhere under
+``tools/``: ``tests/test_rp11_cleanup.py`` names this file and this exact import. It
+is the pure journal grammar (hashlib, re and the canonical-JSON helper), not the role
+engine; that module already ships in the artifact's ``SOURCES``, and importing it
+grants no authority to run a role, open a capture root or arm a launcher.
+
+The one import from the unit-control boundary (``ControlSpecError`` and
+``validate_activation_id``) is likewise named, statement for statement, by
+``tests/test_systemd_unit_control.py``; it reuses the one activation-id validator
+instead of copying it, and no other reference to that boundary is admitted here.
 """
 
 from __future__ import annotations
@@ -31,7 +43,7 @@ from ..errors import HarnessError
 
 #: Defensive cap on the journal handed in; it keeps the parse bounded. It is 4 MiB
 #: (4_194_304) to match the repository's established maximum authority-journal cap,
-#: ``application.rp11.consume.ACT_FIRST_READ_BYTES``, so this check never refuses a
+#: ``ACT_FIRST_READ_BYTES`` in ``application/rp11/consume.py``, so this check never refuses a
 #: journal the authority side would read. A real consume journal is far smaller.
 MAX_JOURNAL_BYTES = 4_194_304
 

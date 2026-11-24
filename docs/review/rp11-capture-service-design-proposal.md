@@ -1,5 +1,17 @@
 # RP-11 capture service (`rp11-capture-pass-a.service`) — design proposal
 
+**Current decision update, 2026-11-24 (supersedes the opening 2026-11-21
+decision-status wording below).** Peter selected `capture` as the dedicated
+service account: a locked non-login system account, non-root, with no sudo or
+supplementary groups, and not `ubuntu` or `freedom-executor`. The same name is
+used on `oracle-test` for fidelity. Peter also accepted measured conservative
+fixed per-command timeouts with timeout routed through the single safe
+finalization path, and provisionally accepted the reviewed capture mechanism,
+subject to revision before production. Exact timeout values, the derived
+whole-pass bound, the final capture-tool digest, the integrity-pinned SA-2 build
+review and the sandbox remain incomplete. No account creation, production
+access, build, installation, activation or pass is authorized.
+
 **Date:** 2026-11-21 · **Status (updated 2026-11-21): IMPLEMENTATION DIRECTION ACCEPTED by Peter Duscha; implementation starts.** Accepted: the §4 direction (retain the static C launcher re-based to Python 3.14, implement the entrypoint, fold both into the SA-2 build, add a reviewed fragment), delivered by Claude implementation with a Codex review/remediation loop. **Still open and separately gated, not decided by this acceptance:** the production service identity; a proven timeout/finalization contract (§4, §5; no whole-service runtime bound is claimed); the production unit fragment (`infra/rp11/rp11-capture-pass-a.service` does not exist); the SA-2 artifact rebuild and its authorization (changes `ROUTE3_SA2_TREE_SHA256`); production installation; activation; and acceptance probes 2, 3, 5 and 6. This is still not a unit fragment and not installable, changes no RP-11 or S4 acceptance, and **no production or staging step is authorized.** The §3 candidate values other than the accepted launcher `ExecStart` direction, the §6 sandbox and §8 decisions 2 to 4 remain open for Peter's later decision; §8 decision 5 (production installation and activation) stays separate and unauthorized. **Progress (2026-11-21):** §4 step 1 (launcher re-base on Python 3.14) and the regenerated review manifest are done and passed Codex independent review with no blocking findings ([handback](rp11-launcher-py314-rebase-handback.md)); source audit complete; decision proposal prepared ([entry contract proposal](rp11-pass-a-entry-contract-proposal.md)), unaccepted; the G11/G12 slice (inert `rp11_entry.py` bootstrap, digest-bound closure, `INVOCATION_ID` index/binding schemas) is implemented, [handback](rp11-entry-bootstrap-g11-g12-handback.md), and **independent Codex review of the code and final tests passed with no remaining blocking findings**. Final evidence (focused runs, not canonical suites; Python 3.14.4 `venv-web`): local unprivileged 520 passed, 2 skipped and 696 passed, 0 skipped; `oracle-test` root `test_rp11_entry.py`/`test_rp11_entry_artifact.py`/`test_rp11_h1_artifact.py` 354 passed, 3 skipped (expected identity-specific); `oracle-test` `ubuntu` capture/retention/cleanup 696 passed, 0 skipped. `rp11_h1.py` source changed but the installed production SA-2 artifact was not changed or rebuilt; any future bundle use needs the separately authorized, reviewed rebuild and digest update. No operational Pass A, no safety-sentinel (G8) amendment, no SA-2 production rebuild or install, no production or staging access, no activation; the Pass A logic and the unit fragment are not implemented; steps 2 to 4 are pending. **Entry-contract decisions accepted (2026-11-21):** Peter decided (1) that systemd `INVOCATION_ID` is retained as capture provenance, recorded once per pass in the index state chain and handback binding (not per `CaptureRecord`), and (2) that the entrypoint may load tested Python modules under the isolated Python 3.14 launcher via a fixed, root-owned, digest-bound dependency closure beside `rp11_h1.py` with no cwd/environment/site lookup (selected in the [entry contract](rp11-pass-a-entry-contract-proposal.md) §0, §3a, G11, G12). These authorize reversible implementation and `oracle-test` testing only; they do **not** accept the DRAFT Pass A operational commands, an operational run, production/staging mutation, the production identity, sandbox or timeout, the SA-2 rebuild or install, activation or S4 probes, and they do not change the §3 candidates or §8 decisions 2 to 4. The candidate requirements in the body below are the original proposal text and are unchanged; later edits add only progress and evidence updates (status wording, a mechanism status note and a same-InvocationID evidence section), which record what was done or observed and do not change or accept any technical requirement.
 
 **Current-state note (2026-11-22, owner clarification; historical text below unchanged):** Peter's direction is that the production host for the RP-11 capture runtime is the production **Ubuntu** server, and `oracle-test` is proof-of-concept/testing only with no ongoing or production role (see [entry-contract proposal §0b](rp11-pass-a-entry-contract-proposal.md#0b-g4-topology-proposal--single-host-oracle-test-2026-11-22)). This is a host-direction clarification only: all production service policy, identity, sandbox, timeout, SA-2 artifact rebuild, installation and activation remain **undecided and unauthorized**.
@@ -30,14 +42,16 @@ A runnable Pass A `ExecStart` cannot be derived or used yet, because the launche
 
 ## 3. Recommended candidate unit shape (non-installable)
 
-This is a proposal. Peter accepted the launcher `ExecStart` direction (§8 decision 1); the other values remain candidates (§8 decisions 2 to 4). It is not a fragment and nothing below is applied anywhere.
+This remains a non-installable design. Peter accepted the launcher direction and
+the `capture` identity; sandbox values and exact timeout values remain
+candidates. Nothing below is applied anywhere.
 
 | Property | Candidate |
 |---|---|
 | Type | `Type=exec` |
 | Pre-step | exactly one privileged pre-step, the fixed consume vector `ExecStartPre=+/usr/bin/python3.14 -I -S /usr/local/libexec/freedom-blades-rp11/rp11_h1.py consume`, unchanged |
 | Main command | exactly one `ExecStart=/usr/local/libexec/freedom-blades-rp11/rp11-launch --pass A` (the retained static C launcher, re-based to Python 3.14, §4; re-base done and passed Codex independent review). **This path is not runnable today**: it becomes runnable only when the re-based launcher and the operational Pass A entrypoint (only an inert bootstrap exists) are included in a reviewed, built, digest-bound artifact |
-| Account | a non-root operator account. **Identity unresolved**: do not assume `ubuntu`: the historical D3-R4 proposal used `User=ubuntu` on `oracle-test`, and the production service identity is not established by current authoritative records. Confirm it is not `freedom-executor` |
+| Account | `User=capture`: a dedicated locked non-login system account, non-root, no sudo or supplementary groups, not `ubuntu` or `freedom-executor`; use the same name on `oracle-test` for fidelity |
 | Working directory | `WorkingDirectory=/` |
 | Umask | `UMask=0077` |
 | Stdio | `StandardInput=null`; `StandardOutput=journal`; `StandardError=journal` |
@@ -47,7 +61,7 @@ This is a proposal. Peter accepted the launcher `ExecStart` direction (§8 decis
 | Start timeout | one finite `TimeoutStartSec=` (required by the installer mechanics; 90 s is a candidate only), see §5 |
 | Run-time cap | no `RuntimeMaxSec=` (§5) |
 
-**Explicitly non-installable until all of these hold:** the static launcher re-based for Python 3.14 (done in source; passed Codex independent review) is included in the digest-bound artifact; the operational Pass A entrypoint (beyond the inert bootstrap) is implemented, independently reviewed and packaged in a built artifact; both are included in a reviewed, digest-bound artifact (the SA-2 tree); the entrypoint satisfies the bounded-execution requirement in §4; and the production identity is chosen. Until then the installer correctly refuses.
+**Explicitly non-installable until all of these hold:** the static launcher re-based for Python 3.14 (done in source; passed Codex independent review) is included in the digest-bound artifact; the operational Pass A entrypoint is implemented, independently reviewed and packaged; both are included in a reviewed, digest-bound SA-2 tree; and the entrypoint satisfies the bounded-execution requirement in §4. The identity is chosen, but the account has not been created and its production use is not authorized. Until then the installer correctly refuses.
 
 ## 4. `ExecStart` target — recommendation: retain the static C launcher
 
@@ -59,7 +73,7 @@ Dependency work, in order:
 3. **Pending:** add launcher and entry, with the entry's computed dependency closure (entry contract §3a), to `infra/rp11-h1/build.py`. That changes `ROUTE3_SA2_TREE_SHA256`, the archive, its manifest and runbook references, so S3.2 needs a separate authorized rebuild.
 4. **Pending:** add the reviewed fragment at `infra/rp11/rp11-capture-pass-a.service`.
 
-**Bounded-execution requirement.** Because no manager-side runtime cap is recommended (§5), the eventual entrypoint must bound every child command it runs (an explicit timeout on each) and, on a handled timeout, attempt the prescribed evidence finalization before exiting. If that cannot be guaranteed, the service design remains **not ready**.
+**Bounded-execution policy accepted 2026-11-24.** Because no manager-side runtime cap is recommended (§5), every child command has a measured, conservative fixed timeout. A timeout stops the pass through the prescribed single finalization path; there is no retry, resume or later act. The exact values and derived whole-pass bound still require measurement and tests. Until that evidence exists, the service design remains **not ready**.
 
 **Mechanism status (2026-11-21).** The capture mechanism now enforces the first half: `ActRequest.timeout_seconds` and `ProcessLauncher.launch(timeout_seconds=...)` are required (no default; positive and finite, else refused). `StreamCaptureLauncher` runs each child in its own process group, and at the monotonic deadline kills the group, drains both channels for at most the existing `drain_seconds`, reaps the child and returns `timed_out`. `CaptureSession` treats that as a started host act (`command-timeout`, `host_act_may_have_run`), admits no record, leaves both stream files unadmitted and takes the one stop transition (exactly one X-3 attempt, no retry). **No timeout value is chosen here or in the mechanism:** the Pass A plan must supply one per command. Tests use a test-only constant that is not a Pass A value. What remains open: an entrypoint that actually uses this, and the values.
 
@@ -103,7 +117,9 @@ Other candidates from the earlier matrix keep their tests: stdio produces no sec
 
 ## 7. Gates (deployment kept separate)
 
-1. **Design acceptance** (Peter): **direction accepted 2026-11-21** (§8 decision 1, launcher `ExecStart` direction). Decisions 2 to 4 (identity, sandbox, start timeout/bounded execution) remain open.
+1. **Design acceptance** (Peter): launcher direction accepted 2026-11-21;
+   identity and bounded-execution policy accepted 2026-11-24. The sandbox,
+   exact timeout values, final digest and build evidence remain open.
 2. **Launcher rebuild and entry implementation, with independent review** (security-sensitive; required before production activation), including the §4 bounded-execution requirement. **Launcher Python 3.14 re-base: done; Codex independent review passed with no blocking findings. Inert G11/G12 bootstrap and its independent Codex review: done and passed (no remaining blocking findings); operational Pass A logic, evidence output and the `run-start` pairing: pending.**
 3. **Fragment and SA-2 build change** in the repository, then focused tests and the installer suites against the real fragment. **Pending.**
 4. **`oracle-test` rehearsal** (**pending**): install, verify and remove the real fragment under a synthetic name, then a genuine pass with consume evidence, running the canonical suites and quoting actual skips. This satisfies no production gate.
@@ -116,15 +132,21 @@ Also open independently: confirm and remove the temporary broad sudo grant noted
 
 1. **Decided: direction accepted by Peter Duscha (2026-11-21).** Retain the **static C launcher** re-based on 3.14. The candidate `ExecStart=/usr/local/libexec/freedom-blades-rp11/rp11-launch --pass A` is preserved as the proposal and is not runnable until a reviewed, digest-bound artifact contains the launcher and the entrypoint.
 
-Still open (decisions 2 to 4):
-2. Accept or revise the **service identity** (non-root; production account to be named).
+2. **Decided 2026-11-24:** service identity `capture`, with the restrictions in
+   the current decision update. This names the account but authorizes no creation
+   or production use.
 3. Accept or revise the **sandbox** candidate in §6 (including `ProtectHome=read-only`).
-4. Accept or revise the **start timeout** candidate (`TimeoutStartSec=90` as a candidate only; no `RuntimeMaxSec=` absent a separate accepted forced-termination design) and the **entrypoint bounded-execution requirement** (§4; if not guaranteed, the design is not ready).
+4. **Policy decided 2026-11-24:** use measured conservative fixed per-command
+   timeouts and safe single-path finalization. `TimeoutStartSec=90` remains a
+   candidate only, `RuntimeMaxSec=` remains absent, and exact values plus the
+   whole-pass bound require rehearsal evidence.
 5. **Production installation** and **production activation** remain two separate steps. Each requires separate, explicit authorization from Peter Duscha (Acceptance Authority) and Peter's attendance. This proposal grants neither. SA-2 rebuild authority belongs to the installation decision.
 
 ## 9. Conflicts with existing contracts
 
 - Originally recorded: the `rp11_launch.py` contract (3.12, target `rp11_entry.py` then absent) conflicted with the 3.14 production baseline and §4 re-based it. **Updated 2026-11-21:** the 3.14 re-base is done in the launcher source and contract; outstanding are the operational Pass A logic in `rp11_entry.py` (only the inert bootstrap exists and is packaged by the source build definition), the unbuilt/uninstalled SA-2 artifact, and the absent production fragment.
-- The D3-R4 text's `User=ubuntu` conflicts with the open production identity; and its `⌈PO-11(d)/1,000⌉+30` condition is a Polkit-window rule that is easily misread as a runtime rule.
+- The D3-R4 text's `User=ubuntu` is superseded by the selected `capture`
+  identity; its `⌈PO-11(d)/1,000⌉+30` condition is a Polkit-window rule that is
+  easily misread as a runtime rule.
 - The previous revision of this proposal conflicted with systemd's documented `Type=exec` behavior; §5 corrects it.
 - No conflict found with the installer: it judges only the consume vector, a single finite `TimeoutStartSec=`, no `[Install]` and the spec's required directives. Any `RuntimeMaxSec=` or sandbox line passes through unjudged, so the installer will not catch a wrong one.

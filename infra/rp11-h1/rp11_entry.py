@@ -1,10 +1,11 @@
-"""RP-11 Pass A capture entry (``rp11_entry.py run --pass A``): INERT in this build.
+"""RP-11 Pass A capture entry (``rp11_entry.py run --pass A``): G8 composition staged, run path unavailable.
 
     /usr/bin/python3.14 -I -S <artifact>/rp11_entry.py run --pass A
 
-This is the module-loading substrate the accepted G12 decision calls for, and
-nothing more. It lives beside ``rp11_h1.py`` in the one SA-2 artifact and loads
-from the same root-owned ``lib/``, by the same rules (``rp11_h1.py`` docstring):
+This is the module-loading substrate the accepted G12 decision calls for, plus the
+one reviewed G8 composition site. It lives beside ``rp11_h1.py`` in the one SA-2
+artifact and loads from the same root-owned ``lib/``, by the same rules
+(``rp11_h1.py`` docstring):
 
 * ``-I -S`` leaves only the standard library on ``sys.path``: no script
   directory, no working directory, no ``PYTHONPATH``, no site, no ``.pth``.
@@ -25,13 +26,18 @@ from the same root-owned ``lib/``, by the same rules (``rp11_h1.py`` docstring):
 The dependency closure is the fixed ``ENTRY_SOURCES`` of ``build.py``; a test
 computes the closure of this file by AST and keeps the two equal.
 
-**Inert.** After the imports the entry reports that the run is not implemented
-and exits 69. It does not call ``create_capture_session`` or
-``StreamCaptureLauncher``, starts no process, opens no connection and touches no
-capture root; wiring them needs the separately gated safety-sentinel amendment.
-The shared first-image and tree checks below are byte-for-byte the ones in
-``rp11_h1.py`` (an AST-equality test keeps them equal), because both files run
-before any artifact code can be imported.
+**G8 composition staged; the run path is unavailable.** ``build_pass_a_session`` is
+the one reviewed arming/session construction site: given a ``GenesisRequest`` it
+returns ``create_capture_session`` over ``PosixCaptureFilesystem``,
+``StreamCaptureLauncher(armed=True)`` and ``SystemUtcClock`` (and the mechanism's
+default read-only verifier). It is **not reachable** from ``main`` or ``entry``:
+nothing calls it, ``run_pass_a`` is neither imported by name nor called, and the
+capture root, activation id, act list, consume journal, exit policy, child
+environment, stream bounds and timeouts (G2-G7, A-2) are not supplied anywhere. After the imports the entry
+still reports that the run is not implemented and exits 69, starting no process,
+opening no connection and touching no capture root. The shared first-image and tree
+checks below are byte-for-byte the ones in ``rp11_h1.py`` (an AST-equality test
+keeps them equal), because both files run before any artifact code can be imported.
 
 Exit status: 64 malformed arguments or ``INVOCATION_ID``, 69 the run is not
 implemented, 70 import failure, 71 descriptors not proved closed, 77 unsafe
@@ -57,8 +63,9 @@ _HEX = frozenset("0123456789abcdef")
 _WRITABLE_BY_OTHERS = stat.S_IWGRP | stat.S_IWOTH
 _MAX_TREE_ENTRIES = 1000  # the real artifact has about 110
 
-#: The one module the entry loads; its closure is ``build.ENTRY_SOURCES``.
+#: The modules the entry loads; their closure is ``build.ENTRY_SOURCES``.
 _LOADED = "tools.phase_5_0_evidence.execution.capture_mechanism"
+_PASS_A = "tools.phase_5_0_evidence.execution.pass_a"
 
 
 def _required_owner():
@@ -237,6 +244,25 @@ def first_image_controls():
     return invocation_id
 
 
+def build_pass_a_session(request):
+    """G8: the one reviewed arming/session construction site (``request``: ``GenesisRequest``).
+
+    Composes the exact production parts and creates the pass's capture root (X-1).
+    Nothing in this module calls it; the imports are local so they run only on a
+    call, after the artifact tree has been checked and ``lib/`` is on ``sys.path``.
+    """
+    from tools.phase_5_0_evidence.execution.boundary import StreamCaptureLauncher
+    from tools.phase_5_0_evidence.execution.capture_mechanism import SystemUtcClock, create_capture_session
+    from tools.phase_5_0_evidence.execution.capture_store import PosixCaptureFilesystem
+
+    return create_capture_session(
+        request,
+        filesystem=PosixCaptureFilesystem(),
+        launcher=StreamCaptureLauncher(armed=True),
+        clock=SystemUtcClock(),
+    )
+
+
 def main(argv):
     sys.dont_write_bytecode = True
     if argv != ACCEPTED_ARGV:
@@ -254,6 +280,7 @@ def main(argv):
         sys.path.append(lib)
     try:
         import tools.phase_5_0_evidence.execution.capture_mechanism as mechanism
+        import tools.phase_5_0_evidence.execution.pass_a  # noqa: F401  loaded, never called
     except ImportError as exc:
         print(f"rp11_entry: import failed: {exc}", file=sys.stderr)
         return EX_SOFTWARE

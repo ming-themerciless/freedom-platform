@@ -28,9 +28,16 @@ ROOT = Path(__file__).resolve().parent.parent
 HERE = ROOT / "infra/rp11-h1"
 ENTRY_PATH = HERE / "rp11_entry.py"
 LOADED = "tools.phase_5_0_evidence.execution.capture_mechanism"
-#: Not imported by the (inert) entry yet; a second closure root so the eventual entry
-#: finds the G11 start-time binding, and the journal modules it uses, in ``lib/``.
+#: G8: the entry also imports (never calls) the Pass A orchestrator, a second closure
+#: root that brings the G11 start-time binding and its journal modules into ``lib/``.
+PASS_A = "tools.phase_5_0_evidence.execution.pass_a"
 START_BINDING = "tools.phase_5_0_evidence.execution.start_binding"
+#: The factory's local imports: the exact production parts it composes.
+FACTORY_IMPORTS = {
+    "tools.phase_5_0_evidence.execution.boundary": {"StreamCaptureLauncher"},
+    "tools.phase_5_0_evidence.execution.capture_mechanism": {"SystemUtcClock", "create_capture_session"},
+    "tools.phase_5_0_evidence.execution.capture_store": {"PosixCaptureFilesystem"},
+}
 INVOCATION_ID = "0123456789abcdef0123456789abcdef"
 RUN = ["run", "--pass", "A"]
 #: Top-level packages of this repository the entry's closure may contain.
@@ -118,17 +125,41 @@ def _closure(start: str) -> tuple[set[str], set[str]]:
     return files, outside
 
 
-def test_the_entry_loads_exactly_the_one_declared_module():
-    assert entry_source._LOADED == LOADED
-    imports = _imported_modules(ENTRY_PATH, "rp11_entry")
-    assert [name for name in imports if name.split(".")[0] in REPO_PACKAGES] == [LOADED]
+ENTRY_TREE = ast.parse(ENTRY_PATH.read_text())  # one tree, so node identities are comparable
+
+
+def _function(name: str) -> ast.FunctionDef:
+    return next(n for n in ENTRY_TREE.body if isinstance(n, ast.FunctionDef) and n.name == name)
+
+
+def test_the_entry_loads_exactly_the_declared_modules_and_the_factory_imports_only_its_parts():
+    assert entry_source._LOADED == LOADED and entry_source._PASS_A == PASS_A
+    main_imports = [
+        alias.name for n in ast.walk(_function("main")) if isinstance(n, ast.Import) for alias in n.names
+    ]
+    assert main_imports == [LOADED, PASS_A]
+    factory = {
+        n.module: {a.name for a in n.names}
+        for n in ast.walk(_function("build_pass_a_session"))
+        if isinstance(n, ast.ImportFrom)
+    }
+    assert factory == FACTORY_IMPORTS
+    # nothing else in the entry imports repository code, at module level or elsewhere
+    tree = ENTRY_TREE
+    inside = {id(n) for f in (_function("main"), _function("build_pass_a_session")) for n in ast.walk(f)}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)) and id(node) not in inside:
+            names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module]
+            assert not any(n.split(".")[0] in REPO_PACKAGES for n in names), names
 
 
 def test_entry_sources_equal_the_ast_closure_of_the_loaded_module_in_both_directions():
     files, third_party = _closure(LOADED)
-    binding_files, binding_third_party = _closure(START_BINDING)
-    files |= binding_files
-    third_party |= binding_third_party
+    for root in (PASS_A, START_BINDING, *FACTORY_IMPORTS):
+        more_files, more_third_party = _closure(root)
+        files |= more_files
+        third_party |= more_third_party
+    assert "tools/phase_5_0_evidence/execution/pass_a.py" in build.ENTRY_SOURCES
     declared = set(build.ENTRY_SOURCES)
     assert files - set(build.SOURCES) == declared, (
         f"missing {sorted(files - set(build.SOURCES) - declared)}, "
@@ -188,17 +219,71 @@ def test_the_shared_constants_equal_rp11_h1s():
         assert getattr(entry_source, name) == getattr(role, name), name
 
 
-def test_the_entry_never_wires_the_capture_session_or_the_launcher():
+def _calls(function: ast.FunctionDef) -> list[tuple[str, int]]:
+    return [
+        (n.func.id if isinstance(n.func, ast.Name) else getattr(n.func, "attr", ""), n.lineno)
+        for n in ast.walk(function)
+        if isinstance(n, ast.Call)
+    ]
+
+
+def test_the_entry_arms_and_builds_a_session_only_inside_the_one_factory():
     """The safety sentinel stays authoritative; this is the entry-side restatement."""
-    text = ENTRY_PATH.read_text()
-    code = "\n".join(
-        line for line in text.splitlines() if not line.lstrip().startswith("#")
-    )
-    tree = ast.parse(text)
-    docstring_free = [n for n in ast.walk(tree) if isinstance(n, (ast.Name, ast.Attribute))]
-    used = {getattr(n, "id", None) or getattr(n, "attr", None) for n in docstring_free}
-    assert not used & {"create_capture_session", "StreamCaptureLauncher", "ActRequest", "subprocess"}
-    assert "subprocess" not in code.replace("starts no process", "")
+    tree = ENTRY_TREE
+    factory = _function("build_pass_a_session")
+    inside = {id(n) for n in ast.walk(factory)}
+    names = [
+        (getattr(n, "id", None) or getattr(n, "attr", None), id(n) in inside)
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.Name, ast.Attribute))
+    ]
+    for guarded in ("create_capture_session", "StreamCaptureLauncher", "PosixCaptureFilesystem", "SystemUtcClock"):
+        assert all(inside_factory for name, inside_factory in names if name == guarded), guarded
+    for forbidden in ("ActRequest", "subprocess", "run_pass_a", "require_start_binding"):
+        assert forbidden not in {name for name, _ in names}, forbidden
+    calls = [name for name, _ in _calls(factory)]
+    assert calls.count("create_capture_session") == 1 and calls.count("StreamCaptureLauncher") == 1
+    armed = [
+        kw for n in ast.walk(factory) if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "StreamCaptureLauncher"
+        for kw in n.keywords
+    ]
+    assert [(k.arg, getattr(k.value, "value", None)) for k in armed] == [("armed", True)]
+    assert "subprocess" not in ENTRY_PATH.read_text().replace("starts no process", "")
+
+
+def test_the_factory_is_unreachable_from_main_and_entry():
+    for name in ("main", "entry", "first_image_controls"):
+        used = {
+            getattr(n, "id", None) or getattr(n, "attr", None)
+            for n in ast.walk(_function(name))
+            if isinstance(n, (ast.Name, ast.Attribute))
+        }
+        assert "build_pass_a_session" not in used, name
+    tree = ENTRY_TREE
+    references = [
+        n for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id == "build_pass_a_session"
+    ]
+    assert references == [], "nothing in the module refers to the factory by name"
+
+
+def test_the_factory_composes_the_exact_production_classes(monkeypatch):
+    import tools.phase_5_0_evidence.execution.boundary as boundary
+    import tools.phase_5_0_evidence.execution.capture_mechanism as mechanism
+    import tools.phase_5_0_evidence.execution.capture_store as store
+
+    seen = {}
+
+    def fake_create(request, **kwargs):
+        seen.update(request=request, **kwargs)
+        return "session"
+
+    monkeypatch.setattr(mechanism, "create_capture_session", fake_create)
+    assert entry_source.build_pass_a_session("request") == "session"
+    assert set(seen) == {"request", "filesystem", "launcher", "clock"}  # default verifier kept
+    assert seen["request"] == "request"
+    assert type(seen["filesystem"]) is store.PosixCaptureFilesystem
+    assert type(seen["clock"]) is mechanism.SystemUtcClock
+    assert type(seen["launcher"]) is boundary.StreamCaptureLauncher and seen["launcher"].armed is True
 
 
 def test_the_entry_requires_root_whoever_runs_it():
@@ -471,10 +556,11 @@ def test_a_good_artifact_imports_only_from_its_own_closure_and_stays_inert(artif
     loaded = [line for line in origins.splitlines() if line]
     lib = str(artifact / "lib")
     assert loaded and all(line.startswith(lib + os.sep) for line in loaded), loaded
-    # The closure plus the role sources' ``application`` package marker it also needs.
+    # The closure, plus the role sources (the journal modules ``start_binding`` uses,
+    # which ``pass_a`` now brings in) and the ``application`` package marker.
     expected = {
         str(artifact / "lib" / source)
-        for source in (*build.ENTRY_SOURCES, "application/__init__.py")
+        for source in (*build.ENTRY_SOURCES, *build.SOURCES)
     }
     assert set(loaded) <= expected, sorted(set(loaded) - expected)
     assert str(artifact / "lib/tools/phase_5_0_evidence/execution/capture_mechanism.py") in loaded

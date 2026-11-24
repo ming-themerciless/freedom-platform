@@ -5,7 +5,7 @@
 Layout of ``<dir>`` (installed as ``/usr/local/libexec/freedom-blades-rp11``):
 
     rp11_h1.py                     the role entry point
-    rp11_entry.py                  the Pass A capture entry (inert; same lib/)
+    rp11_entry.py                  the Pass A capture entry (G8 composition staged; same lib/)
     lib/application/...            the application boundary (unit_control only)
     lib/adapters/systemd/...       the Route 3 adapter
     lib/tools/phase_5_0_evidence/...   the capture entry's fixed dependency closure
@@ -102,9 +102,10 @@ SOURCES = (
 # repository module ``tools.phase_5_0_evidence.execution.capture_mechanism``
 # imports, with its package ``__init__`` files, and nothing third-party. A test
 # computes the closure from the entry's imports by AST and keeps this equal to it.
-# ``execution/start_binding.py`` (the G11 InvocationID/consume ``run-start`` pairing)
-# is not imported by the entry yet; the test adds it as a second closure root so the
-# future entry finds it, and the journal modules it uses, already in ``lib/``.
+# The roots are ``capture_mechanism`` and ``execution/pass_a.py`` (the policy-neutral
+# Pass A orchestrator, which brings in ``start_binding.py``, the G11 InvocationID/consume
+# ``run-start`` pairing, and the journal modules it uses). The entry imports ``pass_a``
+# but calls nothing in it: the run path stays unavailable (exit 69) until G2-G7 land.
 ENTRY_SOURCES = (
     "application/idempotency.py",
     "tools/__init__.py",
@@ -119,6 +120,7 @@ ENTRY_SOURCES = (
     "tools/phase_5_0_evidence/execution/capture_mechanism.py",
     "tools/phase_5_0_evidence/execution/capture_store.py",
     "tools/phase_5_0_evidence/execution/descriptors.py",
+    "tools/phase_5_0_evidence/execution/pass_a.py",
     "tools/phase_5_0_evidence/execution/retention_check.py",
     "tools/phase_5_0_evidence/execution/start_binding.py",
     "tools/phase_5_0_evidence/identity.py",

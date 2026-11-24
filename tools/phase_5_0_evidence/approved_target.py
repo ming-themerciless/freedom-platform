@@ -58,15 +58,15 @@ DISPOSABILITY_STATEMENT = (
     "Peter Duscha, Operations Owner and Acceptance Authority, named and "
     "confirmed this exact disposable target on 2026-09-05. oracle-test is a "
     "dedicated, explicitly disposable test host rebuilt onto the future "
-    "production baseline (Ubuntu 26.04.1 LTS, generic 7.0.0-31 kernel); it is "
+    "production baseline (Ubuntu 26.04.1 LTS); it is "
     "isolated from production and staging, holds no production credential and "
     "no player data, and its whole purpose is destructive drills. Codex "
-    "independently verified the booted generic kernel, PostgreSQL 16 online "
-    "with PostgreSQL 18 down and disabled, ext4 append-attribute support, the "
-    "root capability bounding set, the required system tools, pristine "
-    "template ownership and ACLs, the restricted test role, the absence of any "
-    "P5 evidence object, and a metadata-only scan finding no secret-shaped "
-    "file, and accepted the assignment."
+    "independently verified the host prerequisites and accepted the "
+    "assignment. The environment facts below were rebased on 2026-11-23 to the "
+    "current canonical oracle-test record in "
+    "docs/operations/disposable-test-server.md (Python 3.14, PostgreSQL "
+    "18/main, kernel 7.0.0-1015-oracle); that rebase is a review input, not a "
+    "new host observation and not execution authority."
 )
 
 #: The approved disposable target. **One construction, and no other in the
@@ -79,7 +79,7 @@ APPROVED_TARGET = DisposableTarget(
     postgres_socket_directory="/var/run/postgresql",
     confirmed_disposable=True,
     disposability_evidence=DISPOSABILITY_STATEMENT,
-    postgres_config_directory="/etc/postgresql/16/main",
+    postgres_config_directory="/etc/postgresql/18/main",
 )
 
 
@@ -162,14 +162,14 @@ APPROVED_TARGET_FACTS = ApprovedTargetFacts(
     ipv4="138.2.182.39",
     operating_system="Ubuntu 26.04.1 LTS",
     architecture="x86_64",
-    active_kernel="7.0.0-31-generic",
+    active_kernel="7.0.0-1015-oracle",
     filesystem_root="/var/lib/fb-evidence-p5-0",
     filesystem_type="ext4",
     filesystem_device="/dev/sda1",
-    postgres_instance="16/main",
+    postgres_instance="18/main",
     postgres_port=5432,
     postgres_socket_directory="/var/run/postgresql",
-    postgres_config_directory="/etc/postgresql/16/main",
+    postgres_config_directory="/etc/postgresql/18/main",
     evidence_database="fb_evidence_p5_0",
     confirmed_by="Peter Duscha, Operations Owner",
     confirmed_on="2026-09-05",

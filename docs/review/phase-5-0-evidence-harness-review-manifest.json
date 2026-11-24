@@ -14,7 +14,7 @@
       "-S"
     ],
     "interpreter_path": "/opt/freedom-blades/runtime/venv-web/bin/python",
-    "interpreter_python_version": "3.12",
+    "interpreter_python_version": "3.14",
     "open_modes": [
       "rdonly",
       "wronly",
@@ -247,7 +247,7 @@
         "mode": "0640",
         "name": "",
         "owner": "postgres",
-        "path": "/etc/postgresql/16/main/pg_ident.conf",
+        "path": "/etc/postgresql/18/main/pg_ident.conf",
         "payload_source": ""
       },
       "kind": "restore",
@@ -255,7 +255,7 @@
         "postgres_config_line:pg_ident.conf:freedomcoord->freedom_migration_coordinator"
       ],
       "refusal_required": false,
-      "removes": "/etc/postgresql/16/main/pg_ident.conf",
+      "removes": "/etc/postgresql/18/main/pg_ident.conf",
       "requires_revalidated": "",
       "requires_satisfied": [],
       "run_as": "root",
@@ -281,7 +281,7 @@
         "mode": "0640",
         "name": "",
         "owner": "postgres",
-        "path": "/etc/postgresql/16/main/pg_hba.conf",
+        "path": "/etc/postgresql/18/main/pg_hba.conf",
         "payload_source": ""
       },
       "kind": "restore",
@@ -289,7 +289,7 @@
         "postgres_config_line:pg_hba.conf:freedomcoord->freedom_migration_coordinator"
       ],
       "refusal_required": false,
-      "removes": "/etc/postgresql/16/main/pg_hba.conf",
+      "removes": "/etc/postgresql/18/main/pg_hba.conf",
       "requires_revalidated": "",
       "requires_satisfied": [],
       "run_as": "root",
@@ -1705,7 +1705,7 @@
       "reversed_by": "CL-06"
     }
   ],
-  "confirmation_token": "oracle-test:/var/lib/fb-evidence-p5-0:fb_evidence_p5_0#fc2a9c9b9d581cc7",
+  "confirmation_token": "oracle-test:/var/lib/fb-evidence-p5-0:fb_evidence_p5_0#1bf0a32ce925cb85",
   "evidence_schema_version": 3,
   "exit_classifications": [
     {
@@ -1837,7 +1837,7 @@
         "key": "case_program"
       },
       {
-        "expected": "5ec710a5f8ba3f1f40b33ea3768baef4721cc8a361c4b1681f6e63686a7dd2b6",
+        "expected": "bfd5ee20e927e70a8adcd18d4dd39e7e6c2aa89354ff708be63fc44c7fbc70dd",
         "key": "case_program_sha256"
       },
       {
@@ -1861,7 +1861,7 @@
         "key": "no_site"
       },
       {
-        "expected": "3.12",
+        "expected": "3.14",
         "key": "python_version"
       },
       {
@@ -1985,14 +1985,14 @@
   "harness_name": "phase-5-0-evidence-harness",
   "harness_version": "0.7.0-pre-execution",
   "manifest_schema": "phase-5-0-evidence-review-manifest",
-  "manifest_version": 32,
+  "manifest_version": 34,
   "materializations": [
     {
       "after_step_id": "B6-03",
       "band": "postgresql",
       "byte_count": 975,
       "capture_step_id": "B6-01",
-      "destination": "/etc/postgresql/16/main/pg_hba.conf",
+      "destination": "/etc/postgresql/18/main/pg_hba.conf",
       "evidence_case_ids": [
         "HBA-POST-CHANGE-ORDERING"
       ],
@@ -2030,7 +2030,7 @@
       "band": "postgresql",
       "byte_count": 258,
       "capture_step_id": "B6-01",
-      "destination": "/etc/postgresql/16/main/pg_ident.conf",
+      "destination": "/etc/postgresql/18/main/pg_ident.conf",
       "evidence_case_ids": [
         "HBA-POST-CHANGE-ORDERING"
       ],
@@ -2458,7 +2458,7 @@
       "reason": "\u00a72.12.3's coordinator role, PASSWORD NULL, in the disposable instance only."
     },
     {
-      "file_path": "/etc/postgresql/16/main/pg_hba.conf",
+      "file_path": "/etc/postgresql/18/main/pg_hba.conf",
       "group": "",
       "identifier": "pg_hba.conf:freedomcoord->freedom_migration_coordinator",
       "kind": "postgres_config_line",
@@ -2468,7 +2468,7 @@
       "reason": "\u00a72.12.3's five lines, in that order, above any broader local rule"
     },
     {
-      "file_path": "/etc/postgresql/16/main/pg_ident.conf",
+      "file_path": "/etc/postgresql/18/main/pg_ident.conf",
       "group": "",
       "identifier": "pg_ident.conf:freedomcoord->freedom_migration_coordinator",
       "kind": "postgres_config_line",
@@ -2944,7 +2944,7 @@
     },
     {
       "path": "tools/phase_5_0_evidence/approved_target.py",
-      "sha256": "6cb145bedcb79a3aedb0b55b8b615c3b9b430d6c7bd27c423e5b120789f26e30"
+      "sha256": "c0a2c017a95fb6b7840385b606a5c3ee79207695ed86146c00fea8699b177969"
     },
     {
       "path": "tools/phase_5_0_evidence/binding.py",
@@ -2960,11 +2960,11 @@
     },
     {
       "path": "tools/phase_5_0_evidence/capture_contract.py",
-      "sha256": "437d663e6cf79ac3d4cd62c0cbf7955a8fe9b207c680b144af6b9cd3beb60dd7"
+      "sha256": "4e259baa903838f405469eaf0ba54ae2ecf27f235dfc20bfefc4abb6dd59ae25"
     },
     {
       "path": "tools/phase_5_0_evidence/case_runtime.py",
-      "sha256": "bbadc0a099fd310a9a1ad8ee249d1b4345cdd114138c823ae155176b9b1b31b9"
+      "sha256": "752be241405da7efb9e4a07922fa2a42ded0d913cd58659ac56a25c863d2021c"
     },
     {
       "path": "tools/phase_5_0_evidence/cleanup.py",
@@ -2992,11 +2992,11 @@
     },
     {
       "path": "tools/phase_5_0_evidence/execution/boundary.py",
-      "sha256": "329d000171fb07a91bd2cd5ff072ef7471c09d331efc42b23cb8e185f2397b25"
+      "sha256": "40445f36c7f9c18da3cc817a345950c3a4cfd0b8d4d802f85367be745c840f37"
     },
     {
       "path": "tools/phase_5_0_evidence/execution/capture_mechanism.py",
-      "sha256": "b64d92cb7fcbd6176dee616d312ab24132a5d780cb7ebae7fe04922088c3c14a"
+      "sha256": "4e590ba2ce7de38f0c923205afb79f4923cc6bfda264d11f0f63aa368d7c1af3"
     },
     {
       "path": "tools/phase_5_0_evidence/execution/capture_store.py",
@@ -3004,7 +3004,7 @@
     },
     {
       "path": "tools/phase_5_0_evidence/execution/case_program.py",
-      "sha256": "5ec710a5f8ba3f1f40b33ea3768baef4721cc8a361c4b1681f6e63686a7dd2b6"
+      "sha256": "bfd5ee20e927e70a8adcd18d4dd39e7e6c2aa89354ff708be63fc44c7fbc70dd"
     },
     {
       "path": "tools/phase_5_0_evidence/execution/cli.py",
@@ -3012,7 +3012,7 @@
     },
     {
       "path": "tools/phase_5_0_evidence/execution/descriptors.py",
-      "sha256": "fbf37a86599c502aad81c44b4434dd892f855d6e3ad82d7ab4b822dc7205fb89"
+      "sha256": "4e4bee1347196f05c28abfa5413fd138c6d06f2b2fcceedbdf1f5580e01d2eb7"
     },
     {
       "path": "tools/phase_5_0_evidence/execution/evidence_cli.py",
@@ -3047,6 +3047,10 @@
       "sha256": "430965c81d6fc746d46cb64b6be626c70339047c355ffd28fbb93685b082199a"
     },
     {
+      "path": "tools/phase_5_0_evidence/execution/pass_a.py",
+      "sha256": "e1fccf88c28d979e3ee01c1b34118d01075a03af5d04f06d31aa543d686cfa36"
+    },
+    {
       "path": "tools/phase_5_0_evidence/execution/provisioner.py",
       "sha256": "32ff8d9a9dc0bb4205ce59b2f73f67bb1834bab994d75fbe87aa57b54b8fd0e7"
     },
@@ -3060,11 +3064,15 @@
     },
     {
       "path": "tools/phase_5_0_evidence/execution/retention_check.py",
-      "sha256": "208bec5a251873a5661e692cd9b541db91629051ef72007336e506fac8803349"
+      "sha256": "5522009642505d1a3a33b85f9b35edcaddd534a201da075dbd2d61c179dda3be"
     },
     {
       "path": "tools/phase_5_0_evidence/execution/run_ledger.py",
       "sha256": "735bf449260c2e909bac0f04d102d6802643eb96c42931412fb3f2a7ed953fbc"
+    },
+    {
+      "path": "tools/phase_5_0_evidence/execution/start_binding.py",
+      "sha256": "d92b84866c44c5c4a1220f70d44571ed45ff3d20fb07696f2ed1087a10bfabce"
     },
     {
       "path": "tools/phase_5_0_evidence/expectations.py",
@@ -3108,7 +3116,7 @@
     },
     {
       "path": "tools/phase_5_0_evidence/plan.py",
-      "sha256": "0c76f7d8206fb4b0114ea53587fe9a0c0c348932143c8aee3ec4766315a60fbb"
+      "sha256": "991b4f4ef0f094226df0dd09a47c6ff124c8bb22030467f196caaa6334ac333d"
     },
     {
       "path": "tools/phase_5_0_evidence/provenance.py",
@@ -3132,7 +3140,7 @@
     },
     {
       "path": "tools/phase_5_0_evidence/review_manifest.py",
-      "sha256": "8ac85add33bad4d5ec0e65433870979a2ca748b2434fac07af775dfa7b960290"
+      "sha256": "072dbdb6fac9668a39e058e09ede0ea6761fb325bf313ca519098151200cd3fb"
     },
     {
       "path": "tools/phase_5_0_evidence/rp11_launch.py",
@@ -5303,7 +5311,7 @@
         "CASE-RUNTIME-PREFLIGHT"
       ],
       "expected_refusal": "a missing, duplicated, unreadable or unequal value for any of the eleven keys makes this prerequisite unsatisfied, stops the run before any dependent case, and makes every dependent case INCONCLUSIVE. Both interpreter facts are reviewed target facts supplied from outside; neither is ever learned from this run, and the expected case-program digest comes from the review manifest's covered source rather than from the installed file or from this observation. **The digest covers the interpreter executable's own bytes only** \u2014 not the operating system, the dynamic loader, the shared libraries or the standard library, which are disposable-host prerequisites exactly as they are for every other distribution executable this plan names.",
-      "expected_result": "exit 0; verb=runtime, result=returned, interpreter /opt/freedom-blades/runtime/venv-web/bin/python, interpreter_real equal to the reviewed target fact `case_runtime.EXPECTED_INTERPRETER_REAL_PATH`, python_version 3.12, interpreter_sha256 equal to the reviewed target fact `case_runtime.EXPECTED_INTERPRETER_SHA256`, isolated=yes, no_site=yes, third_party_importable=no, case_program equal to the installed path this plan names, and case_program_sha256 equal to the review manifest's covered-source digest for tools/phase_5_0_evidence/execution/case_program.py. **All eleven are compared before this step may be satisfied**, and exit 0 alone does not satisfy it.",
+      "expected_result": "exit 0; verb=runtime, result=returned, interpreter /opt/freedom-blades/runtime/venv-web/bin/python, interpreter_real equal to the reviewed target fact `case_runtime.EXPECTED_INTERPRETER_REAL_PATH`, python_version 3.14, interpreter_sha256 equal to the reviewed target fact `case_runtime.EXPECTED_INTERPRETER_SHA256`, isolated=yes, no_site=yes, third_party_importable=no, case_program equal to the installed path this plan names, and case_program_sha256 equal to the review manifest's covered-source digest for tools/phase_5_0_evidence/execution/case_program.py. **All eleven are compared before this step may be satisfied**, and exit 0 alone does not satisfy it.",
       "identity_name": "",
       "mutation_ids": [],
       "nothing_created_statuses": [],
@@ -9988,7 +9996,7 @@
         "mode": "",
         "name": "",
         "owner": "",
-        "path": "/etc/postgresql/16/main",
+        "path": "/etc/postgresql/18/main",
         "payload_source": ""
       },
       "establishes_ownership_by_creation": [],
@@ -10479,7 +10487,7 @@
     },
     {
       "name": "active_kernel",
-      "value": "7.0.0-31-generic"
+      "value": "7.0.0-1015-oracle"
     },
     {
       "name": "filesystem_root",
@@ -10495,7 +10503,7 @@
     },
     {
       "name": "postgres_instance",
-      "value": "16/main"
+      "value": "18/main"
     },
     {
       "name": "postgres_port",
@@ -10507,7 +10515,7 @@
     },
     {
       "name": "postgres_config_directory",
-      "value": "/etc/postgresql/16/main"
+      "value": "/etc/postgresql/18/main"
     },
     {
       "name": "evidence_database",
@@ -10525,14 +10533,14 @@
   "target_fields": {
     "confirmed_disposable": true,
     "database_name": "fb_evidence_p5_0",
-    "disposability_evidence": "Peter Duscha, Operations Owner and Acceptance Authority, named and confirmed this exact disposable target on 2026-09-05. oracle-test is a dedicated, explicitly disposable test host rebuilt onto the future production baseline (Ubuntu 26.04.1 LTS, generic 7.0.0-31 kernel); it is isolated from production and staging, holds no production credential and no player data, and its whole purpose is destructive drills. Codex independently verified the booted generic kernel, PostgreSQL 16 online with PostgreSQL 18 down and disabled, ext4 append-attribute support, the root capability bounding set, the required system tools, pristine template ownership and ACLs, the restricted test role, the absence of any P5 evidence object, and a metadata-only scan finding no secret-shaped file, and accepted the assignment.",
+    "disposability_evidence": "Peter Duscha, Operations Owner and Acceptance Authority, named and confirmed this exact disposable target on 2026-09-05. oracle-test is a dedicated, explicitly disposable test host rebuilt onto the future production baseline (Ubuntu 26.04.1 LTS); it is isolated from production and staging, holds no production credential and no player data, and its whole purpose is destructive drills. Codex independently verified the host prerequisites and accepted the assignment. The environment facts below were rebased on 2026-11-23 to the current canonical oracle-test record in docs/operations/disposable-test-server.md (Python 3.14, PostgreSQL 18/main, kernel 7.0.0-1015-oracle); that rebase is a review input, not a new host observation and not execution authority.",
     "host": "oracle-test",
-    "postgres_config_directory": "/etc/postgresql/16/main",
+    "postgres_config_directory": "/etc/postgresql/18/main",
     "postgres_socket_directory": "/var/run/postgresql",
     "root_path": "/var/lib/fb-evidence-p5-0"
   },
   "target_identity": "oracle-test:/var/lib/fb-evidence-p5-0",
-  "target_identity_digest": "fc2a9c9b9d581cc79c7f9bff15712ce4d2e958123c0f8b9d1a6fc2bc2b1308ff",
+  "target_identity_digest": "1bf0a32ce925cb8572113304e97e8562a4edc821f9fe06b59a89ec6cb0e2cb5f",
   "unresolved": [
     {
       "band": "filesystem",

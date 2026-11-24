@@ -1,4 +1,4 @@
-"""G12: the inert Pass A entry and its fixed module-loading substrate (SA-2 artifact).
+"""G12/G8: the Pass A entry (composition staged, run path unavailable) and its fixed module-loading substrate (SA-2 artifact).
 
 Synthetic artifacts only. Nothing here runs the capture mechanism, a host act, SSH,
 rsync or a systemd unit, and nothing rebuilds or installs the production artifact.
@@ -23,9 +23,15 @@ HERE = ROOT / "infra/rp11-h1"
 INVOCATION_ID = "0123456789abcdef0123456789abcdef"
 ARGV = ["run", "--pass", "A"]
 LOADED = "tools.phase_5_0_evidence.execution.capture_mechanism"
-#: Not imported by the (inert) entry yet; a second closure root so the eventual entry
-#: finds the G11 start-time binding, and the journal modules it uses, in ``lib/``.
+#: G8: the entry imports (never calls) the Pass A orchestrator, a second closure root;
+#: the G11 start-time binding and its journal modules it uses are a third.
+PASS_A = "tools.phase_5_0_evidence.execution.pass_a"
 START_BINDING = "tools.phase_5_0_evidence.execution.start_binding"
+#: The factory's local imports are closure roots too.
+FACTORY_ROOTS = (
+    "tools.phase_5_0_evidence.execution.boundary",
+    "tools.phase_5_0_evidence.execution.capture_store",
+)
 SHARED = (
     "invocation_id_from",
     "_initial_environment",
@@ -90,7 +96,7 @@ def _closure(start: str) -> tuple[set[str], set[str]]:
     return files, third_party
 
 
-def test_the_entry_loads_exactly_one_module_and_nothing_third_party():
+def test_the_entry_loads_exactly_two_modules_and_nothing_third_party():
     tree = ast.parse(entry_source.read_text(encoding="utf-8"))
     imported = [
         alias.name
@@ -99,16 +105,19 @@ def test_the_entry_loads_exactly_one_module_and_nothing_third_party():
         for alias in node.names
         if alias.name.split(".")[0] in ("tools", "application", "adapters")
     ]
-    assert imported == [LOADED]
-    assert f'_LOADED = "{LOADED}"' in entry_source.read_text(encoding="utf-8")
+    assert imported == [LOADED, PASS_A]
+    text = entry_source.read_text(encoding="utf-8")
+    assert f'_LOADED = "{LOADED}"' in text and f'_PASS_A = "{PASS_A}"' in text
 
 
 def test_entry_sources_are_exactly_the_entrys_dependency_closure():
     files, third_party = _closure(LOADED)
-    binding_files, binding_third_party = _closure(START_BINDING)
-    files |= binding_files
-    third_party |= binding_third_party
+    for root in (PASS_A, START_BINDING, *FACTORY_ROOTS):
+        more_files, more_third_party = _closure(root)
+        files |= more_files
+        third_party |= more_third_party
     assert third_party == set()
+    assert "tools/phase_5_0_evidence/execution/pass_a.py" in build.ENTRY_SOURCES
     assert len(build.ENTRY_SOURCES) == len(set(build.ENTRY_SOURCES))
     # both directions: nothing missing, nothing extra
     assert files - set(build.SOURCES) == set(build.ENTRY_SOURCES)
@@ -168,11 +177,13 @@ def test_the_entry_requires_root_ownership_whoever_runs_it():
     assert module._required_owner() == 0
 
 
-# -- inertness -----------------------------------------------------------------
+# -- the run path stays unavailable ----------------------------------------------
+# The G8 factory (``build_pass_a_session``) is the only place that names the session
+# constructor and the launcher; the checks below exclude it and ``test_rp11_entry``
+# proves it is unreachable.
 
 _FORBIDDEN_NAMES = {
-    "create_capture_session",
-    "StreamCaptureLauncher",
+    "run_pass_a",
     "subprocess",
     "socket",
     "ctypes",
@@ -188,12 +199,17 @@ _FORBIDDEN_NAMES = {
     "spawnv",
     "run_act",
 }
+_FACTORY_ONLY = {"create_capture_session", "StreamCaptureLauncher", "PosixCaptureFilesystem", "SystemUtcClock"}
 
 
 def test_the_entry_cannot_reach_the_mechanism_a_host_act_or_a_connection():
     tree = ast.parse(entry_source.read_text(encoding="utf-8"))
+    factory = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "build_pass_a_session")
+    skip = {id(n) for n in ast.walk(factory)}
     used = set()
     for node in ast.walk(tree):
+        if id(node) in skip:
+            continue
         if isinstance(node, ast.Name):
             used.add(node.id)
         elif isinstance(node, ast.Attribute):
@@ -204,7 +220,7 @@ def test_the_entry_cannot_reach_the_mechanism_a_host_act_or_a_connection():
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             lowered = node.value.lower()
             assert "rsync" not in lowered and "ssh" not in lowered.split(), node.value
-    assert used & _FORBIDDEN_NAMES == set()
+    assert used & (_FORBIDDEN_NAMES | _FACTORY_ONLY) == set()
     # the only module it loads, it loads by import and never calls into
     calls = {
         n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", "")
@@ -266,7 +282,7 @@ def _run(artifact: Path, tmp_path: Path, *, argv=ARGV, env=None, cwd=None, trust
     return proc, (json.loads(out.read_text()) if out.exists() else None)
 
 
-def test_the_entry_is_inert_and_loads_only_from_the_fixed_directory(artifact, tmp_path):
+def test_the_run_path_is_unavailable_and_loads_only_from_the_fixed_directory(artifact, tmp_path):
     marker = tmp_path / "PLANTED-CODE-RAN"
     hostile_path = _plant(tmp_path / "hostile-path", marker)
     hostile_cwd = _plant(tmp_path / "hostile-cwd", marker)

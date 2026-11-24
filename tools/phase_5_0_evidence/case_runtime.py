@@ -108,7 +108,7 @@ from .targets import REPOSITORY_ROOT, DisposableTarget
 # The runtime, named once
 # ---------------------------------------------------------------------------
 
-#: The Python 3.12 interpreter `docs/operations/disposable-test-server.md`
+#: The Python 3.14 interpreter `docs/operations/disposable-test-server.md`
 #: documents for `oracle-test`. One absolute path, stated here and nowhere else.
 INTERPRETER_PATH = "/opt/freedom-blades/runtime/venv-web/bin/python"
 
@@ -121,7 +121,7 @@ INTERPRETER_FLAGS = ("-I", "-S")
 
 #: The major/minor version preflight requires. Recorded as text because that is
 #: how the case program reports it and how the manifest pins it.
-INTERPRETER_PYTHON_VERSION = "3.12"
+INTERPRETER_PYTHON_VERSION = "3.14"
 
 #: The sentinel `EXPECTED_INTERPRETER_SHA256` carries until a maintainer states
 #: the fact and the independent reviewer verifies it on the disposable host.

@@ -836,7 +836,7 @@ def _prctl_get_securebits() -> int:
 
     ## Why it is allowed to use `ctypes` when nothing else is
 
-    Python 3.12 exposes no `prctl` in `os`, so the smallest mechanism that can
+    Python 3.14 exposes no `prctl` in `os`, so the smallest mechanism that can
     read the value at all is a foreign call. This is a **narrow exception**,
     justified solely by the already-approved `PR_GET_SECUREBITS` evidence
     contract, and it is bounded mechanically rather than by convention:

@@ -42,10 +42,10 @@ missing=[w+"  "+n for w,n in rows if w+"  "+n not in out]
 for m in missing:
     print("missing_from_build_stdout",m)
 sys.exit(31 if missing else 0)' /var/tmp/<RUN>-evidence/build.stdout <<'OUTPUTS'
-04218ed2d834c1c7abe417a850831d8956f087711befd692eefc2e61b2668572  rp11-launch
-8c1fedee1c717b17a14d7c746669ffcec3c41d155e5cc4c63d24a5f2527cd188  rp11-launch.x86_64.listing
+7e2b7bde86a5ec8aaf112c3377fbdb3c862ffcb7acfff944c965b1aa0fddc67e  rp11-launch
+498108223928ddaa1eb5d57cca15c7628f5bd30f331bb1930f10a68dcf7cdfc9  rp11-launch.x86_64.listing
 5a8b058084edcb1e3f6f7ddea13b60da6af71102300ea276225ae4ab0e8bc34d  rp11-launch.map
-b37280d53eecce690210021a793cde5d5b73a8f9c027d187e4bd1338e7e27706  launch.s
+3d65779e718d2cd1e8d199fd1db619712237613df975992ade1b8d48cd57786e  launch.s
 OUTPUTS
   status=$?
   printf 'S8.3 independent-output-check exit=%s\n' "$status"

@@ -839,6 +839,8 @@ PERMITTED_PHASE_5_0_EVIDENCE_HARNESS = frozenset({
     "tools/phase_5_0_evidence/execution/capture_mechanism.py",
     "tools/phase_5_0_evidence/execution/capture_store.py",
     "tools/phase_5_0_evidence/execution/retention_check.py",
+    "tools/phase_5_0_evidence/execution/start_binding.py",
+    "tools/phase_5_0_evidence/execution/pass_a.py",
 })
 
 
@@ -871,8 +873,17 @@ PERMITTED_DISPOSABLE_SERVER_REMEDIATION = frozenset({
 #: as a side effect of a repository-wide sweep, which broke the hash-pinned R3
 #: contract and its tests; the line is restored byte for byte (313 bytes). One
 #: file, not a prefix.
+#: 2026-11-23: the G1 re-derivation (accepted for review, not run-authorized) re-pinned
+#: five runner resources and `r5run.py` to the Python 3.14 / PostgreSQL 18 target. These
+#: six files are named individually; this is not a directory wildcard.
 PERMITTED_R5_RUNNER_RESTORATION = frozenset({
     "tools/r5_runner/blocks/s04b-sync.argv",
+    "tools/r5_runner/blocks/s01.sh",
+    "tools/r5_runner/blocks/s04c.sh",
+    "tools/r5_runner/blocks/s04d.sh",
+    "tools/r5_runner/blocks/s08.sh",
+    "tools/r5_runner/blocks/s11.sh",
+    "tools/r5_runner/r5run.py",
 })
 
 
@@ -907,6 +918,7 @@ PERMITTED_ROUTE_3_ADAPTER = frozenset({
     "infra/rp11-h1/build.py",
     "infra/rp11-h1/requirements.lock",
     "infra/rp11-h1/requirements.txt",
+    "infra/rp11-h1/rp11_entry.py",  # the Pass A entry (G12; G8 composition factory, 2026-11-23)
     "infra/rp11-h1/rp11_h1.py",
     "infra/rp11-h1/rp11_roles.py",
     # Route 3 Polkit `tmpfiles.d` prerequisite (2026-10-14): the fragment and its

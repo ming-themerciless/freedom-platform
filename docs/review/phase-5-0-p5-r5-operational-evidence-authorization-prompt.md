@@ -1,14 +1,31 @@
 # DRAFT — NOT AUTHORIZED — P5.0-R5 harness-facsimile feasibility-evidence pass on `oracle-test`
 
-> # DRAFT ONLY. NOT ACCEPTED. NOT AUTHORIZED. DO NOT EXECUTE.
+> # DRAFT. NOT AUTHORIZED. DO NOT EXECUTE.
 >
-> ## G1 status, 2026-11-22 — candidate command set NOT ACCEPTED; topology conflict unresolved
+> ## G1 status, 2026-11-23 — current commands and value layer accepted for review; NOT authorized to run
 >
-> A Codex independent review of the candidate command set (decision G1 of the
-> [Pass A entry contract](rp11-pass-a-entry-contract-proposal.md), which carries
-> the dated disposition) found it **not acceptable**. This file stays **DRAFT /
-> NOT ACCEPTED / NOT AUTHORIZED**. Nothing below can be run, and nothing in this
-> note or in the editorial corrections made with it accepts any command.
+> Peter Duscha approved on 2026-11-23 that G1 be fully re-derived and accepted
+> for the current Python 3.14 / PostgreSQL 18 disposable target (decision G1 of
+> the [Pass A entry contract](rp11-pass-a-entry-contract-proposal.md)). The
+> commands and the value layer of this draft (§4.3 pins, the R5 assignment's pin
+> tables, runner and tests) are **accepted for review** at review-manifest
+> **version 34**, aggregate `2abad119…24cf` (version 33, aggregate
+> `f8dc8d4a…e596`, is superseded history). **They are NOT authorized to run:**
+> no A-2, no AUTH-SYNC, AUTH-READ or AUTH-DBREAD grant, no source acquisition, no
+> operational Pass A, no production or staging access, no SA-2 build or
+> installation, and no service activation or probe. This acceptance does not
+> close any unresolved RP gate: G4 (topology), G8 (safety sentinel), RP-11, C-11,
+> the child environment, A-6 and the clean-pinned-tree and owner inputs stay
+> open. Codex's independent review of the version-33 re-derivation passed; the
+> version-34 refresh changed only `pass_a.py`'s docstring (G8 consistency) and
+> its Codex review passed after remediation, with canonical full suites and the
+> final `oracle-test` rerun still pending until Codex runs them.
+> This file remains **DRAFT / NOT AUTHORIZED**: nothing below can be run.
+>
+> **History, 2026-11-22 (superseded as to the value layer; retained).** A Codex
+> independent review of the earlier candidate command set found it **not
+> acceptable**, and the host-role conflict below remains true of the commands'
+> two-host form.
 >
 > * **Host-role conflict (blocking; no approved topology).** Everywhere this
 >   draft says *repository host* it means the host holding
@@ -59,16 +76,33 @@
 >   handback block is now `rp11-capture-binding/2` with `invocation_id` (accepted
 >   G11, §14); the target facts below are brought to the current disposable-server
 >   record or marked observational; see the next bullet.
-> * **Harness source still stale (blocking, not remediated here).** The
->   repository's harness constants still encode the old target: cluster `16/main`
->   and config directory `/etc/postgresql/16/main`, kernel `7.0.0-31-generic`
->   (`tools/phase_5_0_evidence/approved_target.py`, `plan.py`) and interpreter
->   `3.12` (`case_runtime.INTERPRETER_PYTHON_VERSION`). The pins, `PIN.dry_run`
->   figures, manifest version and reviewed digests derived from that source are
->   therefore not re-pinned. Re-pinning is a code, manifest and re-review change
->   outside this documentation correction. Every fact value in §3 and §6.2 that
->   differs from the harness source is **observational and subject to
->   revalidation**, not a replacement for that source.
+> * **G1 value re-derivation, 2026-11-23 (accepted for review; not an
+>   authorization).** The canonical dry-run generator
+>   (`python -m tools.phase_5_0_evidence.execution.cli --manifest-out … --render …`,
+>   no `--execute`) was run twice to scratch with byte-identical manifest, plan
+>   and output before the checked-in manifest and concrete plan were written.
+>   §4.3 and the R5 assignment's pin tables, runner `PINS`, five resources and
+>   `tests/test_r5_runner.py` were re-derived together from those bytes. The
+>   earlier intermediate draft's finding that version 32 was stale against four
+>   covered sources (`capture_contract.py`, `execution/boundary.py`,
+>   `execution/capture_mechanism.py`, `execution/retention_check.py`) is
+>   resolved by version 33 (current: version 34), and the version-32 harness constants (Python `3.12`,
+>   PostgreSQL `16/main`, kernel `7.0.0-31-generic`) are rebased to the current
+>   canonical record (Python 3.14, PostgreSQL `18/main` with
+>   `/etc/postgresql/18/main`, kernel `7.0.0-1015-oracle`) from repository facts
+>   only; no host was observed or mutated. The harness's own confirmation token
+>   changes with the target identity (§3). The approval does not grant A-2,
+>   AUTH-SYNC, AUTH-READ, AUTH-DBREAD, source acquisition, an operational Pass A,
+>   any production or staging access, SA-2 build or installation, service
+>   activation or any probe.
+> * **Commands still carry the two-host form (blocking G4 dependency).** The §5
+>   `rsync` and every `ssh oracle-test` step below are the repository-host form
+>   that the 2026-11-22 review rejected. Their Python 3.14 interpreter path and
+>   the A1 expected values are current, but rewriting them for the single-host
+>   topology depends on §0b, which Peter has not accepted (G4); no command was
+>   rewritten on a guess. Facts in §3 and §6.2 that are observational remain
+>   subject to revalidation by Band A1 and are not a replacement for the harness
+>   source.
 >
 > Proposed identifier: **C-P5.0-R5-OP1**. Claude drafted this on 2026-09-24
 > under the repository-only assignment in
@@ -265,7 +299,7 @@ or by a value that "looks right".**
 | **Target** | `oracle-test`: the approved disposable host, IPv4 `138.2.182.39`, kernel nodename `Test`, Ubuntu `26.04.1 LTS`, `x86_64`, recorded kernel `7.0.0-1015-oracle` (observed 2026-11-07 per the disposable-server document; observational, revalidated by A1-02; the historical `7.0.0-31-generic` is superseded). Confirmed disposable by Peter Duscha as Operations Owner on 2026-09-05. Under MD-2 it is the only host whose facts count ([MD-2](project-review-2026-09-23-p5-r5-md2-host-facts-baseline.md)) |
 | **Approved disposable run root** | `/var/lib/fb-evidence-p5-0`, the only canonical run root `R`. V11 and `/opt/freedom-blades/evidence` were withdrawn |
 | **Approved disposable database** | `fb_evidence_p5_0` on the PostgreSQL 18.6 cluster `18/main` (the only cluster; PostgreSQL 16 was removed, per the disposable-server document), port `5432`, socket directory `/var/run/postgresql`. **Never** `freedom_test` or `freedom_dev` |
-| **Harness confirmation token** | `oracle-test:/var/lib/fb-evidence-p5-0:fb_evidence_p5_0#fc2a9c9b9d581cc7` (manifest v21) |
+| **Harness confirmation token** | `oracle-test:/var/lib/fb-evidence-p5-0:fb_evidence_p5_0#1bf0a32ce925cb85` (manifest v34, unchanged from v33; the token is derived from the approved target's identity, which the 2026-11-23 rebase to `18/main` and `7.0.0-1015-oracle` changed; it was `…#fc2a9c9b9d581cc7` through v32) |
 | **Operator** | `⟨MI.operator⟩`. The proposal is **Claude, as implementing operator**, following the C-P5.0-LAB-I3-R8 precedent. The authorization must name the operator. Nobody else may issue a host command under this prompt |
 | **Independent Reviewer** | **Codex**: technical, security, operational and evidence review, before execution (this draft) and after it (the returned evidence). Codex does not operate the pass and cannot approve its own recommendation |
 | **Authorization owner** | **Peter Duscha**, as Acceptance Authority, Operations Owner and Data Owner. Only he authorizes host access, synchronization, controlled mutation, database work, recovery rehearsals and the supervised reboot. Only he decides P5.0-R5 closure after independent review |
@@ -367,11 +401,26 @@ usable while RP-11 is unmet**: every host command of either pass, including the
 synchronization, must be issued through the reviewed capture mechanism of §9.5,
 and a granted row does not substitute for it.
 
-### 4.3 Repository pins — resolved from the repository on 2026-09-24
+### 4.3 Repository pins — resolved on 2026-09-24; re-derived 2026-11-23 (G1) and refreshed the same day (G8) to manifest version 34
 
-These are the values the drafting pass observed. **None of the
+**Re-derivation of 2026-11-23.** Every row of the table below was re-derived
+together from the tree at `HEAD` `5906d69c…` for review-manifest **version 33**
+(then refreshed to **version 34** for the G8 docstring fix to `pass_a.py`; the
+table below holds the version-34 values, and version 33's are history only:
+aggregate `f8dc8d4a…e596`, manifest JSON `74dbcc9b…7e97`, concrete plan
+`924d6054…d087`), after the 2026-09-24 values (version 21) had been overtaken
+by versions 22 to 34. The versions 22 to 25 paragraph that follows is the historical account of
+why the original values went stale and is kept for that purpose only. The same
+re-derivation moved the R5 assignment's pin tables, runner and tests (assignment
+§3, its G1 re-derivation note). The `PIN.dry_run` figures come from the
+canonical dry-run generator, run twice with identical output. The test counts
+cited in the handoff are in the G1 handback. **This re-derivation is accepted for
+review only: it does not accept any command for execution, does not satisfy A-1
+(which pins the prompt's own digest) and grants no AUTH row or A-2.**
+
+These are the values the drafting pass observed (before the re-pin above). **None of the
 C-P5.0-R5-OP1-R1, C-P5.0-R5-OP1-R2, C-P5.0-R5-OP1-R3, C-P5.0-R5-OP1-R4 and
-C-P5.0-R5-OP1-R5 and C-P5.0-R5-RP11-I1-R1 remediations re-derived them**; each changed documentation only (I1-R1 also added one diagnostic test module, which is not a covered source). **Four later repository passes changed covered sources and so made
+C-P5.0-R5-OP1-R5 and C-P5.0-R5-RP11-I1-R1 remediations re-derived them**; each changed documentation only (I1-R1 also added one diagnostic test module, which is not a covered source). **Four repository passes changed covered sources and so made
 `PIN.manifest_version`, `PIN.reviewed_digest`, `PIN.manifest_json_sha256`,
 `PIN.concrete_plan_sha256` and `PIN.covered_sources` stale:** C-P5.0-R5-RP11-I1
 (manifest version 22, review-input digest `adeabe17…`),
@@ -392,22 +441,22 @@ Codex's re-review.
 
 | Pin | Value at drafting | Note |
 |---|---|---|
-| `PIN.head` | `2fb1d6fd88013752d53af76fc97b4db07fc31181` | branch `docs/platform-plan` |
-| `PIN.worktree` | **unresolved: the tree is uncommitted.** `git status --porcelain=v1` lists 140 entries, including every Package 5.0 harness change since `HEAD` | **`⟨MI.pinned_commit⟩` is required.** The maintainer commits, or directs a commit of, the exact reviewed tree on a non-default branch, and Codex reviews that commit. A0-02 then requires `HEAD == ⟨MI.pinned_commit⟩` and a porcelain status that is empty. This pass never synchronizes an unpinned working tree |
-| `PIN.manifest_version` | `21` | `tools/phase_5_0_evidence/review_manifest.py` |
-| `PIN.reviewed_digest` | `ac5ffb3cc1a077618d8fc0590a803ec42282a3a1011d4edfc9ff1eafb5137dad` | Review input only, **not approved**. Pass A pins `⟨PIN.reviewed_digest_A⟩`, which equals this value **only if** the satisfied RP-11 changes no covered source; otherwise it is the new reviewed digest. Pass B needs a new digest (RP-1 changes covered source), so Pass B pins `⟨PIN.reviewed_digest_B⟩` |
-| `PIN.capture_tool_sha256` | **unresolved: no reviewed RP-11 mechanism exists.** The returned, unaccepted implementation computes a candidate value; it is review input only and is not pinned here | **Scope (proposed by C-P5.0-R5-RP11-I1-R1 for review; unchanged by I1-R3).** The digest covers exactly these seven complete source files, as whole files and in this order: `tools/phase_5_0_evidence/capture_contract.py`, `errors.py`, `execution/boundary.py`, `execution/capture_mechanism.py`, `execution/capture_store.py`, `execution/descriptors.py` and `execution/retention_check.py`. Its construction is the one the returned source defines as schema `rp11-capture-tool/1`: the SHA-256 of the canonical JSON document `{"schema": "rp11-capture-tool/1", "sources": [[path, SHA-256 of that file's bytes], …]}` in that fixed order. **Why whole modules:** the mechanism's process start lives in `boundary.py` and its one link call site lives in `descriptors.py`, and both modules also carry reviewed code for other harness callers. No reviewed canonical construction exists for a digest over part of a module, and none is invented here. **Consequence, stated plainly:** any change to any byte of any of the seven files — including a change to `boundary.py` or `descriptors.py` that is unrelated to RP-11 — produces a different digest and invalidates the pin, and requires a new review before either pass can use it. A0-08, B0-08 |
-| `PIN.manifest_json_sha256` | `ea5d22c1bf6826f0296d5c2ee4b2295331d612eab6d250c0772fdf1068b6cd66` | `docs/review/phase-5-0-evidence-harness-review-manifest.json` |
-| `PIN.concrete_plan_sha256` | `5437147546f268e3d1b81c84270ff9a7255d2a079a9534da775dd5a478840cfd` | `docs/review/phase-5-0-evidence-harness-concrete-plan.md` |
-| `PIN.covered_sources` | 48 covered sources. All 48 match the manifest's `source_digests` byte for byte | checked by a read-only script at drafting |
+| `PIN.head` | `5906d69c03d437a584d795231cb78cbcd00350c7` (observed 2026-11-23; was `2fb1d6fd…` at the 2026-09-24 drafting) | branch `docs/platform-plan`. Orientation only: the binding identities are the digests below and `⟨MI.pinned_commit⟩` |
+| `PIN.worktree` | **unresolved: the tree is uncommitted.** `git status --porcelain=v1` lists 44 entries at the 2026-11-23 version-34 refresh (the RP-11 slice documents, tests, the regenerated manifest and plan, and the covered sources the version-33 refresh changed or added, including `pass_a.py`, which the entry now packages and imports but never calls, and `start_binding.py`) | **`⟨MI.pinned_commit⟩` is required.** The maintainer commits, or directs a commit of, the exact reviewed tree on a non-default branch, and Codex reviews that commit. A0-02 then requires `HEAD == ⟨MI.pinned_commit⟩` and a porcelain status that is empty. This pass never synchronizes an unpinned working tree |
+| `PIN.manifest_version` | `34` | `tools/phase_5_0_evidence/review_manifest.py` (`MANIFEST_VERSION = 34`; the G8 documentation/source-consistency refresh, 2026-11-23; version 33 was the current-target and G11 source refresh of the same day and version 32 the launcher Python 3.14 refresh of 2026-11-21) |
+| `PIN.reviewed_digest` | `2abad1191770e423df28bd2a2b82d76d44df5e69c6989d2dce147ea0935224cf` | The review-manifest digest of version 34, as printed on the concrete plan's `Review-manifest digest:` line. Review input only, **not approved by this value**. Pass A pins `⟨PIN.reviewed_digest_A⟩`, which equals this value **only if** no covered source changes before the pinned commit; any change to a covered source (including the RP-11 admission work of §4.4) produces a new manifest version and a new digest that a further amended draft must pin. Pass B needs a new digest (RP-1 changes covered source), so Pass B pins `⟨PIN.reviewed_digest_B⟩` |
+| `PIN.capture_tool_sha256` | **unresolved: no accepted RP-11 mechanism exists, so no value is pinned.** Candidate (review input only, **not** a pin; computed 2026-11-23 by calling `capture_contract.capture_tool_sha256` on the seven current files' bytes): `f831d38c884822cd261b2da2c99da3d4958474d21eee2691b3e5e08028ea5134` | **Scope (proposed by C-P5.0-R5-RP11-I1-R1 for review; unchanged by I1-R3).** The digest covers exactly these seven complete source files, as whole files and in this order: `tools/phase_5_0_evidence/capture_contract.py`, `errors.py`, `execution/boundary.py`, `execution/capture_mechanism.py`, `execution/capture_store.py`, `execution/descriptors.py` and `execution/retention_check.py`. Its construction is the one the returned source defines as schema `rp11-capture-tool/1`: the SHA-256 of the canonical JSON document `{"schema": "rp11-capture-tool/1", "sources": [[path, SHA-256 of that file's bytes], …]}` in that fixed order. **Why whole modules:** the mechanism's process start lives in `boundary.py` and its one link call site lives in `descriptors.py`, and both modules also carry reviewed code for other harness callers. No reviewed canonical construction exists for a digest over part of a module, and none is invented here. **Consequence, stated plainly:** any change to any byte of any of the seven files — including a change to `boundary.py` or `descriptors.py` that is unrelated to RP-11 — produces a different digest and invalidates the pin, and requires a new review before either pass can use it. A0-08, B0-08 |
+| `PIN.manifest_json_sha256` | `fe0cff8a8e6160bc6e1187d182b33461b318c99dddfaf04acf53f95f17520e29` (377,527 bytes) | `docs/review/phase-5-0-evidence-harness-review-manifest.json`; `"manifest_version": 34` |
+| `PIN.concrete_plan_sha256` | `ff17aa3da5fce67da8f62d06c727d3e5147484679868c09de55933c26e5964a9` (178,764 bytes) | `docs/review/phase-5-0-evidence-harness-concrete-plan.md`; its `Review-manifest digest:` line is `PIN.reviewed_digest` |
+| `PIN.covered_sources` | 65 covered sources: the 55 harness modules of `COVERED_SOURCES` (the 53 of version 32 plus `execution/pass_a.py` and `execution/start_binding.py`) plus the 10 `RP11_LAUNCH_COVERED` launcher files. The manifest's `source_digests` holds 65 entries | the generator reads every covered source's bytes; `tests/phase_5_0_evidence/test_concrete_plan.py::test_the_covered_sources_are_exactly_the_package` requires the enumeration to equal the package on disk. The four digests that version 32 held stale (`capture_contract.py`, `execution/boundary.py`, `execution/capture_mechanism.py`, `execution/retention_check.py`) are current in version 33 and unchanged at 34 (which moves only `pass_a.py`'s docstring). The seven-file `PIN.capture_tool_sha256` candidate above covers a different, seven-file set |
 | `PIN.journal_py` | `b9ecf08c87ad0928e8d31436fd3ab1e5f0a4442ae451c80364ef09cbea93d0a9` | the MD-5 classifier |
 | `PIN.unit_sandbox_py` | `edd360fbd01aaded56ee29bdf61af5cb9ae0882d0f990ad8f4e620fd8fc7a92c` | S4-3's four conditions |
-| `PIN.case_program_py` | `5ec710a5f8ba3f1f40b33ea3768baef4721cc8a361c4b1681f6e63686a7dd2b6` | installed byte-for-byte as `R/bin/case` |
+| `PIN.case_program_py` | `bfd5ee20e927e70a8adcd18d4dd39e7e6c2aa89354ff708be63fc44c7fbc70dd` | installed byte-for-byte as `R/bin/case` |
 | `PIN.cli_py` | `485f960f1dee97feaef4a6c1f8e002c27262a427db470cd91c5dd36f057cb4d1` | the only `--execute` entry point |
 | `PIN.reservation_py` | `aa37107590755a6307b79bea7e37b1cca45e44709f99a54f1e390e09dc52340b` | holds `REAL_EXECUTION_REFUSAL` |
-| `PIN.dry_run` | `steps planned 138`, `mutations declared 43`, `cleanup steps derived 47`, `unresolved conflicts 4 (C-7, C-S4-3)`, twelve unconfirmed facts (`interpreter_sha256`, `interpreter_real_path`, `E7.{cap_amb,cap_bnd,cap_eff,cap_inh,cap_prm,gid,groups,no_new_privs,securebits,uid}`), `executable False` | the local dry run at drafting, which executed nothing |
+| `PIN.dry_run` | `steps planned 138`, `mutations declared 43`, `cleanup steps derived 47`, `unresolved conflicts 4 (C-7, C-S4-3)`, twelve unconfirmed facts (`interpreter_sha256`, `interpreter_real_path`, `E7.{cap_amb,cap_bnd,cap_eff,cap_inh,cap_prm,gid,groups,no_new_privs,securebits,uid}`), `executable False` | Re-derived 2026-11-23 for version 34 (identical to version 33's figures: only a docstring moved) **from the canonical dry-run generator** (`python -m tools.phase_5_0_evidence.execution.cli --manifest-out … --render …`, no `--execute`), run twice with byte-identical manifest, plan and output: 138 plan steps, 43 mutations, 47 cleanup steps, 4 unresolved entries (C-7, C-S4-3), the twelve unconfirmed facts above and `executable False`. A0-05's live output is the authority; the dry-run CLI now prints further lines (materializations, binding sites, ownership baselines, external contracts) that this row does not pin. The values are `PIN.dry_run` only once A0-05 has been run and shown to equal them |
 | `PIN.prompt_sha256` | set by Codex at review of the exact amended bytes; a file cannot contain its own digest. The digests Codex reviewed on 2026-09-27 (`9bd4f5b5…`, then `7a73d3da…`, then `308e788c…`, then `026edf43…`, then `20fa2ce0…`) are superseded by this amendment | A0-03 |
-| `PIN.interpreter` | `/opt/freedom-blades/runtime/venv-web/bin/python`, flags `-I -S`, Python 3.14 | AGENTS.md "Running the suites". The disposable-server document records Ubuntu Python 3.14.4 in that virtualenv; observational, revalidated by A1-13. The harness source constant still says `3.12` (see the G1 status note), so this pin is not satisfied until the source is re-pinned |
+| `PIN.interpreter` | `/opt/freedom-blades/runtime/venv-web/bin/python`, flags `-I -S`, Python 3.14 | AGENTS.md "Running the suites". The disposable-server document records Ubuntu Python 3.14.4 in that virtualenv; observational, revalidated by A1-13. Versions 33 and 34 record `3.14` in `case_runtime.INTERPRETER_PYTHON_VERSION` (manifest `case_runtime.interpreter_python_version` and the concrete plan's `python version` row), the Pass B case program's expectation; it is not read by any Pass A step. The approved-target facts (`18/main`, `/etc/postgresql/18/main`, `7.0.0-1015-oracle`) were rebased from the repository's canonical disposable-server record, not from a host observation |
 
 ### 4.4 Repository prerequisites — unmet today; each blocks the bands named
 
@@ -472,7 +521,7 @@ this against the record schema.
 | `OP.protected_hardlinks` | integer | `1` | stop |
 | `OP.interpreter_real_path` | an absolute normalized path | **corroborative only** (A1-C). Compared with the pinned `MI.target_fact_statement`; **never an RP-1 input** | stop if not absolute, or if it differs from the statement (reported, never used to amend the statement) |
 | `OP.interpreter_sha256` | 64 lowercase hex | **corroborative only** (A1-C), as above | stop if unreadable or different, as above |
-| `OP.interpreter_version` | `3.14.x` (observed 3.14.4; observational, subject to revalidation) | major.minor `3.14`. The source constant `case_runtime.INTERPRETER_PYTHON_VERSION` still reads `3.12` and must be re-pinned before this can be compared as written | stop |
+| `OP.interpreter_version` | `3.14.x` (observed 3.14.4; observational, subject to revalidation) | major.minor `3.14`. The source constant `case_runtime.INTERPRETER_PYTHON_VERSION` reads `3.14` at version 34, so the two compare as written | stop |
 | `OP.sudo_root_status.*`, `OP.sudo_capsh.*` | the shapes in `capability._E7_FACT_SHAPES` (`uid`/`gid`/`no_new_privs` decimal; `groups` comma-separated decimal; five masks 1–16 hex; `securebits` 1–2 hex) | **corroborative only** (A1-C). They describe a `sudo`-launched `grep` and a `sudo`-launched `capsh` process, **not** the final interpreted E7 process, and are **never an RP-1 input** | stop if unparseable; a difference from the statement is reported, never reconciled |
 | `OP.capsh` | owner, mode and package version | present, `root:root`, not group- or world-writable | stop |
 | `OP.systemd_identity` | `systemctl --version` first line and the `dpkg-query` version | recorded. RP-2 input | — |
@@ -755,7 +804,7 @@ fail-closed stops, and the operator's only act on a stop is to record it.
 Exact command, issued once from the repository host:
 
 ```bash
-ssh oracle-test "cd /opt/freedom-blades/platform && sudo /opt/freedom-blades/runtime/venv-web/bin/python -m tools.phase_5_0_evidence.execution.cli --execute --confirm-target 'oracle-test:/var/lib/fb-evidence-p5-0:fb_evidence_p5_0#fc2a9c9b9d581cc7' --reviewed-digest '⟨PIN.reviewed_digest_B⟩' --run-id '⟨MI.run_id⟩' --reservation '⟨MI.reservation_id⟩' --author '⟨MI.operator⟩' --at '⟨OP.at : YYYY-MM-DDTHH:MM:SSZ, the client UTC time at issue⟩' --reservation-owner '⟨MI.reservation_owner⟩' --requested-at '⟨OP.requested_at : YYYY-MM-DDTHH:MM:SSZ⟩' --deadline '⟨MI.deadline⟩' --recovery-owner '⟨MI.recovery_owner⟩' --observed-by '⟨MI.operator⟩' --processes-ended true --transactions-settled true --transient-units-inactive true --run-record-out '⟨MI.run_record_path⟩'"
+ssh oracle-test "cd /opt/freedom-blades/platform && sudo /opt/freedom-blades/runtime/venv-web/bin/python -m tools.phase_5_0_evidence.execution.cli --execute --confirm-target 'oracle-test:/var/lib/fb-evidence-p5-0:fb_evidence_p5_0#1bf0a32ce925cb85' --reviewed-digest '⟨PIN.reviewed_digest_B⟩' --run-id '⟨MI.run_id⟩' --reservation '⟨MI.reservation_id⟩' --author '⟨MI.operator⟩' --at '⟨OP.at : YYYY-MM-DDTHH:MM:SSZ, the client UTC time at issue⟩' --reservation-owner '⟨MI.reservation_owner⟩' --requested-at '⟨OP.requested_at : YYYY-MM-DDTHH:MM:SSZ⟩' --deadline '⟨MI.deadline⟩' --recovery-owner '⟨MI.recovery_owner⟩' --observed-by '⟨MI.operator⟩' --processes-ended true --transactions-settled true --transient-units-inactive true --run-record-out '⟨MI.run_record_path⟩'"
 ```
 
 * The launcher must be effective UID 0; `sudo` supplies that, and the

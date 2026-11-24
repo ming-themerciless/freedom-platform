@@ -651,7 +651,17 @@ MANIFEST_SCHEMA = "phase-5-0-evidence-review-manifest"
 #: target fact, launcher file, schema or covered-set membership changes.
 #: `is_executable` remains `False`. A digest remains review input, not
 #: execution approval.
-MANIFEST_VERSION = 34
+#: **35** is the single-host Pass A plan refresh, 2026-11-24 (not an execution
+#: approval). One module joins the covered set: `execution/pass_a_plan.py`, the
+#: finite local-only Pass A plan with its fixed argv, complete non-inherited child
+#: environments (G2/G3), the accepted `capture` identity as policy data and the
+#: measured per-command timeouts with the derived whole-pass bound (G7). It
+#: replaces the withdrawn two-host command model as data; it starts nothing and is
+#: not imported by the entry or the build closure, and `run_pass_a` still has no
+#: caller. 65 covered sources become 66; no vector, step, target fact, launcher
+#: file or schema changes. `is_executable` remains `False`. A digest remains
+#: review input, not execution approval.
+MANIFEST_VERSION = 35
 
 #: **27.** The `infra/rp11-launch/` files whose bytes the manifest pins
 #: (proposal §5.2, §5.11): image source, build definition, toolchain and
@@ -706,6 +716,7 @@ COVERED_SOURCES = (
     "tools/phase_5_0_evidence/execution/materializer.py",
     "tools/phase_5_0_evidence/execution/participants.py",
     "tools/phase_5_0_evidence/execution/pass_a.py",
+    "tools/phase_5_0_evidence/execution/pass_a_plan.py",
     "tools/phase_5_0_evidence/execution/provisioner.py",
     "tools/phase_5_0_evidence/execution/provisioning_cli.py",
     "tools/phase_5_0_evidence/execution/recovery_store.py",

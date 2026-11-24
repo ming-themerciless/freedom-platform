@@ -267,6 +267,12 @@ EXECUTION_TIER_NAMES = {
     # handed. It imports no `subprocess`, constructs no session (no default
     # factory), reads no environment value and is inert on import.
     "pass_a",
+    # **RP-11 Pass A plan data, 2026-11-24.** The finite local-only plan, its fixed
+    # argv, complete child environments, `capture` identity policy and measured
+    # timeouts. It is in this tier because it builds `ActRequest`/`GenesisRequest`
+    # values for the mechanism. It imports no `subprocess`, starts nothing, opens no
+    # file, reads no environment value, creates no account and is inert on import.
+    "pass_a_plan",
     # **C-P5.0-LAB-V6-R1.** The r6 §7 directory items, applied. It is in this
     # tier because it is the one module in the repository that creates a
     # provisioned directory: exclusive `mkdirat`, `fchown` and `fchmod` on the

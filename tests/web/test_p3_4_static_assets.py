@@ -841,6 +841,7 @@ PERMITTED_PHASE_5_0_EVIDENCE_HARNESS = frozenset({
     "tools/phase_5_0_evidence/execution/retention_check.py",
     "tools/phase_5_0_evidence/execution/start_binding.py",
     "tools/phase_5_0_evidence/execution/pass_a.py",
+    "tools/phase_5_0_evidence/execution/pass_a_plan.py",
 })
 
 

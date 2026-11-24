@@ -50,8 +50,8 @@ ASSIGNMENT = ROOT / R.ASSIGNMENT
 R5_AMENDMENTS = ((
     'want=(30,"28a4f4c2b7596e9042f6b12a34f5684b3499a3fafd997e306fe25f6798e8a526",True,'
     '"c9afaf7cd32a398e9714e39779fef522d6af053ec71cd2c403e0a4c2eaba4b5c",False)',
-    'want=(34,"2abad1191770e423df28bd2a2b82d76d44df5e69c6989d2dce147ea0935224cf",True,'
-    '"fe0cff8a8e6160bc6e1187d182b33461b318c99dddfaf04acf53f95f17520e29",False)',
+    'want=(35,"79ca24be090bdab8f0172fc06da2aa5ecd52a527e37e474c148e5aac186377f6",True,'
+    '"a6d98d043d9cedeca2db4dfc6bd1b4335b5f9f40dfa3ffc588d20d10c83878bc",False)',
 ), (
     "04218ed2d834c1c7abe417a850831d8956f087711befd692eefc2e61b2668572  rp11-launch\n",
     "7e2b7bde86a5ec8aaf112c3377fbdb3c862ffcb7acfff944c965b1aa0fddc67e  rp11-launch\n",

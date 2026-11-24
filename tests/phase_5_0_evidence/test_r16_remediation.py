@@ -870,7 +870,9 @@ def test_the_manifest_pins_whether_a_contract_resolves_anything(plan) -> None:
     # listing, `expected.sha256` and image/listing/`launch.s` digests are
     # re-derived from an `oracle-test` build. The cc1.v baseline, linker map
     # digest, XD stream digest and every vector stay unchanged.
-    assert body["manifest_version"] == MANIFEST_VERSION == 34
+    # Version 35 (2026-11-24) adds the finite local-only Pass A plan module to the covered
+    # set; nothing else here moves.
+    assert body["manifest_version"] == MANIFEST_VERSION == 35
     assert body["supplied_observations"]["schema_version"] == 3
     assert "Band 7 supplied observations only" in (
         body["supplied_observations"]["importer_scope"]

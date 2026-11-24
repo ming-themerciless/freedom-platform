@@ -73,7 +73,7 @@ RUN_ID_PATTERN = re.compile(r"p5-r5-fresh-\d{8}T\d{6}Z-[0-9a-f]{8}")
 #: whose own identity is supplied on the command line from the assignment.
 PINS: dict[str, tuple[str, int]] = {
     "tools/r5_runner/blocks/s01.sh": (
-        "dd304376528941ad6611cb1b07f92166a8a622dbeb44f4077c7a37951734ed2b",
+        "49d0addb8e9feb29ba42fefe2bb21c614ced760a65fb9223775131e7c0593590",
         11516,
     ),
     "tools/r5_runner/blocks/s02.sh": (
@@ -101,11 +101,11 @@ PINS: dict[str, tuple[str, int]] = {
         232,
     ),
     "tools/r5_runner/blocks/s04c.sh": (
-        "e62e2144a0269eb0dd506252d5ae3d5ba1c001797743722cd18fe21ecb07d6f4",
+        "03c3f0e8b264a645e115587b6e73e94e66b883b04092615648b3d86cfe4f454b",
         4420,
     ),
     "tools/r5_runner/blocks/s04d.sh": (
-        "7ce0e1bb89d7b8da05b21d4719472156c5e78660bcb1be5bbc4575d4021f6e22",
+        "77495f03d061e87cca89cdedad05a8a43d2dbb8d2b778ba32be94ef570358f53",
         8708,
     ),
     "tools/r5_runner/blocks/s05.sh": (
@@ -129,7 +129,7 @@ PINS: dict[str, tuple[str, int]] = {
         2029,
     ),
     "tools/r5_runner/blocks/s11.sh": (
-        "db1eac19f04e5026aa72ac20d96e6b1e9b38ddc6b2aa60daf6bab888c0408051",
+        "94b397ef2dc6bff5e3fd959bc1e370d568af0c7acf70d576d333f41c2aa87c1a",
         10066,
     ),
     "tools/r5_runner/blocks/s12-start.sh": (
@@ -141,7 +141,7 @@ PINS: dict[str, tuple[str, int]] = {
         1283,
     ),
     "tests/test_r5_runner.py": (
-        "8dc229e5b6b61c8b6726a4b316df2b247d21516ea4d1c5297a3fd256523b110d",
+        "e93a16adc1ee7e4f2cb7c977c38c33bc12b80f9754978043f34e98e4d14de0d5",
         36986,
     ),
 }

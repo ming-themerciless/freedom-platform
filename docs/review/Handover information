@@ -57,7 +57,34 @@ this slice. Full details and limitations are in the
 paragraph above and the figures in it are the earlier helper slice and are kept
 as history.
 
+### G4 disposable-host result — 2026-11-24 (filesystem acceptance FAILED)
+
+Peter explicitly authorized disposable-host actions for this check. The reviewed
+slice is committed locally as `592678b` but **not pushed or published**, so
+exact-source acquisition stays blocked on maintainer publication; no source was
+acquired.
+
+On `oracle-test` preflight, the checkout and both capture roots were absent;
+`/opt/freedom-blades` is `ubuntu:ubuntu` 755 and `/var/lib` is `root:root` 755.
+The `capture` account was created with system `useradd`: uid 992, gid 978, locked,
+home `/nonexistent`, shell `/usr/sbin/nologin`, only its primary `capture` group,
+no sudo. Exclusive `mkdir --mode=700` as `capture` for `/var/lib/fb-rp11-capture-a`
+and `-b` each returned rc 1, *Permission denied*; both roots remain absent.
+
+**Result: G4 filesystem acceptance FAILED.** Direct `/var/lib` leaves conflict
+with exclusive creation by the non-root `capture` account. No remedy is selected.
+**Decision needed (Peter):** (a) change the path or parent design, (b) a narrowly
+provisioned parent, or (c) revise the exclusive-create lifecycle/security. Do not
+weaken `/var/lib` and do not silently precreate the roots.
+
+Production was untouched. No source acquired, no `run_pass_a`, A-2/AUTH, SA-2,
+service, activation or probe. No code or pin changed.
+
 ### Immediate next action
+
+Maintainer: publish `592678b` (or its successor) to the canonical remote, and
+decide the G4 remedy above. Until then, no acquisition, operational or
+`capture`-identity measurement step can proceed.
 
 ### Next clean-session instruction
 

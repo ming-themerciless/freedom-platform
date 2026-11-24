@@ -36,6 +36,23 @@ remain incomplete. No account or path was created. No A-2/AUTH grant, source
 acquisition, `run_pass_a` call, operational pass, production/staging access,
 SA-2 build/install, activation or probe is authorized.
 
+**G4 disposable-host result (2026-11-24): filesystem acceptance FAILED.** With
+Peter's explicit disposable-host authorization, `oracle-test` was checked. The
+reviewed slice is committed locally as `592678b` but not pushed, so exact-source
+acquisition remains blocked on maintainer publication; no source was acquired.
+Preflight: checkout and roots absent; `/opt/freedom-blades` `ubuntu:ubuntu` 755;
+`/var/lib` `root:root` 755. The `capture` account was created via system
+`useradd` (uid 992, gid 978, locked, home `/nonexistent`, shell
+`/usr/sbin/nologin`, primary group only, no sudo). Exclusive `mkdir --mode=700` as
+`capture` for `/var/lib/fb-rp11-capture-a` and `-b` each returned rc 1 *Permission
+denied*; the roots remain absent. Direct `/var/lib` leaves conflict with exclusive
+creation by non-root `capture`. **Decision needed:** change the path/parent design,
+use a narrowly provisioned parent, or revise the exclusive-create
+lifecycle/security; no remedy is selected, `/var/lib` must not be weakened and the
+roots must not be silently precreated. Production untouched; no source
+acquisition, `run_pass_a`, A-2/AUTH, SA-2, service, activation or probe. No code or
+pin change.
+
 **Pass A plan slice (2026-11-24; implemented, tested, measured with synthetic stand-ins, accepted for review only).**
 `tools/phase_5_0_evidence/execution/pass_a_plan.py` holds the finite local-only Pass A plan
 (49 fixed argv), four complete child environments (G2/G3), the `capture` identity as policy

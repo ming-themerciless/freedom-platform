@@ -95,3 +95,21 @@ runner `PINS` and digest, the four runner blocks and `tests/test_r5_runner.py`.
 
 **Next action:** the separately gated steps in item 1, in the maintainer's order. The plan module,
 its tests and the v35 pins have been independently reviewed.
+
+## Follow-up 2026-11-24 — G4 disposable-host result (filesystem acceptance FAILED)
+
+With Peter's explicit disposable-host authorization, `oracle-test` was checked. The slice is
+committed locally as `592678b` but not pushed, so exact-source acquisition remains blocked on
+maintainer publication. Preflight: checkout and roots absent; `/opt/freedom-blades`
+`ubuntu:ubuntu` 755; `/var/lib` `root:root` 755. `capture` was created by system `useradd` (uid
+992, gid 978, locked, home `/nonexistent`, shell `/usr/sbin/nologin`, primary group only, no
+sudo). Exclusive `mkdir --mode=700` as `capture` for `/var/lib/fb-rp11-capture-a` and `-b` each
+returned rc 1 *Permission denied*; the roots remain absent.
+
+**G4 filesystem acceptance failed:** the direct `/var/lib` leaves conflict with exclusive
+creation by non-root `capture`. This also means the "wrong identity" and "paths untouched"
+limitations above still stand: nothing was measured under `capture` or at the selected paths.
+**Decision needed, none selected:** change the path/parent design, a narrowly provisioned parent,
+or a revised exclusive-create lifecycle/security. Do not weaken `/var/lib` or silently precreate
+the roots. Production untouched; no source acquired, `run_pass_a`, A-2/AUTH, SA-2, service,
+activation or probe. No code or pin changed, so the results and manifest v35 above are unaffected.

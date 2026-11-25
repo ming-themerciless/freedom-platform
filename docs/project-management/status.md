@@ -8,6 +8,30 @@ remain authorized.
 
 ### RP-11 implementation continuation — current as of 2026-11-25
 
+**Current RP-11 position (2026-11-25, after Codex review). This supersedes every
+dated RP-11 statement here that differs, including those saying the manifest is
+v37, G7 is unmeasured, source acquisition is absent or unauthorized, or Codex
+review is pending.**
+
+* The authorized exact-source acquisition of `b279de11978308b60ee9d491b43952cf9f113871`
+  from the canonical HTTPS remote is complete: clean, detached, `fsck` clean; its v37
+  manifest and plan hashes match that tree.
+* G7 is measured as `capture` (uid 992, gid 978, groups `[978]`): all 24 quiet and
+  loaded runs accepted. The outcome is manifest **v38**, aggregate
+  `2a7564bb71efbe467d4ccc504fcbfd4f98cf78545aef8c66e866d821a82e1ca9`.
+* Codex independent review is done, including the advisory-lock remediation: no
+  blocking source finding remains.
+* **Remaining gate:** commit, publish and re-acquire the v38 successor, then validate
+  the new advisory-lock code canonically on the remote host. None of these has been
+  done. `b279de1` is superseded as a pass candidate because covered bytes changed.
+* Not claimed or authorized: A-2/AUTH, `run_pass_a`, SA-2, any service, staging or
+  production.
+
+Record: [change log C-RP11-G7-V38-20261125](change-log.md); measurement detail:
+[plan handback follow-ups 7 and 8](../review/rp11-pass-a-plan-handback.md).
+
+**G7 real-identity measurement (2026-11-25; for Codex review, not accepted).** The unchanged plan ran as `capture` (uid 992) against the acquired clean detached checkout `b279de1` and the selected roots: 12 quiet and 12 loaded 51-step runs, every exit as planned, X-3 succeeded and X-4 valid in all 24. Slowest T-local 0.88 s, T-dry 12.99 s, T-read 2.58 s, so the per-command timeouts stay **44 / 161 / 30 s** (the slower synthetic samples still govern). One loaded finalization took **22.38 s** against a 30 s allowance, so the finalization allowance is now **112 s** and the whole-pass bound **2548 s** (49 steps; 2638 s with corroboration). Manifest **v38**. The change moves covered bytes, so `b279de1` is no longer the tree a pass would be pinned to. `run_pass_a` was not called and nothing operational is authorized. Details: [plan handback follow-up 7](../review/rp11-pass-a-plan-handback.md). Next: Codex review. **Review remediation (same date):** the harness now serializes real-path runs with a `flock` on the capture parent (local focused suites 6727 passed, 20 skipped; v38 unchanged). Codex's `b279de1` run of the four `laboratory.lock` sentinel tests on `oracle-test` (4 failed, each solely on the pre-existing lock file) shows those failures are host-baseline, not regressions. The new lock code has not been transferred to or tested on `oracle-test`; canonical remote validation needs a successor commit, publication and re-acquisition first: see handback follow-up 8.
+
 **G4 host filesystem acceptance (2026-11-25): complete for disposable feasibility; final suite evidence recorded.** On `oracle-test`, under the `root:capture` mode 0770 parent `/var/lib/fb-rp11`, the
 unmodified `CaptureRootStore` / `PosixCaptureFilesystem` ran as the capture account
 (UID 992, GID 978) for both `/var/lib/fb-rp11/capture-a` and

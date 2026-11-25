@@ -558,6 +558,29 @@ def test_the_measured_whole_pass_took_far_less_than_its_bound() -> None:
     assert len(P.MEASURED_WHOLE_PASS_SECONDS) >= P.MIN_SAMPLES
 
 
+def test_every_timeout_and_allowance_covers_the_real_identity_measurements() -> None:
+    """The ``capture``/selected-path set confirms the synthetic-derived timeouts."""
+    assert set(P.REAL_MEASUREMENTS) == set(P.CLASSES)
+    for name, klass in P.CLASSES.items():
+        real = P.REAL_MEASUREMENTS[name]
+        assert len(real.samples) == 24
+        assert klass.timeout_seconds >= klass.multiplier * max(real.samples)
+    assert len(P.MEASURED_REAL_FINALIZATION_SECONDS) == 24
+    assert P.GENESIS_ALLOWANCE_SECONDS >= P.DEFAULT_MULTIPLIER * P.MEASURED_REAL_MAX_GENESIS_SECONDS
+    assert P.PER_ACT_ALLOWANCE_SECONDS >= P.DEFAULT_MULTIPLIER * P.MEASURED_REAL_MAX_PER_ACT_OVERHEAD_SECONDS
+    assert P.FINALIZATION_ALLOWANCE_SECONDS == math.ceil(
+        P.DEFAULT_MULTIPLIER * max(P.MEASURED_REAL_FINALIZATION_SECONDS)
+    ) == 112.0
+
+
+def test_the_per_command_timeouts_and_the_whole_pass_bound_are_the_reviewed_values() -> None:
+    assert {name: k.timeout_seconds for name, k in P.CLASSES.items()} == {
+        "T-local": 44.0, "T-dry": 161.0, "T-read": 30.0
+    }
+    assert P.build_pass_a_plan().whole_pass_bound_seconds == 2548.0
+    assert P.build_pass_a_plan(include_corroboration=True).whole_pass_bound_seconds == 2638.0
+
+
 # --- G7 behavior: stop, timeout and single finalization over the plan's own acts -------
 
 

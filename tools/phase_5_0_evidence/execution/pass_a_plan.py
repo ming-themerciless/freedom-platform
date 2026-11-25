@@ -26,6 +26,13 @@
   theirs, so the multiplier decides for those two classes. ``whole_pass_bound_seconds`` is the finite worst case: every act runs to
   its deadline, drains fully and pays its allowance. ``require_operational`` still
   refuses a plan whose used classes are unmeasured.
+  On 2026-11-25 the unchanged plan was also run as ``capture`` against the acquired
+  checkout and the two selected roots (24 whole runs; ``REAL_MEASUREMENTS``). Every
+  real sample is faster than the synthetic worst case, so the synthetic samples still
+  govern the per-command timeouts (the more conservative set; the sets are not merged).
+  That run set did move one constant: a loaded finalization took 22.38 s, too close to its
+  30 s allowance, so the finalization allowance is now the same multiplier times the slowest
+  measured finalization.
 * **A scoped parent for the capture roots (G4).** The roots are ``/var/lib/fb-rp11/capture-a``
   and ``-b``. ``PARENT_CONTRACT`` states the pre-provisioned parent (``root:capture``, ``0770``:
   root and the ``capture`` group have full access; others nothing)
@@ -34,7 +41,8 @@
   directories against it and touch no filesystem. ``/var/lib`` is never widened. ``0770`` replaces
   the earlier ``0730`` because the unmodified ``CaptureRootStore`` opens every ancestor
   ``O_RDONLY`` and fsyncs the parent entry, which needs group read; the directory is purpose-built
-  and ``capture`` is its only group member. Host validation remains outstanding.
+  and ``capture`` is its only group member. Both roots passed host filesystem acceptance
+  on 2026-11-25.
 * **The capture identity as data.** ``CAPTURE_IDENTITY`` states the accepted ``capture``
   account policy and ``identity_problems`` judges an *observed* account against it. Nothing
   here creates, modifies or looks up an account.
@@ -42,7 +50,7 @@
 Nothing in this module starts a process, opens a file, arms a launcher, builds a session
 or calls ``run_pass_a``. The entry does not import it: it is a value layer that a later,
 separately authorized wiring step consumes. It lives beside ``pass_a`` in the execution
-tier and its bytes are covered by the review manifest (version 37), so changing a command, an environment or a measurement moves the
+tier and its bytes are covered by the review manifest (version 38), so changing a command, an environment or a measurement moves the
 reviewed digest and every pin derived from it.
 """
 
@@ -376,10 +384,25 @@ MIN_SAMPLES = 10
 DEFAULT_MULTIPLIER = 5.0
 #: Mechanism work around each act, not part of any child's deadline: stream and record
 #: publication with their barriers (per act), and the genesis and finalization sequences.
-#: Conservative allowances, not measurements of this host.
+#: These are terms of the stated whole-pass bound, not enforced deadlines.
+#: Measured 2026-11-25 on ``oracle-test`` as ``capture`` at the selected roots (the 24 runs
+#: of ``REAL_MEASUREMENTS``): slowest genesis and slowest per-act overhead (``run_act``
+#: minus the child's launch), and every run's finalization (``complete()``: X-3, release,
+#: X-4), 12 quiet then 12 loaded. Genesis and per-act allowances are fixed values well over
+#: ``DEFAULT_MULTIPLIER`` times their maxima; finalization had one 22.38 s outlier (cause
+#: not recorded), so its allowance is derived by that multiplier, floor 30 s.
+MEASURED_REAL_MAX_GENESIS_SECONDS = 0.4266
+MEASURED_REAL_MAX_PER_ACT_OVERHEAD_SECONDS = 0.7016
+MEASURED_REAL_FINALIZATION_SECONDS: tuple[float, ...] = (
+        0.2859, 0.3111, 0.3808, 0.2076, 0.2954, 0.2842, 0.2825, 0.3768,
+        0.2843, 0.3594, 0.366, 0.4188, 1.3173, 1.279, 1.3091, 0.9067,
+        1.0956, 1.2049, 1.1065, 1.3224, 1.3022, 1.5315, 4.5895, 22.3802,
+)
 GENESIS_ALLOWANCE_SECONDS = 30.0
 PER_ACT_ALLOWANCE_SECONDS = 10.0
-FINALIZATION_ALLOWANCE_SECONDS = 30.0
+FINALIZATION_ALLOWANCE_SECONDS = float(
+    max(30, math.ceil(max(MEASURED_REAL_FINALIZATION_SECONDS) * DEFAULT_MULTIPLIER))
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -487,8 +510,42 @@ MEASUREMENTS: Mapping[str, Measurement] = {
         ),
     ),
 }
-#: Largest single-channel output of any measured step, per class (bytes).
-MEASURED_MAX_OUTPUT_BYTES: Mapping[str, int] = {'T-local': 645, 'T-dry': 1456, 'T-read': 5026}
+#: Confirmation set, 2026-11-25: the same plan, unchanged, run as ``capture`` (uid 992, gid
+#: 978, no supplementary group) against ``SOURCE_CHECKOUT`` at commit ``b279de1`` and the
+#: roots ``capture-a``/``-b`` alternately; 12 quiet runs (1-minute load 0.6-1.1) then 12
+#: loaded runs (5.4-7.8), 51 steps each, all with the planned exit, no timeout, bound
+#: excess or incomplete stream, every finalization ``X-3`` succeeded and ``X-4`` valid.
+#: Same sample definition and rounding as ``MEASUREMENTS``. Slowest whole run
+#: 55.2878 s. Not used to derive timeouts: a test holds every timeout at or above the
+#: multiplier times these.
+REAL_MEASUREMENTS: Mapping[str, Measurement] = {
+    "T-local": Measurement(
+        "Test",
+        (
+        0.072, 0.0652, 0.0753, 0.0719, 0.0749, 0.0983, 0.0752, 0.0697,
+        0.0746, 0.0795, 0.0765, 0.0644, 0.4173, 0.2037, 0.3008, 0.5817,
+        0.3996, 0.4915, 0.7914, 0.2829, 0.8788, 0.3173, 0.2136, 0.2929,
+        ),
+    ),
+    "T-dry": Measurement(
+        "Test",
+        (
+        2.4588, 2.5793, 2.6611, 2.7738, 2.3917, 2.5998, 2.6788, 2.7724,
+        2.4233, 2.4961, 2.5064, 2.5187, 10.2957, 12.7827, 10.1018, 11.7731,
+        11.4959, 12.0934, 12.3004, 11.6829, 12.3831, 12.9892, 10.8294, 10.777,
+        ),
+    ),
+    "T-read": Measurement(
+        "Test",
+        (
+        0.2624, 0.2036, 0.2069, 0.1981, 0.2679, 0.2126, 0.1998, 0.2174,
+        0.1985, 0.2685, 0.2873, 0.272, 2.5789, 1.2208, 1.2922, 1.6857,
+        1.2822, 1.3934, 1.7908, 1.2826, 1.4226, 1.8882, 1.2993, 1.4863,
+        ),
+    ),
+}
+#: Largest single-channel output of any measured step in either set, per class (bytes).
+MEASURED_MAX_OUTPUT_BYTES: Mapping[str, int] = {'T-local': 700, 'T-dry': 1456, 'T-read': 5026}
 #: Wall-clock seconds of each of the 24 whole runs, mechanism included (51 steps).
 MEASURED_WHOLE_PASS_SECONDS: tuple[float, ...] = (
         15.3766, 13.112, 15.3307, 12.8934, 15.9907, 14.684, 13.1153, 12.8016,
@@ -770,6 +827,9 @@ __all__ = [
     "FORBIDDEN_ENVIRONMENT_NAMES",
     "MEASUREMENTS",
     "MEASURED_MAX_OUTPUT_BYTES",
+    "MEASURED_REAL_FINALIZATION_SECONDS",
+    "MEASURED_REAL_MAX_GENESIS_SECONDS",
+    "MEASURED_REAL_MAX_PER_ACT_OVERHEAD_SECONDS",
     "MEASURED_WHOLE_PASS_SECONDS",
     "Measurement",
     "ObservedAccount",
@@ -780,6 +840,7 @@ __all__ = [
     "PassAPlan",
     "PassAPlanError",
     "PlannedStep",
+    "REAL_MEASUREMENTS",
     "SOURCE_CHECKOUT",
     "ServiceIdentity",
     "WITHDRAWN_STEPS",

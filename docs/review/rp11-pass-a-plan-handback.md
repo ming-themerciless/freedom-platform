@@ -250,3 +250,107 @@ Commit `b279de11978308b60ee9d491b43952cf9f113871` is published: `refs/heads/docs
 Publication does not authorize source acquisition, `run_pass_a`, A-2/AUTH, SA-2, services, staging or production.
 
 **Next action:** none for publication; source acquisition still needs its own authorization.
+
+## Follow-up 7 2026-11-25 — G7 measured as `capture` at the selected paths (Claude; for Codex review)
+
+**Evidence** (`/var/tmp/rp11-g7-capture-evidence-2026-11-25`; SHA-256: smoke `daa47d15…ab231`, quiet `48ef7fab…81719`,
+loaded `33e07241…1ba8`, confirm `703d04ab…ba3`; independently re-read, not re-run). Harness as run: `7bc26e4b…20f3`.
+Provenance: acquired checkout clean, detached at `b279de11…f9d` (provenance script: manifest v37, 66 sources, aggregate
+`36ad663b…`, JSON and plan byte-equal, tool digest `f831d38c…5134`); the measurement overlay's `tools/` and
+`tests/phase_5_0_evidence` matched the tree. Identity in every file: uid 992, gid 978, groups `[978]`.
+Quiet 12 runs (load 0.6-1.1) + loaded 12 (5.4-7.8, generator not recorded), 51 steps each: every exit as planned, no
+timeout/bound excess/incomplete stream, `X-3` succeeded and `X-4` valid, 24 distinct index digests, leaf 992:978 `0700`
+after X-1, `a`/`b` alternating, both absent afterwards. 4-run smoke/confirm (plan's own timeouts, 2 runs) also clean.
+
+| | slowest real | synthetic (governing) | timeout |
+|---|---|---|---|
+| T-local | 0.88 s | 8.70 s | 44 s |
+| T-dry | 12.99 s | 32.08 s | 161 s |
+| T-read | 2.58 s | 2.71 s | 30 s |
+
+Genesis max 0.43 s, per-act overhead max 0.70 s (allowances 30 s / 10 s hold). **Finalization max 22.38 s** (one loaded
+run; others 0.9-4.6 s; cause not recorded) against a 30 s allowance: under the module's own "twofold with contention"
+rule that is not conservative. **Decision:** per-command timeouts unchanged; `FINALIZATION_ALLOWANCE_SECONDS` =
+`ceil(5 x 22.38)` = **112 s**; whole-pass bound **2548 s** (49 steps; 2638 s with corroboration, was 2466/2556).
+`REAL_MEASUREMENTS` and the three mechanism maxima are embedded and tested; `MEASURED_MAX_OUTPUT_BYTES['T-local']` 645 -> 700
+(streams stay far inside their bounds). Manifest **v38**: aggregate `2a7564bb…2e1ca9`, JSON `4fa1c2b1…ca8d` (377690 B), plan
+`d827b755…d617` (178764 B), `review_manifest.py` `f18d8fdf…3879`, `pass_a_plan.py` `0b691f23…67e3`; generator run twice,
+byte-identical; prompt §4.3, R5 assignment, runner `PINS` and blocks, `test_r5_runner.py` re-derived (runner `869f71d2…53d2`).
+Because covered bytes moved, a pass can no longer be pinned to `b279de1`: a successor commit, publication and re-acquisition
+are needed (not done; not authorized here).
+
+**Harness review.** Defect fixed: the round's `finally` removed `capture-X` even when X-1 had refused an existing leaf (a leaf
+created between the pre-check and X-1, or by a concurrent run, would have been deleted). Now only the directory this session's own
+`mkdir` created, matched by device and inode, is removed; an existing output file is refused (`open(..., "x")`). Four unit controls
+cover these. Disclosed: during this session another session ran a sentinel-leaf negative control and a `negleaf` run on `capture-b`
+(sentinel left intact, then removed by it) and moved the evidence directory.
+
+**Tests.** Local (Python 3.14.4 `venv-web`): plan, pass_a, measure, r5 runner, `phase_5_0_evidence`: 3727 passed, 2 skipped (opt-in).
+`oracle-test` (scratch clone of the acquired commit + diff, `platform-g7`; synthetic round enabled): `tests/test_rp11*.py`,
+`test_r5_runner.py`, `tests/phase_5_0_evidence`: **6720 passed, 18 skipped, 4 failed in 777 s**. The 4 failures are
+`test_this_suite_builds_over_no_production_path` x3 and `test_the_production_layout_is_data_and_no_test_builds_over_it`, all on the
+pre-existing `/run/freedom-blades/laboratory.lock` (root:freedomlab, 8 Nov), a host-state sentinel unrelated to this change; the 18 skips
+are the unprovisioned launch toolchain and `RLIMIT` cases. Remediated harness as `capture` at the real paths (2 rounds + controls):
+**7 passed**, both leaves absent afterwards, rerun on the same output file refused. Full bot/web/Node suites not rerun.
+
+**Remaining gates:** Codex review; successor commit/publication/re-acquisition; A-2/AUTH, `run_pass_a`, SA-2, services, staging,
+production unchanged and unauthorized.
+
+## Follow-up 8 2026-11-25 — real-path serialization (Claude; remediates a Codex finding; for Codex review)
+
+**Finding.** `_remove_created_leaf` did `lstat` then `shutil.rmtree` by path, so the follow-up 7 device/inode check left a
+check-to-delete window. Two authorized measurement sessions did overlap. This supersedes follow-up 7's statement that only
+the directory this session created is removed: the comparison alone does not guarantee that.
+
+**Change** (`tests/test_rp11_pass_a_measure.py` only). Both real-path tests take a non-blocking exclusive `flock` on
+`CAPTURE_PARENT` itself (no lock file) before the first precondition or leaf check and hold it over all rounds and every
+cleanup. A contender raises `RealPathsBusy` before checking, creating or removing anything. The descriptor is
+close-on-exec. Synthetic mode takes no lock.
+
+**What it does not do.** The lock is advisory and excludes only processes that take it: not root, a manual command (such as
+the sentinel-leaf control of follow-up 7), another program, `run_pass_a`, or an older harness copy (including any left in a
+scratch clone on `oracle-test`). The device/inode comparison stays as defense in depth; it is not atomic with `rmtree`, and
+an inode number can be reused.
+
+**Local tests** (repository host, `venv-web`, Python 3.14.4). Five new cases: refusal and release (also after an
+exception, no residue); a second process holding the lock, released when killed; both real-path tests under contention
+reaching no precondition, round or removal, with the owner's leaf intact; lock held from preconditions over three stubbed
+rounds. With the lock disabled, three of them fail. Measure module: 10 passed, 2 skipped. `tests/test_rp11*.py`,
+`test_r5_runner.py`, `tests/phase_5_0_evidence`: **6727 passed, 20 skipped** (16 launch-toolchain, 2 `RLIMIT_NOFILE`,
+2 opt-in measurement), exit 0.
+
+**Pins and evidence.** The harness is not a manifest-covered source, so v38 and its pins are unchanged (not regenerated).
+The G7 samples were not rerun and the evidence was not touched: they were taken with harness `7bc26e4b…20f3`, without the
+lock, and the lock adds nothing inside a timed section.
+
+**Baseline comparison (run independently by Codex; supersedes the earlier "not established").** On `oracle-test`, from
+the clean detached acquired checkout `/opt/freedom-blades/rp11-source` at `b279de11978308b60ee9d491b43952cf9f113871`, the
+four exact `laboratory.lock` sentinel node IDs gave exactly **4 failed in 5.78 s**, each solely because the pre-existing
+`/run/freedom-blades/laboratory.lock` exists:
+
+- `tests/phase_5_0_evidence/test_lab_{call_graph,integration,live_authority}.py::test_this_suite_builds_over_no_production_path`
+  (three node IDs);
+- `tests/phase_5_0_evidence/test_lab_implementation.py::test_the_production_layout_is_data_and_no_test_builds_over_it`.
+
+The same four failures in follow-up 7's changed-tree focused run are therefore host-baseline failures, not regressions.
+
+**Not done on `oracle-test`.** This follow-up's session could not reach it (the agent sandbox makes plain `ssh` fail with
+`Bad owner or permissions`, and `ssh -F` needs explicit maintainer authorization). The new advisory-lock code has not been
+transferred to or tested on `oracle-test`: neither the focused suites nor the lock on the real `/var/lib/fb-rp11` as
+`capture`. Canonical remote validation needs a successor commit, publication and re-acquisition first (not done; not
+authorized here). The baseline run above is of `b279de1` and says nothing about the lock code.
+
+No commit, push, `run_pass_a`, A-2/AUTH, SA-2, service, staging or production action.
+
+## Follow-up 9 2026-11-25 — independent Codex disposition of G7 v38 (recorded by Claude; not re-observed)
+
+Supersedes the review-pending statements of follow-ups 7 and 8, which are otherwise preserved as history.
+
+- Codex re-read the G7 evidence.
+- Codex regenerated v38 and found it deterministic.
+- The local result is **6727 passed, 20 skipped** (follow-up 8).
+- The four `laboratory.lock` failures are established as host-baseline failures (follow-up 8, baseline comparison).
+- **Review passed** after the advisory-lock remediation, with no blocking source finding.
+
+**Remaining:** publication of a v38 successor commit, its re-acquisition, and remote validation of the advisory lock.
+This disposition grants no A-2/AUTH, `run_pass_a`, SA-2, service, staging or production authority.

@@ -32,9 +32,16 @@ cases. These supersede the earlier v35 figures as the current-tree result.
 
 **G4 disposable filesystem acceptance is complete** (host result plus the suite evidence
 above). It grants no operational authorization. Production and operational gates are
-unchanged. Exact-source acquisition stays blocked until the maintainer publishes the final
-successor commit. No push, source acquisition, `run_pass_a`, A-2/AUTH, SA-2, service,
-activation or probe.
+unchanged. The G4 result involved no push, source acquisition, `run_pass_a`, A-2/AUTH, SA-2,
+service, activation or probe.
+
+**Publication record (2026-11-25; observed by Codex, not re-observed by the recorder).** The
+maintainer-authorized push published commit `b279de11978308b60ee9d491b43952cf9f113871`
+(*Implement RP-11 scoped capture parent*) to the canonical origin
+`git@github.com:ming-themerciless/freedom-platform.git`, branch `docs/platform-plan`; direct
+`ls-remote` verification returned that exact hash for `refs/heads/docs/platform-plan`.
+Publication is no longer pending. It does **not** authorize source acquisition (which still
+needs its own authorization), `run_pass_a`, A-2/AUTH, SA-2, services, staging or production.
 
 **Historical: next clean-session trigger (the slice was implemented and reviewed 2026-11-24).** Peter may say **“Start implementation Loop with
 Claude, proceed without asking until it's finished.”** That starts the bounded

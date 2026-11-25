@@ -52,9 +52,16 @@ cases. These supersede the earlier v35 figures (bot 8400 passed, 280 skipped) as
 
 **G4 disposable filesystem acceptance is complete** (host result plus the suite evidence
 above). It grants no operational authorization. Production and operational gates are
-unchanged. Exact-source acquisition stays blocked until the maintainer publishes the final
-successor commit. No push, source acquisition, `run_pass_a`, A-2/AUTH, SA-2, service,
-activation or probe.
+unchanged. The G4 result involved no push, source acquisition, `run_pass_a`, A-2/AUTH, SA-2,
+service, activation or probe.
+
+**Publication record (2026-11-25; observed by Codex, not re-observed by the recorder).** The
+maintainer-authorized push published commit `b279de11978308b60ee9d491b43952cf9f113871`
+(*Implement RP-11 scoped capture parent*) to the canonical origin
+`git@github.com:ming-themerciless/freedom-platform.git`, branch `docs/platform-plan`; direct
+`ls-remote` verification returned that exact hash for `refs/heads/docs/platform-plan`.
+Publication is no longer pending. It does **not** authorize source acquisition, `run_pass_a`,
+A-2/AUTH, SA-2, services, staging or production.
 
 
 The production runtime is intended to run on production Ubuntu. `oracle-test`
@@ -139,9 +146,10 @@ parent was not provisioned and no leaf was tested then.
 ### Immediate next action
 
 Final suite evidence for the current tree is recorded above, so nothing remains pending for
-G4 disposable filesystem acceptance. The maintainer publishes the final
-successor commit (not `592678b` alone, which predates the 0770 redesign) to the canonical
-remote. Source acquisition stays blocked until then and still needs its own authorization.
+G4 disposable filesystem acceptance. Publication of the successor commit `b279de1` is done
+(publication record above). Source acquisition is not authorized by it and still needs its
+own separate authorization; publication likewise authorizes no `run_pass_a`, A-2/AUTH,
+SA-2, service, staging or production action.
 Timing measurement under `capture` and at the selected paths has not been done.
 
 ### Next clean-session instruction

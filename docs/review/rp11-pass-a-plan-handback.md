@@ -240,3 +240,13 @@ G7 timings remain unmeasured under `capture` and at the selected paths.
 
 **Next action:** maintainer publication of the final successor commit; source acquisition still needs its own
 authorization.
+
+## Follow-up 6 2026-11-25 — publication record (observed by Codex, recorded by Claude; not re-observed)
+
+Documentation-only. Supersedes every publication-pending statement above, including the "Next action" of follow-up 5.
+Commit `b279de11978308b60ee9d491b43952cf9f113871` is published: `refs/heads/docs/platform-plan` on the canonical origin
+`git@github.com:ming-themerciless/freedom-platform.git` pointed to it.
+
+Publication does not authorize source acquisition, `run_pass_a`, A-2/AUTH, SA-2, services, staging or production.
+
+**Next action:** none for publication; source acquisition still needs its own authorization.

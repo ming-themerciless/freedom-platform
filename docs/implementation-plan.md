@@ -2597,10 +2597,13 @@ environment gates; web skips are permitted matrix cells asserted by per-route
 success cases.
 
 **G4 disposable filesystem acceptance is complete.** It grants no operational
-authorization. The next action is maintainer publication of the final successor
-commit; source acquisition still needs its own authorization. G7 timings remain unmeasured under
+authorization. The successor commit `b279de11978308b60ee9d491b43952cf9f113871` was
+published by maintainer-authorized push to `docs/platform-plan` on the canonical origin
+(verified by Codex with `ls-remote`, 2026-11-25; not re-observed by the recorder).
+Publication does not authorize source acquisition, which still needs its own authorization,
+or `run_pass_a`, A-2/AUTH, SA-2, services, staging or production. G7 timings remain unmeasured under
 `capture` and at the selected paths. No push, source acquisition, `run_pass_a`,
-A-2/AUTH, SA-2, service or production action is authorized by this result. The
+A-2/AUTH, SA-2, service or production action is authorized by the G4 result. The
 dated RP-11 records below are history where they differ from this paragraph.
 
 **Historical: next clean-session trigger (the slice was implemented and reviewed 2026-11-24).** Peter may say **“Start implementation Loop with

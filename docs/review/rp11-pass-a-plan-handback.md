@@ -354,3 +354,47 @@ Supersedes the review-pending statements of follow-ups 7 and 8, which are otherw
 
 **Remaining:** publication of a v38 successor commit, its re-acquisition, and remote validation of the advisory lock.
 This disposition grants no A-2/AUTH, `run_pass_a`, SA-2, service, staging or production authority.
+
+## Follow-up 10 2026-11-25 — v38 publication, re-acquisition and remote validation (observed by Codex; recorded by Claude, not re-observed)
+
+Supersedes the pending successor publication, re-acquisition and remote lock validation statements of follow-ups 7-9,
+and follow-up 8's statement that the lock code had not been tested on `oracle-test`. Those sections are kept as history.
+
+**Publication.** The maintainer-authorized push published commit `575218e0410a5c97200fb11c94c8111f5b86e0ce`
+to branch `docs/platform-plan` on the canonical origin; direct `ls-remote` matched.
+
+**Re-acquisition** (`oracle-test`). `/opt/freedom-blades/rp11-source` was clean at `b279de1`, fetched the canonical
+HTTPS origin, then was detached clean at exactly `575218e`; `git fsck` clean. The v38 SHA-256 values matched:
+
+| File | SHA-256 |
+|---|---|
+| manifest JSON | `4fa1c2b1fcf9cedf7fb1028feeeda4d0e229ed061ef3cc19047ca24cd42bca8d` |
+| concrete plan | `d827b7552f0ad48a13ae899c6fb40d0c47815d3f1332d158f5c519e77b09d617` |
+| `pass_a_plan.py` | `0b691f238606fb7eb237511c7f08510598f7f67ff3f772eaf63520485d4f67e3` |
+| `review_manifest.py` | `f18d8fdf897961167ee58da475d1483de14bf01ba90c0a2e537a49dd2eef3879` |
+
+**Remote lock validation.** The real capture advisory-lock/measurement module on that exact checkout, run as
+uid 992 / gid 978 with one plan-timeout round: **12 passed in 10.19 s**. `run_pass_a` was not called.
+
+**Suites.** The bot run, both web runs, the isolated web rerun and the Node suite all ran from the clean detached
+`/opt/freedom-blades/rp11-source` at exactly `575218e0410a5c97200fb11c94c8111f5b86e0ce`. The bot and web runs used
+`PATH=/usr/lib/postgresql/18/bin:/usr/bin:/bin` and `TEST_DATABASE_URL=postgresql+psycopg:///freedom_test`.
+
+Skip reasons: the bot skips retained the documented reasons (unprivileged root, ownership and provisioning;
+unprovisioned `RP11_LAUNCH_BUILD_ROOT` toolchain; RLIMIT; role grants; opt-in measurement). The web skips were the
+permitted matrix cells asserted by per-route success cases.
+
+| Run | Result |
+|---|---|
+| Canonical bot | 8448 passed, 280 skipped, 6 warnings, 2254.29 s (0:37:34), exit 0 |
+| Canonical web, initial | **1 failed**, 2893 passed, 80 skipped, 1137 warnings, 1238.17 s |
+| Failed test, exact isolated rerun | passed, 12.98 s |
+| Canonical web, full final rerun | 2894 passed, 80 skipped, 1137 warnings, 1182.19 s (0:19:42), exit 0 |
+| Foundry Node | 171 passed, 0 failed, 0 skipped, 7676.900501 ms, exit 0 |
+
+**Initial web failure and disposition.** `test_a_full_ceremony_spends_one_unit_of_each_budget` observed 8 where 5 was
+expected, attributed to time-window distortion under host delay. The exact test passed when rerun alone, and the full
+final web rerun passed; that final rerun supersedes the initial run as the web result. The initial run was not green.
+
+**Remaining gates:** G6 final capture-tool digest and integrity-pinned SA-2 build review; G9/A-6; G10/A-2/AUTH; the
+actual `run_pass_a`. Services, staging and production remain unauthorized.

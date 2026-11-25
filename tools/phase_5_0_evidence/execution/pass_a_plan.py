@@ -26,6 +26,15 @@
   theirs, so the multiplier decides for those two classes. ``whole_pass_bound_seconds`` is the finite worst case: every act runs to
   its deadline, drains fully and pays its allowance. ``require_operational`` still
   refuses a plan whose used classes are unmeasured.
+* **A scoped parent for the capture roots (G4).** The roots are ``/var/lib/fb-rp11/capture-a``
+  and ``-b``. ``PARENT_CONTRACT`` states the pre-provisioned parent (``root:capture``, ``0770``:
+  root and the ``capture`` group have full access; others nothing)
+  and the leaf rule (absent before X-1, then created ``0700`` by the non-root ``capture``).
+  ``parent_problems`` / ``leaf_absent_problems`` / ``created_leaf_problems`` judge *observed*
+  directories against it and touch no filesystem. ``/var/lib`` is never widened. ``0770`` replaces
+  the earlier ``0730`` because the unmodified ``CaptureRootStore`` opens every ancestor
+  ``O_RDONLY`` and fsyncs the parent entry, which needs group read; the directory is purpose-built
+  and ``capture`` is its only group member. Host validation remains outstanding.
 * **The capture identity as data.** ``CAPTURE_IDENTITY`` states the accepted ``capture``
   account policy and ``identity_problems`` judges an *observed* account against it. Nothing
   here creates, modifies or looks up an account.
@@ -33,7 +42,7 @@
 Nothing in this module starts a process, opens a file, arms a launcher, builds a session
 or calls ``run_pass_a``. The entry does not import it: it is a value layer that a later,
 separately authorized wiring step consumes. It lives beside ``pass_a`` in the execution
-tier and its bytes are covered by the review manifest (version 35), so changing a command, an environment or a measurement moves the
+tier and its bytes are covered by the review manifest (version 37), so changing a command, an environment or a measurement moves the
 reviewed digest and every pin derived from it.
 """
 
@@ -42,6 +51,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import stat
 from dataclasses import dataclass, field
 from typing import Callable, Mapping
 
@@ -56,9 +66,14 @@ from .capture_store import RootPolicy
 PASS_ID = "C-P5.0-R5-OP1-A"
 
 #: Accepted 2026-11-24 for the disposable feasibility exercise only. Nothing creates them.
+#: The capture roots are scoped under one narrow, pre-provisioned parent (G4 redesign,
+#: maintainer-approved 2026-11-24 after direct ``/var/lib`` leaves failed exclusive creation
+#: by the non-root ``capture`` account). The parent is ``PARENT_CONTRACT``; the leaves are
+#: created by ``capture`` itself at X-1 and are absent before it.
 SOURCE_CHECKOUT = "/opt/freedom-blades/rp11-source"
-CAPTURE_ROOT_A = "/var/lib/fb-rp11-capture-a"
-CAPTURE_ROOT_B = "/var/lib/fb-rp11-capture-b"
+CAPTURE_PARENT = "/var/lib/fb-rp11"
+CAPTURE_ROOT_A = f"{CAPTURE_PARENT}/capture-a"
+CAPTURE_ROOT_B = f"{CAPTURE_PARENT}/capture-b"
 EVIDENCE_RUN_ROOT = "/var/lib/fb-evidence-p5-0"
 
 INTERPRETER = "/opt/freedom-blades/runtime/venv-web/bin/python"
@@ -150,6 +165,105 @@ def identity_problems(
 # --- paths ----------------------------------------------------------------------------
 
 
+@dataclass(frozen=True, slots=True)
+class ParentContract:
+    """The G4 parent/leaf filesystem contract, as data (nothing here touches a filesystem).
+
+    The parent is provisioned *before* the pass by the host owner, as ``root:capture`` mode
+    ``0770``: root and the ``capture`` group have full access (read, write, search), which the
+    capture store needs to open and fsync the parent; others have nothing. Each
+    leaf is absent until X-1, where the non-root ``capture`` account creates it exclusively
+    with mode ``0700``, so a leaf is owned by ``capture`` and no one else can open it.
+    ``/var/lib`` itself is never widened.
+    """
+
+    path: str
+    owner: str
+    group: str
+    mode: int
+    leaf_owner: str
+    leaf_mode: int
+    leaves: tuple[str, ...]
+
+
+PARENT_CONTRACT = ParentContract(
+    path=CAPTURE_PARENT,
+    owner="root",
+    group="capture",
+    mode=0o770,
+    leaf_owner="capture",
+    leaf_mode=0o700,
+    leaves=(CAPTURE_ROOT_A, CAPTURE_ROOT_B),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ObservedDirectory:
+    """What a later, authorized step observed with ``lstat`` about one path.
+
+    ``mode`` is the complete ``st_mode`` so that a symbolic link, a file or a setgid bit is
+    seen, not masked away. This module observes nothing."""
+
+    path: str
+    uid: int
+    gid: int
+    mode: int
+
+
+def parent_problems(
+    observed: ObservedDirectory, capture_gid: int, policy: ParentContract = PARENT_CONTRACT
+) -> tuple[str, ...]:
+    """Every way the parent departs from the contract; empty means it conforms.
+
+    ``capture_gid`` is the observed primary group id of the ``capture`` account (never 0)."""
+    problems: list[str] = []
+    if observed.path != policy.path:
+        problems.append("path")
+    if not stat.S_ISDIR(observed.mode):
+        problems.append("not-a-directory")  # includes a symbolic link, seen by lstat
+    if observed.uid != 0:
+        problems.append("owner")
+    if capture_gid == 0 or observed.gid != capture_gid:
+        problems.append("group")
+    permission = stat.S_IMODE(observed.mode)
+    if permission != policy.mode:
+        problems.append("mode")
+        if permission & 0o007:
+            problems.append("other-access")
+        if not permission & 0o040:
+            problems.append("group-cannot-read")
+        if permission & 0o030 != 0o030:
+            problems.append("group-cannot-create")
+        if permission & 0o7000:
+            problems.append("special-bits")
+        if permission & 0o700 != 0o700:
+            problems.append("owner-bits")
+    return tuple(problems)
+
+
+def leaf_absent_problems(observed: ObservedDirectory | None) -> tuple[str, ...]:
+    """Before X-1 a leaf must not exist at all (not even as a link): ``None`` conforms."""
+    return () if observed is None else ("present",)
+
+
+def created_leaf_problems(
+    observed: ObservedDirectory | None, capture_uid: int, policy: ParentContract = PARENT_CONTRACT
+) -> tuple[str, ...]:
+    """After X-1 a leaf is a real directory owned by ``capture`` with exactly ``0700``."""
+    if observed is None:
+        return ("absent",)
+    problems: list[str] = []
+    if observed.path not in policy.leaves:
+        problems.append("path")
+    if not stat.S_ISDIR(observed.mode):
+        problems.append("not-a-directory")
+    if capture_uid == 0 or observed.uid != capture_uid:
+        problems.append("owner")
+    if stat.S_IMODE(observed.mode) != policy.leaf_mode:
+        problems.append("mode")
+    return tuple(problems)
+
+
 def _is_under(path: str, ancestor: str) -> bool:
     return path == ancestor or path.startswith(ancestor.rstrip("/") + "/")
 
@@ -159,9 +273,29 @@ def validate_paths(
     root_a: str = CAPTURE_ROOT_A,
     root_b: str = CAPTURE_ROOT_B,
     run_root: str = EVIDENCE_RUN_ROOT,
+    parent: str = CAPTURE_PARENT,
 ) -> None:
-    """Absolute, normalized, outside ``/tmp``, and no path inside or equal to another."""
+    """Absolute, normalized, outside ``/tmp``; no path inside or equal to another, except that
+    each capture root is a direct child of the one capture ``parent``, which is itself a single
+    component directly below ``/var/lib`` and overlaps neither the checkout nor the run root."""
     paths = (checkout, root_a, root_b, run_root)
+    for path in (parent, *paths):
+        if (
+            not isinstance(path, str)
+            or not path.startswith("/")
+            or os.path.normpath(path) != path
+            or path == "/"
+            or _is_under(path, "/tmp")
+        ):
+            raise PassAPlanError("malformed-path")
+    if os.path.dirname(parent) != "/var/lib":
+        raise PassAPlanError("malformed-path")
+    for root in (root_a, root_b):
+        if os.path.dirname(root) != parent:
+            raise PassAPlanError("malformed-path")
+    for other in (checkout, run_root):
+        if _is_under(parent, other) or _is_under(other, parent):
+            raise PassAPlanError("malformed-path")
     for path in paths:
         if (
             not isinstance(path, str)
@@ -626,6 +760,7 @@ CLASSES: Mapping[str, CommandClass] = derive_timeouts(MEASUREMENTS, BASE_CLASSES
 __all__ = [
     "BASE_CLASSES",
     "CAPTURE_IDENTITY",
+    "CAPTURE_PARENT",
     "CAPTURE_ROOT_A",
     "CAPTURE_ROOT_B",
     "CLASSES",
@@ -638,7 +773,10 @@ __all__ = [
     "MEASURED_WHOLE_PASS_SECONDS",
     "Measurement",
     "ObservedAccount",
+    "ObservedDirectory",
+    "PARENT_CONTRACT",
     "PASS_ID",
+    "ParentContract",
     "PassAPlan",
     "PassAPlanError",
     "PlannedStep",
@@ -646,9 +784,12 @@ __all__ = [
     "ServiceIdentity",
     "WITHDRAWN_STEPS",
     "build_pass_a_plan",
+    "created_leaf_problems",
     "derive_timeouts",
     "environment_problems",
     "identity_problems",
+    "leaf_absent_problems",
+    "parent_problems",
     "root_policy",
     "validate_paths",
 ]

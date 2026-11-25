@@ -1985,7 +1985,7 @@
   "harness_name": "phase-5-0-evidence-harness",
   "harness_version": "0.7.0-pre-execution",
   "manifest_schema": "phase-5-0-evidence-review-manifest",
-  "manifest_version": 35,
+  "manifest_version": 37,
   "materializations": [
     {
       "after_step_id": "B6-03",
@@ -3052,7 +3052,7 @@
     },
     {
       "path": "tools/phase_5_0_evidence/execution/pass_a_plan.py",
-      "sha256": "48ec0e90a6f9fb8ca3310fe55f54792a59430273452445654599067440e10315"
+      "sha256": "3d28da78cf16bcfb180ce778ec9f5f404ee8da41a3eeec781113367d3bcfe571"
     },
     {
       "path": "tools/phase_5_0_evidence/execution/provisioner.py",
@@ -3144,7 +3144,7 @@
     },
     {
       "path": "tools/phase_5_0_evidence/review_manifest.py",
-      "sha256": "d405f40b5acda140c77c9f19f98ba3a4b5703389e6134c04a48e5438b7fc25bd"
+      "sha256": "6c498490ad10ee6bc67149403b8cd6e45eb19f36c338948f2f88d69fc0591b7c"
     },
     {
       "path": "tools/phase_5_0_evidence/rp11_launch.py",

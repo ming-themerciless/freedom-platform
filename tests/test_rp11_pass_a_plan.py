@@ -13,6 +13,8 @@ import json
 import math
 import os
 import shlex
+import shutil
+import stat
 import subprocess
 import sys
 from dataclasses import replace
@@ -80,7 +82,7 @@ def test_every_path_a_step_names_is_a_fixed_path_not_a_selected_path_creation() 
     creators = {"mkdir", "touch", "install", "cp", "mv", "ln", "tee", "chmod", "chown", "useradd", "adduser"}
     for step in P.build_pass_a_plan(include_corroboration=True).steps:
         assert Path(step.argv[0]).name not in creators, step.step_id
-        assert not any(a.startswith((P.CAPTURE_ROOT_A, P.CAPTURE_ROOT_B)) for a in step.argv), step.step_id
+        assert not any(a.startswith(P.CAPTURE_PARENT) for a in step.argv), step.step_id
 
 
 def test_an_accepted_exit_list_is_explicit_and_a_signal_never_passes() -> None:
@@ -243,6 +245,15 @@ def test_judging_an_account_creates_and_looks_up_nothing() -> None:
 def test_the_selected_paths_validate_and_overlaps_are_refused() -> None:
     P.validate_paths()
     for bad in (
+        {"parent": "/var/lib"},
+        {"parent": "/var/lib/fb-rp11/"},
+        {"parent": "/var/lib/fb/rp11"},
+        {"parent": "/srv/fb-rp11", "root_a": "/srv/fb-rp11/capture-a", "root_b": "/srv/fb-rp11/capture-b"},
+        {"parent": "/tmp/fb-rp11"},
+        {"parent": P.EVIDENCE_RUN_ROOT},
+        {"root_a": "/var/lib/fb-rp11-capture-a"},  # the withdrawn direct /var/lib leaf
+        {"root_b": "/var/lib/fb-rp11/nested/capture-b"},
+        {"root_b": "/var/lib/other/capture-b"},
         {"checkout": "relative/path"},
         {"checkout": "/opt/freedom-blades/rp11-source/"},
         {"root_a": "/tmp/capture"},
@@ -257,12 +268,190 @@ def test_the_selected_paths_validate_and_overlaps_are_refused() -> None:
         assert raised.value.reason == "malformed-path"
 
 
+def test_the_selected_roots_are_two_leaves_of_one_narrow_parent_below_var_lib() -> None:
+    assert P.CAPTURE_PARENT == "/var/lib/fb-rp11"
+    assert P.CAPTURE_ROOT_A == "/var/lib/fb-rp11/capture-a"
+    assert P.CAPTURE_ROOT_B == "/var/lib/fb-rp11/capture-b"
+    assert os.path.dirname(P.CAPTURE_ROOT_A) == os.path.dirname(P.CAPTURE_ROOT_B) == P.CAPTURE_PARENT
+    assert os.path.dirname(P.CAPTURE_PARENT) == "/var/lib"
+    assert P.PARENT_CONTRACT.leaves == (P.CAPTURE_ROOT_A, P.CAPTURE_ROOT_B)
+    # The parent is not a pass root, so the store's root policy never lets a root be the parent.
+    assert P.CAPTURE_PARENT not in P.root_policy().other_pass_roots
+
+
 def test_the_genesis_request_names_root_a_forbids_tmp_and_the_checkout_and_names_root_b() -> None:
     request = P.build_pass_a_plan().genesis_request(invocation_id=INVOCATION_ID, tool_sha256=TOOL_SHA256)
     assert request.capture_root == P.CAPTURE_ROOT_A and request.pass_id == P.PASS_ID
     assert P.SOURCE_CHECKOUT in request.policy.forbidden_ancestors
     assert "/tmp" in request.policy.forbidden_ancestors
     assert request.policy.other_pass_roots == (P.CAPTURE_ROOT_B,)
+
+
+# --- G4: the scoped-parent contract -----------------------------------------------------
+
+CAPTURE_GID = 978
+CAPTURE_UID = 992
+DIRECTORY = stat.S_IFDIR
+
+
+def _parent(**change: int | str) -> P.ObservedDirectory:
+    fields = {"path": P.CAPTURE_PARENT, "uid": 0, "gid": CAPTURE_GID, "mode": DIRECTORY | 0o770}
+    fields.update(change)
+    return P.ObservedDirectory(**fields)  # type: ignore[arg-type]
+
+
+def _leaf(**change: int | str) -> P.ObservedDirectory:
+    fields = {"path": P.CAPTURE_ROOT_A, "uid": CAPTURE_UID, "gid": CAPTURE_GID, "mode": DIRECTORY | 0o700}
+    fields.update(change)
+    return P.ObservedDirectory(**fields)  # type: ignore[arg-type]
+
+
+def test_the_parent_contract_states_the_approved_modes_and_owners() -> None:
+    contract = P.PARENT_CONTRACT
+    assert (contract.owner, contract.group, contract.mode) == ("root", "capture", 0o770)
+    assert (contract.leaf_owner, contract.leaf_mode) == ("capture", 0o700)
+    # Root: full. capture group: full (the store needs read to open and fsync). Others: nothing.
+    assert contract.mode & 0o700 == 0o700
+    assert contract.mode & 0o070 == 0o070
+    assert contract.mode & 0o007 == 0 and not contract.mode & 0o7000
+    assert P.parent_problems(_parent(), CAPTURE_GID) == ()
+
+
+@pytest.mark.parametrize(
+    ("change", "expected"),
+    [
+        ({"uid": 1000}, ("owner",)),
+        ({"uid": CAPTURE_UID}, ("owner",)),
+        ({"gid": 0}, ("group",)),
+        ({"gid": 1000}, ("group",)),
+        ({"mode": DIRECTORY | 0o755}, ("mode", "other-access", "group-cannot-create")),
+        ({"mode": DIRECTORY | 0o750}, ("mode", "group-cannot-create")),
+        ({"mode": DIRECTORY | 0o730}, ("mode", "group-cannot-read")),
+        ({"mode": DIRECTORY | 0o700}, ("mode", "group-cannot-read", "group-cannot-create")),
+        ({"mode": DIRECTORY | 0o771}, ("mode", "other-access")),
+        ({"mode": DIRECTORY | 0o777}, ("mode", "other-access")),
+        ({"mode": DIRECTORY | 0o731}, ("mode", "other-access", "group-cannot-read")),
+        ({"mode": DIRECTORY | 0o1770}, ("mode", "special-bits")),
+        ({"mode": DIRECTORY | 0o2770}, ("mode", "special-bits")),
+        ({"mode": DIRECTORY | 0o4770}, ("mode", "special-bits")),
+        ({"mode": DIRECTORY | 0o370}, ("mode", "owner-bits")),
+        ({"mode": stat.S_IFLNK | 0o770}, ("not-a-directory",)),
+        ({"mode": stat.S_IFREG | 0o770}, ("not-a-directory",)),
+        ({"path": "/var/lib"}, ("path",)),
+        ({"path": "/var/lib/fb-rp11-capture-a"}, ("path",)),
+    ],
+)
+def test_each_unsafe_parent_is_refused_by_name(change: dict, expected: tuple[str, ...]) -> None:
+    assert P.parent_problems(_parent(**change), CAPTURE_GID) == expected
+
+
+def test_a_parent_whose_group_is_root_is_never_accepted_whatever_the_capture_gid_is() -> None:
+    assert "group" in P.parent_problems(_parent(gid=0), 0)
+    assert "group" in P.parent_problems(_parent(), 0)
+
+
+def test_a_leaf_is_absent_before_x1_and_any_object_there_is_refused() -> None:
+    assert P.leaf_absent_problems(None) == ()
+    for mode in (DIRECTORY | 0o700, stat.S_IFLNK | 0o777, stat.S_IFREG | 0o600):
+        assert P.leaf_absent_problems(_leaf(mode=mode)) == ("present",)
+
+
+@pytest.mark.parametrize(
+    ("change", "expected"),
+    [
+        ({}, ()),
+        ({"path": P.CAPTURE_ROOT_B}, ()),
+        ({"uid": 0}, ("owner",)),
+        ({"uid": 1000}, ("owner",)),
+        ({"mode": DIRECTORY | 0o755}, ("mode",)),
+        ({"mode": DIRECTORY | 0o750}, ("mode",)),
+        ({"mode": DIRECTORY | 0o2700}, ("mode",)),
+        ({"mode": DIRECTORY | 0o701}, ("mode",)),
+        ({"mode": stat.S_IFLNK | 0o700}, ("not-a-directory",)),
+        ({"path": P.CAPTURE_PARENT}, ("path",)),
+        ({"path": "/var/lib/fb-rp11/other"}, ("path",)),
+    ],
+)
+def test_a_created_leaf_is_a_capture_owned_0700_directory(change: dict, expected: tuple[str, ...]) -> None:
+    assert P.created_leaf_problems(_leaf(**change), CAPTURE_UID) == expected
+
+
+def test_a_leaf_that_was_not_created_or_is_owned_by_root_is_refused() -> None:
+    assert P.created_leaf_problems(None, CAPTURE_UID) == ("absent",)
+    assert "owner" in P.created_leaf_problems(_leaf(uid=0), 0)
+
+
+def test_the_contract_is_judged_from_observations_and_touches_no_filesystem(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("the contract checkers must not touch the filesystem")
+
+    for name in ("stat", "lstat", "open", "mkdir", "listdir", "scandir"):
+        monkeypatch.setattr(os, name, refuse)
+    assert P.parent_problems(_parent(), CAPTURE_GID) == ()
+    assert P.created_leaf_problems(_leaf(), CAPTURE_UID) == ()
+    assert P.leaf_absent_problems(None) == ()
+
+
+def test_the_unmodified_capture_store_creates_the_roots_below_a_0770_parent(tmp_path: Path) -> None:
+    """Executable evidence for the G4 contract: ``PosixCaptureFilesystem`` and ``CaptureRootStore``,
+    unmodified, run X-1 under a ``0770`` stand-in parent (a directory this process owns, so the
+    group-read/search/write the contract grants is exercised without root). The leaf is created
+    exclusively as ``0700``, both durability barriers succeed, an existing leaf is refused and
+    nothing is left behind. Host validation as the real ``capture`` account remains separate."""
+    from tools.phase_5_0_evidence.execution.capture_store import (
+        CaptureRootStore,
+        PosixCaptureFilesystem,
+        RootPolicy,
+        StoreFailure,
+    )
+
+    parent = tmp_path / "fb-rp11"
+    parent.mkdir()
+    parent.chmod(0o770)
+    assert stat.S_IMODE(parent.stat().st_mode) == 0o770
+    assert P.parent_problems(
+        P.ObservedDirectory(P.CAPTURE_PARENT, 0, CAPTURE_GID, DIRECTORY | stat.S_IMODE(parent.stat().st_mode)),
+        CAPTURE_GID,
+    ) == ()
+    leaf = parent / "capture-a"
+    policy = RootPolicy(("/nonexistent-forbidden",))
+    barriers: list[str] = []
+
+    class Recording(PosixCaptureFilesystem):
+        def fsync(self, fd: int, *, stage: str) -> None:
+            super().fsync(fd, stage=stage)
+            barriers.append(stage)
+
+    store = CaptureRootStore(filesystem=Recording(), capture_root=str(leaf))
+    try:
+        store.create_root(policy)
+        assert leaf.is_dir() and not leaf.is_symlink()
+        assert stat.S_IMODE(leaf.stat().st_mode) == 0o700 == P.PARENT_CONTRACT.leaf_mode
+        assert leaf.stat().st_uid == os.geteuid()
+        assert P.created_leaf_problems(
+            P.ObservedDirectory(P.CAPTURE_ROOT_A, leaf.stat().st_uid, leaf.stat().st_gid, leaf.stat().st_mode),
+            os.geteuid(),
+        ) == ()
+        assert "X-1:root-entry-barrier" in barriers and "X-1:subdirectory-entry-barrier" in barriers
+        assert all(
+            stat.S_IMODE(path.stat().st_mode) == 0o700 for path in leaf.rglob("*") if path.is_dir()
+        )
+    finally:
+        store.release()
+
+    # An existing leaf is refused, not reused or replaced, and is left untouched.
+    again = CaptureRootStore(filesystem=PosixCaptureFilesystem(), capture_root=str(leaf))
+    try:
+        with pytest.raises(StoreFailure) as refused:
+            again.create_root(policy)
+        assert (refused.value.stage, refused.value.classification) == ("X-1:create-root", "object-exists")
+    finally:
+        again.release()
+    assert leaf.is_dir()
+
+    # Cleanup leaves no residue.
+    shutil.rmtree(leaf)
+    assert list(parent.iterdir()) == []
 
 
 # --- G7: measured timeouts and the whole-pass bound -----------------------------------

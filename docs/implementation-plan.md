@@ -2574,7 +2574,36 @@ not authority.*
 (`oracle-test`) are authorized. Production and staging mutation, real secrets and
 real player data remain outside that authority.
 
-**Next clean-session trigger.** Peter may say **“Start implementation Loop with
+**Current RP-11 position (2026-11-25).** On `oracle-test`, under the `root:capture` mode 0770 parent `/var/lib/fb-rp11`, the
+unmodified `CaptureRootStore` / `PosixCaptureFilesystem` ran as the capture account
+(UID 992, GID 978) for both `/var/lib/fb-rp11/capture-a` and
+`/var/lib/fb-rp11/capture-b`. Each leaf started absent; X-1 created it mode 0700, owned
+992:978, with the durability path; a duplicate create was refused
+(`X-1:create-root` / `object-exists`); cleanup restored it to absent. The parent ended
+empty. Exact outputs:
+
+```text
+ok root=/var/lib/fb-rp11/capture-a uid=992 gid=978 mode=0700 duplicate=refused cleanup=absent
+ok root=/var/lib/fb-rp11/capture-b uid=992 gid=978 mode=0700 duplicate=refused cleanup=absent
+```
+
+**Final suite evidence (2026-11-25; supplied with the documentation instruction, not
+re-observed by the recorder).** On `oracle-test`: focused reviewer suite 780 passed
+(68.20 s, no skips or failures); canonical bot suite 8437 passed, 280 skipped, 6
+warnings (2494.81 s, exit 0); canonical web suite 2894 passed, 80 skipped, 1137
+warnings (1212.82 s, exit 0); Foundry Node suite 171 passed, 0 failed, 0 skipped
+(7689.042305 ms, exit 0). Bot skips are the documented root/toolchain/opt-in
+environment gates; web skips are permitted matrix cells asserted by per-route
+success cases.
+
+**G4 disposable filesystem acceptance is complete.** It grants no operational
+authorization. The next action is maintainer publication of the final successor
+commit; source acquisition still needs its own authorization. G7 timings remain unmeasured under
+`capture` and at the selected paths. No push, source acquisition, `run_pass_a`,
+A-2/AUTH, SA-2, service or production action is authorized by this result. The
+dated RP-11 records below are history where they differ from this paragraph.
+
+**Historical: next clean-session trigger (the slice was implemented and reviewed 2026-11-24).** Peter may say **“Start implementation Loop with
 Claude, proceed without asking until it's finished.”** That starts the bounded
 non-production repository slice in the active handover: re-derive the withdrawn
 two-host command model as a finite local-only plan, fix every argv and complete
@@ -2586,10 +2615,13 @@ fail-closed and `run_pass_a` remains uncalled. No source acquisition,
 account/path creation, A-2/AUTH grant, SA-2 build/install, service
 activation/probe, operational pass or production/staging access is included.
 
-**RP-11 owner decisions (2026-11-24).** The feasibility topology is single-host
+**Historical: RP-11 owner decisions and then-open gates (2026-11-24).** The feasibility topology is single-host
 `oracle-test` only, using clean checkout `/opt/freedom-blades/rp11-source` and
-capture roots `/var/lib/fb-rp11-capture-a` and
-`/var/lib/fb-rp11-capture-b`; the maintainer publishes the exact commit to the
+capture roots `/var/lib/fb-rp11/capture-a` and
+`/var/lib/fb-rp11/capture-b` (scoped-parent redesign of 2026-11-24: the parent
+`/var/lib/fb-rp11` is pre-provisioned `root:capture` 0770 (corrected from 0730 so the unmodified capture store can open and fsync it; no open durability finding) and the leaves are created
+0700 by non-root `capture` at X-1; the direct `/var/lib` leaves failed filesystem
+acceptance); the maintainer publishes the exact commit to the
 canonical public remote before separately authorized acquisition. The dedicated
 service account is `capture`, a locked non-login system account, non-root, with
 no sudo or supplementary groups, and not `ubuntu` or `freedom-executor`; use the
@@ -2603,7 +2635,7 @@ SA-2 build review remain. No account/path creation, A-2/AUTH grant, source
 acquisition, `run_pass_a` call, operational pass, production/staging access,
 SA-2 build/install, activation or probe is authorized.
 
-**G1 re-derivation (2026-11-23; accepted for review, NOT authorized to run).**
+**Historical: G1 re-derivation (2026-11-23; accepted for review, NOT authorized to run).**
 Peter approved fully re-deriving and accepting G1 for the current Python 3.14 /
 PostgreSQL 18 disposable target. The approved-target constants were rebased from
 the repository's canonical disposable-server record (Python 3.14, PostgreSQL
@@ -2629,7 +2661,7 @@ the accepted single-host topology. G2/G3 remain open; G4 filesystem acceptance,
 G6/G7 technical evidence, RP-11, A-6 and the clean pinned-tree/owner inputs
 remain incomplete.
 
-**Current implementation continuation (2026-11-23).** The policy-neutral
+**Historical: implementation continuation (2026-11-23).** The policy-neutral
 Pass A orchestrator (in the entry's build closure, never called) (`tools/phase_5_0_evidence/execution/pass_a.py`,
 tests in `tests/test_rp11_pass_a.py`) is implemented and reviewed. Final focused
 `oracle-test` evidence: 1323 passed, 2 `RLIMIT` skips; web 2894 passed, 80 skips;
@@ -2651,7 +2683,7 @@ source acquisition remains unauthorized by OP1/A-2. No SA-2 build, systemd or
 production operation, or operational Pass A occurred. See the [current status](project-management/status.md),
 [active handover](review/Handover%20information), and [G11/G12 handback](review/rp11-g11-g12-implementation-handback.md).
 
-**Production/runtime boundary.** Production runtime belongs on production
+**Production/runtime boundary (gate statuses as of 2026-11-23; historical).** Production runtime belongs on production
 Ubuntu. `oracle-test` is solely for proof of concept, feasibility and tests; it
 has no ongoing or production role. This direction does not authorize production
 installation, activation or real evidence capture. As of 2026-11-23 G1 is

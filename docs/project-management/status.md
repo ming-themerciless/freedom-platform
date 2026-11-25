@@ -6,9 +6,37 @@ Baseline v1.9 remains active. Phase 3 and Phase 4 gates are approved; Phase 5
 implementation and unrestricted testing on the disposable `oracle-test` server
 remain authorized.
 
-### RP-11 implementation continuation — current as of 2026-11-24
+### RP-11 implementation continuation — current as of 2026-11-25
 
-**Next clean-session trigger.** Peter may say **“Start implementation Loop with
+**G4 host filesystem acceptance (2026-11-25): complete for disposable feasibility; final suite evidence recorded.** On `oracle-test`, under the `root:capture` mode 0770 parent `/var/lib/fb-rp11`, the
+unmodified `CaptureRootStore` / `PosixCaptureFilesystem` ran as the capture account
+(UID 992, GID 978) for both `/var/lib/fb-rp11/capture-a` and
+`/var/lib/fb-rp11/capture-b`. Each leaf started absent; X-1 created it mode 0700, owned
+992:978, with the durability path; a duplicate create was refused
+(`X-1:create-root` / `object-exists`); cleanup restored it to absent. The parent ended
+empty. Exact outputs:
+
+```text
+ok root=/var/lib/fb-rp11/capture-a uid=992 gid=978 mode=0700 duplicate=refused cleanup=absent
+ok root=/var/lib/fb-rp11/capture-b uid=992 gid=978 mode=0700 duplicate=refused cleanup=absent
+```
+
+**Final suite evidence (2026-11-25; supplied with the documentation instruction, not
+re-observed by the recorder).** On `oracle-test`: focused reviewer suite **780 passed in
+68.20 s, no skips or failures**; canonical bot suite **8437 passed, 280 skipped, 6 warnings
+in 2494.81 s (0:41:34), exit 0**; canonical web suite **2894 passed, 80 skipped, 1137
+warnings in 1212.82 s (0:20:12), exit 0**; Foundry Node suite **171 passed, 0 failed, 0
+skipped in 7689.042305 ms, exit 0**. The bot skips are the documented root/toolchain/opt-in
+environment gates; the web skips are permitted matrix cells asserted by per-route success
+cases. These supersede the earlier v35 figures as the current-tree result.
+
+**G4 disposable filesystem acceptance is complete** (host result plus the suite evidence
+above). It grants no operational authorization. Production and operational gates are
+unchanged. Exact-source acquisition stays blocked until the maintainer publishes the final
+successor commit. No push, source acquisition, `run_pass_a`, A-2/AUTH, SA-2, service,
+activation or probe.
+
+**Historical: next clean-session trigger (the slice was implemented and reviewed 2026-11-24).** Peter may say **“Start implementation Loop with
 Claude, proceed without asking until it's finished.”** That starts the bounded
 non-production repository slice recorded in the active handover: local-only
 Pass A argv and child environments (G2/G3), `capture` identity policy data,
@@ -21,7 +49,8 @@ production/staging access remain outside the slice.
 **Owner decisions recorded 2026-11-24.** The disposable feasibility topology
 is now single-host `oracle-test`, with clean checkout
 `/opt/freedom-blades/rp11-source` and capture roots
-`/var/lib/fb-rp11-capture-a` and `/var/lib/fb-rp11-capture-b`; the maintainer
+`/var/lib/fb-rp11-capture-a` and `/var/lib/fb-rp11-capture-b` (superseded the same
+day by the scoped parent `/var/lib/fb-rp11`, below); the maintainer
 publishes the exact commit to the canonical public remote before separately
 authorized acquisition. The dedicated locked non-login account is `capture`
 (non-root, no sudo or supplementary groups, not `ubuntu` or
@@ -29,14 +58,15 @@ authorized acquisition. The dedicated locked non-login account is `capture`
 eventual production service. Peter accepted measured conservative fixed
 per-command timeouts with timeout stopping through the single finalization path,
 and provisionally accepted the reviewed capture mechanism, subject to revision
-before production. These decisions settle direction only. Filesystem acceptance,
+before production. These decisions settle direction only. As of 2026-11-24, filesystem acceptance (since passed,
+above),
 the single-host G2/G3 command/environment redesign, measured timeout values and
 whole-pass bound, final tool digest, integrity-pinned SA-2 build and review all
 remain incomplete. No account or path was created. No A-2/AUTH grant, source
 acquisition, `run_pass_a` call, operational pass, production/staging access,
 SA-2 build/install, activation or probe is authorized.
 
-**G4 disposable-host result (2026-11-24): filesystem acceptance FAILED.** With
+**Historical, superseded: G4 direct-leaf result (2026-11-24): filesystem acceptance FAILED.** With
 Peter's explicit disposable-host authorization, `oracle-test` was checked. The
 reviewed slice is committed locally as `592678b` but not pushed, so exact-source
 acquisition remains blocked on maintainer publication; no source was acquired.
@@ -53,6 +83,20 @@ roots must not be silently precreated. Production untouched; no source
 acquisition, `run_pass_a`, A-2/AUTH, SA-2, service, activation or probe. No code or
 pin change.
 
+**G4 scoped-parent redesign (2026-11-24; implemented in data and tests; host validation since done, see 2026-11-25 above).**
+Roots are `/var/lib/fb-rp11/capture-a` and `/var/lib/fb-rp11/capture-b`; the parent `/var/lib/fb-rp11`
+is pre-provisioned `root:capture` **0770** (Peter's correction of the first-approved 0730; that mode and its open finding are historical and
+superseded: it withheld
+the read the unmodified capture store needs) and the leaves are absent before X-1 and created 0700 by
+non-root `capture`; `/var/lib` stays 755 and untouched. `pass_a_plan.py` carries `PARENT_CONTRACT` and pure
+checkers; manifest **v37** (aggregate `36ad663b…bbe41d5`) and every pin were regenerated twice
+byte-identically and re-derived. An integration test runs the unmodified `PosixCaptureFilesystem` /
+`CaptureRootStore` under a 0770 stand-in parent: X-1 creates the leaf exclusively as 0700, both entry
+barriers succeed, an existing leaf is refused and nothing is left behind. At that date the parent was not
+provisioned and no leaf had been tested on `oracle-test` (superseded 2026-11-25). `run_pass_a`
+uncalled; no source acquisition, A-2/AUTH, SA-2, service, probe or production/staging action. Handback:
+[follow-up 3](../review/rp11-pass-a-plan-handback.md).
+
 **Pass A plan slice (2026-11-24; implemented, tested, measured with synthetic stand-ins, accepted for review only).**
 `tools/phase_5_0_evidence/execution/pass_a_plan.py` holds the finite local-only Pass A plan
 (49 fixed argv), four complete child environments (G2/G3), the `capture` identity as policy
@@ -66,7 +110,7 @@ account creation, A-2/AUTH, SA-2 build/install, service install/activation, prob
 operational Pass A, production/staging.
 Handback: [rp11-pass-a-plan-handback.md](../review/rp11-pass-a-plan-handback.md).
 
-**G1 re-derivation (2026-11-23; accepted for review, NOT authorized to run).**
+**G1 re-derivation (2026-11-23; accepted for review, NOT authorized to run). Historical: its G2/G3/G4/G7 open-gate statements are superseded by the 2026-11-24 and 2026-11-25 records.**
 Peter approved fully re-deriving and accepting G1 for the current Python 3.14 /
 PostgreSQL 18 disposable target. The approved-target constants were rebased from
 the repository's canonical disposable-server record (Python 3.14, PostgreSQL

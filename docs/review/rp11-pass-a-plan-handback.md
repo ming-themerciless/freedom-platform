@@ -113,3 +113,130 @@ limitations above still stand: nothing was measured under `capture` or at the se
 or a revised exclusive-create lifecycle/security. Do not weaken `/var/lib` or silently precreate
 the roots. Production untouched; no source acquired, `run_pass_a`, A-2/AUTH, SA-2, service,
 activation or probe. No code or pin changed, so the results and manifest v35 above are unaffected.
+
+## Follow-up 2 2026-11-24 — G4 scoped-parent redesign (Claude; for Codex review)
+
+**Historical, superseded:** the 0730 mode, its open finding and the "Not done" host note below
+are replaced by follow-ups 3 and 4.
+
+Peter approved a narrowly provisioned parent. **Roots are now `/var/lib/fb-rp11/capture-a` and
+`/var/lib/fb-rp11/capture-b`.** Parent contract: `/var/lib/fb-rp11` is pre-provisioned by root as
+`root:capture` mode **0730** (root full; `capture` group write + search, no read or listing;
+others nothing; no setuid/setgid/sticky); the leaves are absent before X-1 and created exclusively
+mode 0700 by non-root `capture`; `/var/lib` stays `root:root` 755.
+
+**Changed**
+* `pass_a_plan.py`: `CAPTURE_PARENT`, roots derived from it; `ParentContract`/`PARENT_CONTRACT`;
+  `ObservedDirectory` (an `lstat` observation with the full `st_mode`); pure `parent_problems`,
+  `leaf_absent_problems`, `created_leaf_problems`; `validate_paths(..., parent=)` now requires the
+  parent to be one component below `/var/lib`, each root a direct child of it, and no overlap with the
+  checkout or `R`. No filesystem access, no step/argv/environment/measurement change.
+* `tests/test_rp11_pass_a_plan.py` (+16 tests/cases): the contract's modes and owners; 19 unsafe
+  parents each refused by name (wrong owner/group, 0755/0750/0770/0700/0731/0737/0777, setuid/setgid/
+  sticky, 0330, symlink, file, wrong path); absent-before-X-1; created-leaf owner/mode/type; path
+  refusals incl. the withdrawn direct leaf; checkers touch no filesystem; the open finding below.
+* Manifest **v36** (covered bytes of `pass_a_plan.py` only; 66 sources): aggregate `0499adfb…0bfcd7`,
+  JSON `59c5ab87…4e6c56` (377,690 bytes), concrete plan `171cfa12…7753` (178,764 bytes). The
+  generator ran twice to scratch with byte-identical manifest, plan and output. Re-derived: the operational
+  prompt, R5 assignment, runner `PINS`, blocks s01/s04c/s04d/s11 (incl. `review_manifest.py`
+  `41bc4dff…3c80`, 80,219 bytes), `tests/test_r5_runner.py`, `test_r16_remediation`.
+* Proposal §0b/§4/G4 row, implementation plan §16, handover, status, change-log.
+
+**Superseded by follow-up 3 (mode 0770; no open finding).** *Original finding:* `CaptureRootStore.create_root` opens every ancestor `O_RDONLY` and
+fsyncs the parent's directory entry. The group has no read on 0730, so the store cannot create a root
+below the approved parent. Reproduced with an owner-`0330` stand-in (same rule, no root needed): `O_RDONLY`
+EACCES; `O_PATH` open and `mkdirat`/`rmdir` succeed; `fsync` on `O_PATH` EBADF; `create_root` fails closed at
+`X-1:open-ancestor` / `open-refused` and leaves nothing (pinned by a test that must be replaced when the store
+changes). Options: change the store to traverse by `O_PATH` and settle a different durability barrier for the
+root entry (a durability design choice, so not made here), or a parent mode that grants group read (e.g. 0770).
+The store and `capture_mechanism` are unmodified.
+
+**Not done.** `ssh oracle-test` from this sandboxed session fails with the documented
+`Bad owner or permissions on /etc/ssh/ssh_config.d/…` artifact; the runbook forbids the `-F` workaround without
+explicit authorization, so the parent was not provisioned and no leaf was created or removed as `capture`
+(both leaves remain absent as last recorded). The measurement under `capture` and at the real paths is still
+outstanding. Planned survey steps do not observe the parent (no step changed).
+
+## Follow-up 3 2026-11-24 — parent mode 0770 (Claude; for Codex review)
+
+Peter resolved the 0730-versus-store finding by changing the dedicated parent contract to
+`/var/lib/fb-rp11` = `root:capture` mode **0770** (the directory is purpose-built and `capture` is its
+only group member). `/var/lib` stays `root:root` 755; leaves stay absent before X-1 and are created
+exclusively 0700 by non-root `capture`. **No open durability finding.**
+
+**Changed**
+* `pass_a_plan.py`: `PARENT_CONTRACT.mode = 0o770`; `parent_problems` reasons are now `group-cannot-read`,
+  `group-cannot-create`, `other-access`, `special-bits`, `owner-bits`, `mode` (plus `path`, `not-a-directory`,
+  `owner`, `group`). Docstrings no longer state an open finding. No step, argv, environment or measurement change.
+* `tests/test_rp11_pass_a_plan.py`: 0770 accepted; 0730 (`group-cannot-read`), 0750, 0755, 0700, 0771, 0777, 0731,
+  setuid/setgid/sticky 0770, 0370, wrong owner/group, link, file and wrong path refused with accurate reasons.
+  The test pinning the store failure under 0330 is **removed** and replaced by an integration test using the
+  unmodified `PosixCaptureFilesystem` and `CaptureRootStore` under a 0770 stand-in parent: X-1 creates the leaf
+  exclusively as 0700 (and its subdirectories 0700), the root-entry and subdirectory-entry fsync barriers run and
+  succeed, a second `create_root` on the existing leaf is refused (`X-1:create-root` / `object-exists`) and
+  leaves it intact, and cleanup leaves the parent empty.
+* Manifest **v37** (covered bytes of `pass_a_plan.py` and the version comment in `review_manifest.py`; 66 sources):
+  aggregate `36ad663b…bbe41d5`, JSON `9b6fe73c…14ac87` (377,690 bytes), concrete plan `6e502219…87a5e5`
+  (178,764 bytes), `review_manifest.py` `6c498490…591b7c` (80,791 bytes). Generator run twice to scratch with
+  byte-identical manifest, plan and output. Re-derived: operational prompt, R5 assignment, runner `PINS`, blocks
+  s01/s04c/s04d/s11, `tests/test_r5_runner.py`, `test_r16_remediation`.
+* Proposal §0b/§4/G4 row, implementation plan §16, handover, status, change-log.
+
+**Not done (remains for Codex).** Host validation: provisioning `/var/lib/fb-rp11` as `root:capture` 0770 and creating and
+removing the leaves as the real `capture` account on `oracle-test`. No SSH, push, source acquisition or `run_pass_a`;
+no A-2/AUTH, SA-2, service, probe or production/staging action. The stand-in test shows the unmodified store works
+under 0770 permissions as the owning user; it does not prove behaviour as `capture` on the host.
+
+## Follow-up 4 2026-11-25 — G4 host filesystem acceptance (Codex validation, recorded by Claude)
+
+Documentation-only record of Codex's host validation; Claude did not run or re-observe it.
+
+On `oracle-test`, under the `root:capture` mode 0770 parent `/var/lib/fb-rp11`, the
+unmodified `CaptureRootStore` / `PosixCaptureFilesystem` ran as the capture account
+(UID 992, GID 978) for both `/var/lib/fb-rp11/capture-a` and
+`/var/lib/fb-rp11/capture-b`. Each leaf started absent; X-1 created it mode 0700, owned
+992:978, with the durability path; a duplicate create was refused
+(`X-1:create-root` / `object-exists`); cleanup restored it to absent. The parent ended
+empty. Exact outputs:
+
+```text
+ok root=/var/lib/fb-rp11/capture-a uid=992 gid=978 mode=0700 duplicate=refused cleanup=absent
+ok root=/var/lib/fb-rp11/capture-b uid=992 gid=978 mode=0700 duplicate=refused cleanup=absent
+```
+
+**G4 disposable filesystem acceptance is technically complete, pending final suite
+evidence only.** It grants no operational authorization. Production and operational gates are unchanged. Exact-source
+acquisition stays blocked until the maintainer publishes the final successor commit.
+No push, source acquisition, `run_pass_a`, A-2/AUTH, SA-2, service, activation or probe.
+
+**Limits.** No source was acquired, so this is not evidence from an acquired published
+checkout. It is not a timing measurement: G7 figures remain unmeasured under `capture`
+and at the selected paths. No push, source acquisition, `run_pass_a`, A-2/AUTH, SA-2,
+service or production action. The 0730 mode and its open finding (follow-up 2) are
+historical and superseded. No covered source, test, manifest or pin changed in this
+follow-up.
+
+**Next action:** final suite evidence, then maintainer publication of the final successor
+commit. Source acquisition still needs its own authorization.
+
+## Follow-up 5 2026-11-25 — final suite evidence (recorded by Claude; results supplied, not re-observed)
+
+Documentation-only. On `oracle-test`, for the current tree (manifest v37; no source, test, manifest, plan or pin
+changed by this record):
+
+| Suite | Result |
+|---|---|
+| Focused reviewer suite | **780 passed in 68.20 s**, no skips or failures |
+| Canonical bot suite (`tests/test_*.py`) | **8437 passed, 280 skipped, 6 warnings in 2494.81 s (0:41:34)**, exit 0 |
+| Canonical web suite (`tests/web`) | **2894 passed, 80 skipped, 1137 warnings in 1212.82 s (0:20:12)**, exit 0 |
+| Foundry Node suite | **171 passed, 0 failed, 0 skipped in 7689.042305 ms**, exit 0 |
+
+The bot skips are the documented root/toolchain/opt-in environment gates; the web skips are permitted matrix cells
+asserted by per-route success cases. These supersede the v35 figures above as the current-tree result.
+
+**G4 disposable filesystem acceptance is complete** (follow-up 4 host result plus this evidence). It grants no
+operational authorization: no push, source acquisition, `run_pass_a`, A-2/AUTH, SA-2, service or production action.
+G7 timings remain unmeasured under `capture` and at the selected paths.
+
+**Next action:** maintainer publication of the final successor commit; source acquisition still needs its own
+authorization.

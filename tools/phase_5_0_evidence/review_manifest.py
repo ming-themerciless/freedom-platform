@@ -661,7 +661,23 @@ MANIFEST_SCHEMA = "phase-5-0-evidence-review-manifest"
 #: caller. 65 covered sources become 66; no vector, step, target fact, launcher
 #: file or schema changes. `is_executable` remains `False`. A digest remains
 #: review input, not execution approval.
-MANIFEST_VERSION = 35
+#: **36** is the G4 scoped-parent refresh, 2026-11-24 (not an execution approval). Only the
+#: bytes of the covered `execution/pass_a_plan.py` change: the two capture roots move from
+#: direct `/var/lib` leaves to `/var/lib/fb-rp11/capture-a` and `/var/lib/fb-rp11/capture-b`,
+#: and the module gains the parent/leaf contract data (`PARENT_CONTRACT`: `root:capture`
+#: `0730` parent, leaves absent before X-1 and created `0700` by `capture`) with pure
+#: checkers and the extended `validate_paths`. No step, argv, environment, measurement,
+#: vector, target fact, launcher file, schema or covered-set membership changes (66
+#: covered sources). `is_executable` remains `False`. A digest remains review input, not
+#: execution approval.
+#: **37** is the G4 parent-mode correction, 2026-11-24 (not an execution approval). Only the
+#: bytes of the covered `execution/pass_a_plan.py` change: `PARENT_CONTRACT` moves from
+#: `root:capture` `0730` to `0770` (the unmodified capture store needs group read on the
+#: parent) and `parent_problems` names the refusals accordingly. No step, argv, environment,
+#: measurement, vector, target fact, launcher file, schema or covered-set membership changes
+#: (66 covered sources). `is_executable` remains `False`. A digest remains review input, not
+#: execution approval.
+MANIFEST_VERSION = 37
 
 #: **27.** The `infra/rp11-launch/` files whose bytes the manifest pins
 #: (proposal §5.2, §5.11): image source, build definition, toolchain and

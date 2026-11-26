@@ -872,8 +872,9 @@ def test_the_manifest_pins_whether_a_contract_resolves_anything(plan) -> None:
     # digest, XD stream digest and every vector stay unchanged.
     # Version 35 (2026-11-24) adds the finite local-only Pass A plan module to the covered
     # set; versions 36 and 37 (G4 scoped parent) and 38 (G7 real-identity measurements)
-    # change only that module's bytes; nothing else here moves.
-    assert body["manifest_version"] == MANIFEST_VERSION == 38
+    # change only that module's bytes; nothing else here moves. Version 39 (G9-R1) changes
+    # only `journal.py`'s bytes: an incomplete opened-journal observation is refused.
+    assert body["manifest_version"] == MANIFEST_VERSION == 39
     assert body["supplied_observations"]["schema_version"] == 3
     assert "Band 7 supplied observations only" in (
         body["supplied_observations"]["importer_scope"]

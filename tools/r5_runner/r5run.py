@@ -73,7 +73,7 @@ RUN_ID_PATTERN = re.compile(r"p5-r5-fresh-\d{8}T\d{6}Z-[0-9a-f]{8}")
 #: whose own identity is supplied on the command line from the assignment.
 PINS: dict[str, tuple[str, int]] = {
     "tools/r5_runner/blocks/s01.sh": (
-        "e9be1ab01c7a97e9747bafdc5930badaebddec8a1de6df910cd953f5f9a4b2ca",
+        "057bef68019135191b26a08b76f6f79334941f86720a110e3f17f2375b208d17",
         11516,
     ),
     "tools/r5_runner/blocks/s02.sh": (
@@ -101,11 +101,11 @@ PINS: dict[str, tuple[str, int]] = {
         232,
     ),
     "tools/r5_runner/blocks/s04c.sh": (
-        "6a65f59792fdb858543078604b9d7cdee17c492481d0b4c41a3bc2fb6c20d7f3",
+        "edaa1641cc0b5cb568e67ee08c3e18199728d6f1807fe2f5715c73d5388768be",
         4420,
     ),
     "tools/r5_runner/blocks/s04d.sh": (
-        "918d01cbd56697009011baead30ce2de544c3562acdbbf10c799b271ce522f79",
+        "2a33f831b652d5906b77a9fe216cdb82da4702335cb99cea33bc7bade1acb536",
         8708,
     ),
     "tools/r5_runner/blocks/s05.sh": (
@@ -129,7 +129,7 @@ PINS: dict[str, tuple[str, int]] = {
         2029,
     ),
     "tools/r5_runner/blocks/s11.sh": (
-        "6229421e579ecf92b37ae741aaf029810b22701fbc644a8ed655e71410475370",
+        "3944170aebb712466155159358012701cef2adfce8d9d18dd05e0c50c0f92d07",
         10066,
     ),
     "tools/r5_runner/blocks/s12-start.sh": (
@@ -141,8 +141,8 @@ PINS: dict[str, tuple[str, int]] = {
         1283,
     ),
     "tests/test_r5_runner.py": (
-        "efa4ab463d785e8780820336a614d3b96486c7c60b19176db32aa8d467d1a886",
-        36986,
+        "416baa4818910059d9a3b1b1567ae0889928bbef0405fc102215cfb6bff2a62e",
+        37271,
     ),
 }
 
@@ -153,6 +153,9 @@ TIMESTAMP = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"
 #: The `cc1.v` fixture re-derived under FRESH-R4-HS-1 (assignment R5 §3.1).
 BASELINE_SHA256 = "e99cee65a228339e304d4e578643de409961539a8240230d4e41bb1baf6bb13a"
 BASELINE_LENGTH = 5305
+#: Start of the S1.8 result line, which begins with the review-manifest version
+#: the block expects; the handback excerpt selects the line by it.
+MANIFEST_RESULT_PREFIX = "39 "
 
 EXIT_PASS = 0
 EXIT_HARD_STOP = 1
@@ -1191,7 +1194,7 @@ def render_body(runner: Runner) -> str:
     add("S1.4, S1.5, S1.6, S1.7, S1.8, S4c.2, S4c.3, S4d.3 and S4d.4 result lines:\n")
     results = (
         "repository_state=", "rows ", "launcher_tree ", "package_lines ", "archive_snapshot=",
-        "build_root_manifest_sha256=", "entry_mechanism=", "30 ",
+        "build_root_manifest_sha256=", "entry_mechanism=", MANIFEST_RESULT_PREFIX,
     )
     add(_fence(
         _pick(s1, "S1", ("S1.4", "S1.5", "S1.6", "S1.7", "S1.8"), lambda l: l.startswith(results))

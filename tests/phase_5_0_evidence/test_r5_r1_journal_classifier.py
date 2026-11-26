@@ -202,10 +202,72 @@ def test_each_fault_refuses_at_its_step_with_its_own_codes(overrides, step, writ
     assert verdict.coordinator_records_clear_evidence is False
 
 
+#: The fault each case must be diagnosed as, and its §2.13.6 row, stated here so
+#: that two causes sharing a step and both codes (a missing and an unreadable
+#: seal) cannot be exchanged unnoticed. The row equals the coordinator code except
+#: for the torn tail, whose condition is J-02.
+CAUSES = {
+    "current-absent": ("CURRENT_UNRESOLVED", "J-03"),
+    "current-malformed": ("CURRENT_UNRESOLVED", "J-03"),
+    "seal-missing": ("SEAL_MISSING", "J-17"),
+    "seal-eacces": ("SEAL_UNREADABLE", "J-17"),
+    "seal-eio": ("SEAL_UNREADABLE", "J-17"),
+    "seal-format": ("SEAL_STRUCTURE", "J-24"),
+    "binding-trailing-byte": ("SEAL_STRUCTURE", "J-24"),
+    "probe-digest": ("PROBE_REPORT", "J-25"),
+    "probe-not-a-pass": ("PROBE_REPORT", "J-25"),
+    "genesis-derivation": ("GENESIS_DERIVATION", "J-24"),
+    "seal-mutable": ("SEAL_MUTABLE", "J-17"),
+    "seal-flags-unsupported": ("SEAL_MUTABLE", "J-17"),
+    "journal-missing": ("JOURNAL_MISSING", "J-03"),
+    "journal-eacces": ("JOURNAL_UNREADABLE", "J-12"),
+    "journal-eio": ("JOURNAL_UNREADABLE", "J-12"),
+    "inode-replaced": ("INODE_REPLACED", "J-11"),
+    "device-replaced": ("INODE_REPLACED", "J-11"),
+    "mode": ("OWNER_OR_MODE", "J-05"),
+    "owner": ("OWNER_OR_MODE", "J-05"),
+    "group": ("OWNER_OR_MODE", "J-05"),
+    "append-absent": ("APPEND_FLAG_ABSENT", "J-06"),
+    "append-unsupported": ("APPEND_FLAG_ABSENT", "J-06"),
+    "host": ("HOST_MISMATCH", "J-23"),
+    "deployment-stale": ("DEPLOYMENT_STALE", "J-22"),
+    "source-manifest": ("SOURCE_MANIFEST_MISMATCH", "J-27"),
+    "provenance": ("PROVENANCE_INVALID", "J-26"),
+    "free-space": ("FILESYSTEM_FULL_OR_READ_ONLY", "J-13"),
+    "read-only": ("FILESYSTEM_FULL_OR_READ_ONLY", "J-13"),
+    "empty": ("EMPTY_JOURNAL", "J-04"),
+    "genesis-record": ("GENESIS_RECORD_MISMATCH", "J-04"),
+    "malformed": ("MALFORMED_RECORD", "J-07"),
+    "cross-generation": ("CROSS_GENERATION", "J-18"),
+    "duplicate-seq": ("DUPLICATE_SEQUENCE", "J-10"),
+    "sequence-gap": ("SEQUENCE_GAP", "J-08"),
+    "prev-hash": ("CHAIN_BROKEN", "J-09"),
+    "record-hash": ("CHAIN_BROKEN", "J-09"),
+    "timestamp": ("NON_MONOTONIC_TIME", "J-21"),
+    "torn-tail": ("TORN_TAIL", "J-02"),
+    "sealed": ("GENERATION_SEALED", "J-19"),
+}
+
+
+@pytest.mark.parametrize("case", [row[0] for row in ORACLE])
+def test_each_fault_is_diagnosed_as_its_own_cause_under_its_own_row(case) -> None:
+    overrides = next(row[1] for row in ORACLE if row[0] == case)
+    name, design_row = CAUSES[case]
+    assert validate_generation(SEAL, healthy(**overrides)).fault is JournalFault[name]
+    assert journal.FAULT_REFUSALS[JournalFault[name]].row == design_row
+
+
 def test_the_oracle_exercises_every_modelled_fault() -> None:
     """Every `JournalFault` has an independently stated expectation above."""
-    produced = {validate_generation(SEAL, healthy(**row[1])).fault for row in ORACLE}
-    assert produced == set(JournalFault)
+    assert set(CAUSES) == {row[0] for row in ORACLE}
+    assert {name for name, _ in CAUSES.values()} == {fault.name for fault in JournalFault}
+
+
+def test_the_free_space_floor_is_n5_0_21() -> None:
+    """N5.0-21 is 1 GiB (§8.3), stated here rather than read from the module."""
+    assert validate_generation(SEAL, healthy(free_bytes=1_073_741_824)).fault is None
+    refused = validate_generation(SEAL, healthy(free_bytes=1_073_741_823))
+    assert refused.writer_refusal == "SW-J13"
 
 
 def test_the_healthy_generation_passes_v_w_and_is_still_not_clear_evidence() -> None:
@@ -308,6 +370,72 @@ def test_c4_combined_faults_follow_the_writers_w1_to_w16_order(overrides, writer
     assert validate_generation(SEAL, healthy(**overrides)).writer_refusal == writer
 
 
+#: §2.13.5b's V-W table, top to bottom, read-only steps only.
+PLAN_ORDER = (
+    "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8",
+    "W9", "W10", "W11", "W11a", "W12", "W13", "W14", "W15", "W16",
+)
+
+#: Every two oracle faults at different steps that can be present at once (their
+#: overrides touch different readings), earlier step first.
+STEP_PAIRS = [
+    (earlier, later)
+    for earlier in ORACLE
+    for later in ORACLE
+    if PLAN_ORDER.index(earlier[2]) < PLAN_ORDER.index(later[2])
+    and not set(earlier[1]) & set(later[1])
+]
+
+
+def test_c4_the_pairwise_matrix_covers_every_adjacent_step_boundary() -> None:
+    covered = {(earlier[2], later[2]) for earlier, later in STEP_PAIRS}
+    assert set(zip(PLAN_ORDER, PLAN_ORDER[1:])) <= covered
+
+
+@pytest.mark.parametrize(
+    "earlier, later", STEP_PAIRS, ids=[f"{a[0]}-over-{b[0]}" for a, b in STEP_PAIRS]
+)
+def test_c4_of_two_faults_the_earlier_step_refuses(earlier, later) -> None:
+    case, overrides, step, writer, coordinator = earlier
+    verdict = validate_generation(SEAL, healthy(**{**later[1], **overrides}))
+    assert (verdict.fault.name, verdict.step.value, verdict.writer_refusal) == (
+        CAUSES[case][0], step, writer,
+    )
+    # A torn tail beside a later fault leaves the coordinator code open: J-02's
+    # C column and C-e say J-20, but C-a would first have to pass W16. Not
+    # asserted until the design rules on it.
+    if case != "torn-tail":
+        assert verdict.coordinator_refusal == coordinator
+
+
+#: One record's W14 checks in the order the step lists them: format_version,
+#: generation_id, seq, prev_hash / record_hash, at.
+W14_CHECKS = (
+    ("format", {"format_known": False}, "SW-J07"),
+    ("generation", {"generation_id": "000002"}, "SW-J18"),
+    ("sequence", {"seq": 1}, "SW-J10"),
+    ("sequence", {"seq": 7}, "SW-J08"),
+    ("chain", {"prev_hash": "x"}, "SW-J09"),
+    ("chain", {"hash_verifies": False}, "SW-J09"),
+    ("time", {"at": 0}, "SW-J21"),
+)
+
+W14_PAIRS = [
+    (earlier, later)
+    for i, earlier in enumerate(W14_CHECKS)
+    for later in W14_CHECKS[i + 1:]
+    if earlier[0] != later[0]
+]
+
+
+@pytest.mark.parametrize(
+    "earlier, later", W14_PAIRS, ids=[f"{a[2]}-over-{b[2]}" for a, b in W14_PAIRS]
+)
+def test_c4_within_one_record_w14_refuses_in_its_listed_order(earlier, later) -> None:
+    observation = healthy(records=chain_with(2, **earlier[1], **later[1]))
+    assert validate_generation(SEAL, observation).writer_refusal == earlier[2]
+
+
 # ---------------------------------------------------------------------------
 # The evidence record
 # ---------------------------------------------------------------------------
@@ -315,8 +443,8 @@ def test_c4_combined_faults_follow_the_writers_w1_to_w16_order(overrides, writer
 
 @pytest.mark.parametrize("row", ORACLE, ids=[row[0] for row in ORACLE])
 def test_a_case_expecting_its_own_fault_passes_and_names_both_refusals(row) -> None:
-    _, overrides, _, writer, coordinator = row
-    fault = validate_generation(SEAL, healthy(**overrides)).fault
+    case, overrides, _, writer, coordinator = row
+    fault = JournalFault[CAUSES[case][0]]
     evidence = classify_generation_state(
         case_id=f"JNL-{row[0]}", seal=SEAL, observation=healthy(**overrides),
         expected_fault=fault,
@@ -349,9 +477,54 @@ def test_a_case_that_refuses_for_the_wrong_reason_fails(overrides, expected) -> 
     assert evidence.status is Status.FAILED
 
 
-def test_an_opened_journal_must_carry_its_inode() -> None:
+#: **G9-R1.** What W7 and W8 compare on an opened journal.
+OPENED_JOURNAL_FIELDS = (
+    "journal_device", "journal_inode", "journal_uid", "journal_gid", "journal_mode",
+)
+
+
+@pytest.mark.parametrize("field", OPENED_JOURNAL_FIELDS)
+def test_an_opened_journal_must_carry_every_fstat_field(field) -> None:
+    with pytest.raises(ObservationRefused, match=field):
+        healthy(**{field: None})
+    with pytest.raises(ObservationRefused, match=field):
+        dataclasses.replace(healthy(), **{field: None})
+
+
+@pytest.mark.parametrize(
+    "expected", [None, *JournalFault], ids=lambda f: "no-refusal" if f is None else f.value
+)
+@pytest.mark.parametrize("field", OPENED_JOURNAL_FIELDS)
+def test_an_unobserved_fstat_field_yields_no_evidence_record(field, expected) -> None:
+    """**G9-R1.** An unread value is not a wrong value: before the guard, an
+    unread owner, group or mode classified as J-05 and a case expecting
+    `OWNER_OR_MODE` recorded `passed`. No expectation may obtain any record."""
     with pytest.raises(ObservationRefused):
-        healthy(journal_inode=None)
+        classify_generation_state(
+            case_id="JNL-x", seal=SEAL, observation=healthy(**{field: None}),
+            expected_fault=expected,
+        )
+
+
+@pytest.mark.parametrize(
+    "read, fault",
+    [
+        (ArtifactRead.ENOENT, JournalFault.JOURNAL_MISSING),
+        (ArtifactRead.EACCES, JournalFault.JOURNAL_UNREADABLE),
+        (ArtifactRead.EIO, JournalFault.JOURNAL_UNREADABLE),
+    ],
+    ids=["ENOENT", "EACCES", "EIO"],
+)
+def test_a_journal_that_was_not_opened_needs_no_fstat_fields(read, fault) -> None:
+    observation = healthy(journal_read=read, **dict.fromkeys(OPENED_JOURNAL_FIELDS))
+    assert validate_generation(SEAL, observation).fault is fault
+
+
+@pytest.mark.parametrize("field", ["journal_uid", "journal_gid", "journal_mode"])
+def test_a_zero_owner_group_or_mode_is_observed_and_compared(field) -> None:
+    """uid 0, gid 0 and mode 0 are readings, not absences."""
+    verdict = validate_generation(SEAL, healthy(**{field: 0}))
+    assert verdict.fault is JournalFault.OWNER_OR_MODE
 
 
 def test_record_zero_digest_is_present_exactly_when_record_zero_was_read() -> None:
@@ -373,7 +546,7 @@ def _passing_records():
         records.append(
             classify_generation_state(
                 case_id=f"JNL-{name}", seal=SEAL, observation=observation,
-                expected_fault=validate_generation(SEAL, observation).fault,
+                expected_fault=JournalFault[CAUSES[name][0]],
             )
         )
     return records

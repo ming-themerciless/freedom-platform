@@ -350,13 +350,25 @@ class JournalObservation:
                 "verdict is over the records that were read and nothing appended "
                 "after."
             )
-        if self.journal_read is ArtifactRead.OK and (
-            self.journal_device is None or self.journal_inode is None
-        ):
-            raise ObservationRefused(
-                "A journal that was opened has an st_dev and an st_ino; W7 "
-                "compares both, so an observation missing either is incomplete."
-            )
+        if self.journal_read is ArtifactRead.OK:
+            unobserved = [
+                name
+                for name in (
+                    "journal_device",
+                    "journal_inode",
+                    "journal_uid",
+                    "journal_gid",
+                    "journal_mode",
+                )
+                if getattr(self, name) is None
+            ]
+            if unobserved:
+                raise ObservationRefused(
+                    "A journal that was opened has an st_dev, st_ino, st_uid, "
+                    "st_gid and mode; W7 and W8 compare them, so an observation "
+                    "missing any is incomplete and is never read as a differing "
+                    f"value. Unobserved: {', '.join(unobserved)}."
+                )
         if (self.record_zero_digest is None) != (not self.records):
             raise ObservationRefused(
                 "record_zero_digest is present exactly when a record 0 was read."

@@ -684,7 +684,15 @@ MANIFEST_SCHEMA = "phase-5-0-evidence-review-manifest"
 #: per-command timeout, vector, target fact, launcher file, schema or covered-set
 #: membership changes (66 covered sources). `is_executable` remains `False`. A digest
 #: remains review input, not execution approval.
-MANIFEST_VERSION = 38
+#: **39** is the G9-R1 journal-observation completeness remediation, 2026-11-26 (not an
+#: execution approval). Only the bytes of the covered `journal.py` change: an observation
+#: whose journal was opened but whose `st_dev`, `st_ino`, `st_uid`, `st_gid` or mode is
+#: unobserved is refused (`ObservationRefused`), where an unread owner, group or mode
+#: had classified as `J-05` and could record a passing case. No V-W step, refusal code,
+#: step, vector, target fact, launcher file, schema or covered-set membership changes
+#: (66 covered sources). `is_executable` remains `False`. A digest remains review input,
+#: not execution approval.
+MANIFEST_VERSION = 39
 
 #: **27.** The `infra/rp11-launch/` files whose bytes the manifest pins
 #: (proposal §5.2, §5.11): image source, build definition, toolchain and

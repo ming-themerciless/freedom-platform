@@ -32,10 +32,14 @@ authority exists under this document.**
 **G1 re-derivation note (2026-11-23; pins only).** The controlling G1 contract
 consumes this assignment's pin tables as *current* pins, so they were re-derived
 from the actual bytes of the tree after the RP-11 launcher Python 3.14 rebase and
-the current-target/G11 source refresh. The review manifest is **version 38**,
-aggregate `2a7564bb…2e1ca9` (G7 real-identity measurement refresh, 2026-11-25: only
-the bytes of `execution/pass_a_plan.py` and the version note in `review_manifest.py`
-moved). Superseded history: version 37 was the G4 parent-mode correction
+the current-target/G11 source refresh. The review manifest is **version 39**,
+aggregate `92a59795…9587cc` (G9-R1 journal-observation completeness remediation,
+2026-11-26: only the bytes of `journal.py` and the version note in `review_manifest.py`
+moved; **generated and tested, not yet independently reviewed, committed or
+published**). Superseded history: version 38 was the G7 real-identity measurement
+refresh (2026-11-25, aggregate `2a7564bb…2e1ca9`: only the bytes of
+`execution/pass_a_plan.py` and the version note in `review_manifest.py` moved);
+version 37 was the G4 parent-mode correction
 (2026-11-24, aggregate `36ad663b…bbe41d5`: only the bytes of `execution/pass_a_plan.py`
 moved, the parent contract from `0730` to `0770`; version 36 moved the same module to the
 `/var/lib/fb-rp11/capture-{a,b}` paths and the parent contract; version 35 was the Pass A plan refresh of the same day: the finite local-only plan module
@@ -233,8 +237,8 @@ executable.
 
 | Item | Accepted value |
 |---|---|
-| review-manifest version | `38` |
-| aggregate review-manifest digest | `2a7564bb71efbe467d4ccc504fcbfd4f98cf78545aef8c66e866d821a82e1ca9` |
+| review-manifest version | `39` |
+| aggregate review-manifest digest | `92a59795a840a5f9b5548e25d0a5711cc39a02a4f682ba3beaad0f31ee9587cc` |
 | diagnostic baseline path | `infra/rp11-launch/verify/fixtures/cc1.v.baseline` |
 | diagnostic baseline length | `5305` bytes |
 | diagnostic baseline SHA-256 | `e99cee65a228339e304d4e578643de409961539a8240230d4e41bb1baf6bb13a` |
@@ -268,8 +272,8 @@ repository-state check of §6 step 1 passes.
 | `infra/rp11-launch/build-root.manifest` | 381913 | `f08ba9de4374374fa91012021ce12fb83f6370be5547ee4e214232100c38e76f` |
 | `infra/rp11-launch/expected.sha256` | 328 | `651ff85df120a6b8bddfff7b359074b4c239e94988544c9ef60af7c3af28dd16` |
 | `infra/rp11-launch/verify/fixtures/cc1.v.baseline` | 5305 | `e99cee65a228339e304d4e578643de409961539a8240230d4e41bb1baf6bb13a` |
-| `docs/review/phase-5-0-evidence-harness-review-manifest.json` | 377690 | `4fa1c2b1fcf9cedf7fb1028feeeda4d0e229ed061ef3cc19047ca24cd42bca8d` |
-| `docs/review/phase-5-0-evidence-harness-concrete-plan.md` | 178764 | `d827b7552f0ad48a13ae899c6fb40d0c47815d3f1332d158f5c519e77b09d617` |
+| `docs/review/phase-5-0-evidence-harness-review-manifest.json` | 377690 | `7efe11d080fc1d6374ad5ff0748b81a1c1815999aa9e15a79a067bbb0a2673a2` |
+| `docs/review/phase-5-0-evidence-harness-concrete-plan.md` | 178764 | `a45c9c5ef6a3f7c531e337037b2b521638ca54164af2a2bf4ea738205b72e984` |
 | `infra/rp11-launch/build.sh` | 3254 | `87e318cdd77f1fae0a354f707d9fe32d163ba48b708bb455c670f6d4d333cfd1` |
 | `infra/rp11-launch/launch.c` | 6314 | `62050b5dc1816f4f673b8c49b94c7463391edb6dbed9f69459f0bc6c5f1dc2a7` |
 | `infra/rp11-launch/select.h` | 2187 | `34b56cfc1adb4f14f2e09c740e5e25915194778ebf73c74c1d24502121425c4b` |
@@ -291,7 +295,7 @@ repository-state check of §6 step 1 passes.
 | `tests/test_rp11_launch_toolchain.py` | 12326 | `ff3d458cabae91512562cca6143542337b1306dc3df791da505c51a9519ab76f` |
 | `tests/rp11_launch_support.py` | 8045 | `bc24c0ee7b0c9f58853479adc908c60cf013b9652409e3d5cee0d710074a18b6` |
 | `tools/phase_5_0_evidence/rp11_launch.py` | 16942 | `a51bacda94ef5ed2fe1bea6a7e90bc7c94925237bd6f72f518f7ef0c338381ed` |
-| `tools/phase_5_0_evidence/review_manifest.py` | 81359 | `f18d8fdf897961167ee58da475d1483de14bf01ba90c0a2e537a49dd2eef3879` |
+| `tools/phase_5_0_evidence/review_manifest.py` | 82001 | `b7601a450278cddda5cbd014e205f225ac0799107b21a904d3877ef96b519492` |
 
 Appendix A restates these 28 digests in `sha256sum --check` format and
 Appendix B restates digest, length and path for the independent Python check.
@@ -307,7 +311,7 @@ Cross-checks that §6 makes mechanically:
 * the committed listing's digest equals the listing entry of
   `expected.sha256` (both appear in the table);
 * the review manifest rebuilt in memory serializes byte-equal to the checked-in
-  JSON, reports `MANIFEST_VERSION = 38` and aggregate `2a7564bb…2e1ca9`, and the
+  JSON, reports `MANIFEST_VERSION = 39` and aggregate `92a59795…9587cc`, and the
   plan reports `is_executable=False`; and
 * `tools/phase_5_0_evidence/rp11_launch.py`, which holds the image, listing,
   map, `launch.s`, lock and manifest digests, `CC1_V_BASELINE_PATH` and
@@ -344,25 +348,25 @@ These 19 files are the delivery mechanism. They are committed-source material
 <!-- r5-pins:start -->
 | File | Bytes | SHA-256 |
 |---|---:|---|
-| `tools/r5_runner/r5run.py` | 58905 | `869f71d246389bbc1a7d5b8f99ca54e37b3f4f815ef22b97f3e40584d20353d2` |
-| `tools/r5_runner/blocks/s01.sh` | 11516 | `e9be1ab01c7a97e9747bafdc5930badaebddec8a1de6df910cd953f5f9a4b2ca` |
+| `tools/r5_runner/r5run.py` | 59100 | `593dbb32d213100a92e23f4ff447c5ca209170e4907d2255a300364e82334282` |
+| `tools/r5_runner/blocks/s01.sh` | 11516 | `057bef68019135191b26a08b76f6f79334941f86720a110e3f17f2375b208d17` |
 | `tools/r5_runner/blocks/s02.sh` | 7000 | `a0cda6026583275d45c1a8b88cc0ed77ba97a9973408d66990469901ef78d264` |
 | `tools/r5_runner/blocks/s03.sh` | 1560 | `2d4c39b8ccf9d84afc4a439b08611ce3f5bca32a3b97021bb6caca8d8759676b` |
 | `tools/r5_runner/blocks/s04a.sh` | 1172 | `1a948d6758f6ece09dbafc8f250a5682ec2b096cbed814eb25a8ed57657ef0a1` |
 | `tools/r5_runner/blocks/s04b-start.sh` | 240 | `55ab56d97581e442bf24c3ebe6ab9e6b6714a1aaac04f0f0d620e3d45d4aff85` |
 | `tools/r5_runner/blocks/s04b-sync.argv` | 313 | `7dddbaef33807f4158792c7270d5a6d7e38049938a87953c7c905c44c8738050` |
 | `tools/r5_runner/blocks/s04b-end.sh` | 232 | `a77be397cf2b9a00737f25a5c4d4e17dc706e2d5478353f9afc2dbdbb95c261e` |
-| `tools/r5_runner/blocks/s04c.sh` | 4420 | `6a65f59792fdb858543078604b9d7cdee17c492481d0b4c41a3bc2fb6c20d7f3` |
-| `tools/r5_runner/blocks/s04d.sh` | 8708 | `918d01cbd56697009011baead30ce2de544c3562acdbbf10c799b271ce522f79` |
+| `tools/r5_runner/blocks/s04c.sh` | 4420 | `edaa1641cc0b5cb568e67ee08c3e18199728d6f1807fe2f5715c73d5388768be` |
+| `tools/r5_runner/blocks/s04d.sh` | 8708 | `2a33f831b652d5906b77a9fe216cdb82da4702335cb99cea33bc7bade1acb536` |
 | `tools/r5_runner/blocks/s05.sh` | 3231 | `7750e2502d7ecea05350d3d596b15d59b0b7243789502cc954592862ff4cb64b` |
 | `tools/r5_runner/blocks/s06-s07.sh` | 3193 | `58a63f9cefb8323b339e92dd3f799e2570291803792c705a4face97eacc49868` |
 | `tools/r5_runner/blocks/s08.sh` | 2440 | `aa2a744fe87a7d79964f02c88d1021471fe2b0700202df7f421f9f005cd141d1` |
 | `tools/r5_runner/blocks/s09.sh` | 1588 | `46bbcd1f6eee93531d08350699b83f71897e3c40cea35c2eedde54c517d02dc6` |
 | `tools/r5_runner/blocks/s10.sh` | 2029 | `6502636bf63a5194574ca553e3ca8c2ac3889e2d2bfe97c76e890f60731828f7` |
-| `tools/r5_runner/blocks/s11.sh` | 10066 | `6229421e579ecf92b37ae741aaf029810b22701fbc644a8ed655e71410475370` |
+| `tools/r5_runner/blocks/s11.sh` | 10066 | `3944170aebb712466155159358012701cef2adfce8d9d18dd05e0c50c0f92d07` |
 | `tools/r5_runner/blocks/s12-start.sh` | 240 | `bf495fd370a236b04295e955ce083e63fd4ead1fa8e2fabe4ca788a21f1f2aa3` |
 | `tools/r5_runner/blocks/s12-end.sh` | 1283 | `9aaf1069e4637e3b342712cb33817c4282c1fa8efef8296f54974c6dd59d46db` |
-| `tests/test_r5_runner.py` | 36986 | `efa4ab463d785e8780820336a614d3b96486c7c60b19176db32aa8d467d1a886` |
+| `tests/test_r5_runner.py` | 37271 | `416baa4818910059d9a3b1b1567ae0889928bbef0405fc102215cfb6bff2a62e` |
 <!-- r5-pins:end -->
 
 * `tools/r5_runner/r5run.py` is the runner. Its own digest cannot be inside
@@ -930,7 +934,7 @@ b=m.serialize()
 f=open("docs/review/phase-5-0-evidence-harness-review-manifest.json","rb").read()
 r=(MANIFEST_VERSION, m.digest(), b==f, hashlib.sha256(b).hexdigest(), p.is_executable)
 print(*r)
-want=(38,"2a7564bb71efbe467d4ccc504fcbfd4f98cf78545aef8c66e866d821a82e1ca9",True,"4fa1c2b1fcf9cedf7fb1028feeeda4d0e229ed061ef3cc19047ca24cd42bca8d",False)
+want=(39,"92a59795a840a5f9b5548e25d0a5711cc39a02a4f682ba3beaad0f31ee9587cc",True,"7efe11d080fc1d6374ad5ff0748b81a1c1815999aa9e15a79a067bbb0a2673a2",False)
 sys.exit(0 if r==want else 24)'
   status=$?
   printf 'S1.8 in-memory-review-manifest exit=%s\n' "$status"
@@ -954,7 +958,7 @@ computed from exactly those bytes; S1.4 prints `repository_state=clean`; S1.5
 prints `OK` for all 28 files; S1.6 prints `OK` for all 28, `rows 28 mismatches 0` and
 `launcher_tree files 22 dirs 5`; S1.7 prints `package_lines 62` and the
 snapshot and manifest-digest values of §3.2; and S1.8 prints
-`38 2a7564bb71efbe467d4ccc504fcbfd4f98cf78545aef8c66e866d821a82e1ca9 True 4fa1c2b1fcf9cedf7fb1028feeeda4d0e229ed061ef3cc19047ca24cd42bca8d False`.
+`39 92a59795a840a5f9b5548e25d0a5711cc39a02a4f682ba3beaad0f31ee9587cc True 7efe11d080fc1d6374ad5ff0748b81a1c1815999aa9e15a79a067bbb0a2673a2 False`.
 S1.3 is evidence, not a gate: documentation changes outside the controlled
 paths are expected, and only git's own failure stops it. It runs before S1.4,
 which derives and gates the repository state of the controlled paths. The
@@ -2448,7 +2452,7 @@ that it can be copied without interpretation:
 performed, in order, by issuing exactly this one line, once:
 
 ```text
-cd /opt/freedom-blades/platform && /usr/bin/python3 -I -B tools/r5_runner/r5run.py --executor Gemini --attest-independence --expect-runner-sha256 869f71d246389bbc1a7d5b8f99ca54e37b3f4f815ef22b97f3e40584d20353d2 </dev/null
+cd /opt/freedom-blades/platform && /usr/bin/python3 -I -B tools/r5_runner/r5run.py --executor Gemini --attest-independence --expect-runner-sha256 593dbb32d213100a92e23f4ff447c5ca209170e4907d2255a300364e82334282 </dev/null
 ```
 
 It contains no heredoc, pipe, multiline text or placeholder; the digest is the
@@ -2526,8 +2530,8 @@ f704c0f4f0ddbe9de92da9812dde6929f681ba778263746a603bde8b4b3563d6  infra/rp11-lau
 f08ba9de4374374fa91012021ce12fb83f6370be5547ee4e214232100c38e76f  infra/rp11-launch/build-root.manifest
 651ff85df120a6b8bddfff7b359074b4c239e94988544c9ef60af7c3af28dd16  infra/rp11-launch/expected.sha256
 e99cee65a228339e304d4e578643de409961539a8240230d4e41bb1baf6bb13a  infra/rp11-launch/verify/fixtures/cc1.v.baseline
-4fa1c2b1fcf9cedf7fb1028feeeda4d0e229ed061ef3cc19047ca24cd42bca8d  docs/review/phase-5-0-evidence-harness-review-manifest.json
-d827b7552f0ad48a13ae899c6fb40d0c47815d3f1332d158f5c519e77b09d617  docs/review/phase-5-0-evidence-harness-concrete-plan.md
+7efe11d080fc1d6374ad5ff0748b81a1c1815999aa9e15a79a067bbb0a2673a2  docs/review/phase-5-0-evidence-harness-review-manifest.json
+a45c9c5ef6a3f7c531e337037b2b521638ca54164af2a2bf4ea738205b72e984  docs/review/phase-5-0-evidence-harness-concrete-plan.md
 87e318cdd77f1fae0a354f707d9fe32d163ba48b708bb455c670f6d4d333cfd1  infra/rp11-launch/build.sh
 62050b5dc1816f4f673b8c49b94c7463391edb6dbed9f69459f0bc6c5f1dc2a7  infra/rp11-launch/launch.c
 34b56cfc1adb4f14f2e09c740e5e25915194778ebf73c74c1d24502121425c4b  infra/rp11-launch/select.h
@@ -2549,7 +2553,7 @@ f0e811a4bd61782789b66f31ab4401797e52b8ac00ffeebb984bfcd71afb4a8a  infra/rp11-lau
 ff3d458cabae91512562cca6143542337b1306dc3df791da505c51a9519ab76f  tests/test_rp11_launch_toolchain.py
 bc24c0ee7b0c9f58853479adc908c60cf013b9652409e3d5cee0d710074a18b6  tests/rp11_launch_support.py
 a51bacda94ef5ed2fe1bea6a7e90bc7c94925237bd6f72f518f7ef0c338381ed  tools/phase_5_0_evidence/rp11_launch.py
-f18d8fdf897961167ee58da475d1483de14bf01ba90c0a2e537a49dd2eef3879  tools/phase_5_0_evidence/review_manifest.py
+b7601a450278cddda5cbd014e205f225ac0799107b21a904d3877ef96b519492  tools/phase_5_0_evidence/review_manifest.py
 ```
 
 ## Appendix B — §3.2 digest, length and path (28 lines)
@@ -2559,8 +2563,8 @@ f704c0f4f0ddbe9de92da9812dde6929f681ba778263746a603bde8b4b3563d6 16769 infra/rp1
 f08ba9de4374374fa91012021ce12fb83f6370be5547ee4e214232100c38e76f 381913 infra/rp11-launch/build-root.manifest
 651ff85df120a6b8bddfff7b359074b4c239e94988544c9ef60af7c3af28dd16 328 infra/rp11-launch/expected.sha256
 e99cee65a228339e304d4e578643de409961539a8240230d4e41bb1baf6bb13a 5305 infra/rp11-launch/verify/fixtures/cc1.v.baseline
-4fa1c2b1fcf9cedf7fb1028feeeda4d0e229ed061ef3cc19047ca24cd42bca8d 377690 docs/review/phase-5-0-evidence-harness-review-manifest.json
-d827b7552f0ad48a13ae899c6fb40d0c47815d3f1332d158f5c519e77b09d617 178764 docs/review/phase-5-0-evidence-harness-concrete-plan.md
+7efe11d080fc1d6374ad5ff0748b81a1c1815999aa9e15a79a067bbb0a2673a2 377690 docs/review/phase-5-0-evidence-harness-review-manifest.json
+a45c9c5ef6a3f7c531e337037b2b521638ca54164af2a2bf4ea738205b72e984 178764 docs/review/phase-5-0-evidence-harness-concrete-plan.md
 87e318cdd77f1fae0a354f707d9fe32d163ba48b708bb455c670f6d4d333cfd1 3254 infra/rp11-launch/build.sh
 62050b5dc1816f4f673b8c49b94c7463391edb6dbed9f69459f0bc6c5f1dc2a7 6314 infra/rp11-launch/launch.c
 34b56cfc1adb4f14f2e09c740e5e25915194778ebf73c74c1d24502121425c4b 2187 infra/rp11-launch/select.h
@@ -2582,7 +2586,7 @@ f0e811a4bd61782789b66f31ab4401797e52b8ac00ffeebb984bfcd71afb4a8a 14292 infra/rp1
 ff3d458cabae91512562cca6143542337b1306dc3df791da505c51a9519ab76f 12326 tests/test_rp11_launch_toolchain.py
 bc24c0ee7b0c9f58853479adc908c60cf013b9652409e3d5cee0d710074a18b6 8045 tests/rp11_launch_support.py
 a51bacda94ef5ed2fe1bea6a7e90bc7c94925237bd6f72f518f7ef0c338381ed 16942 tools/phase_5_0_evidence/rp11_launch.py
-f18d8fdf897961167ee58da475d1483de14bf01ba90c0a2e537a49dd2eef3879 81359 tools/phase_5_0_evidence/review_manifest.py
+b7601a450278cddda5cbd014e205f225ac0799107b21a904d3877ef96b519492 82001 tools/phase_5_0_evidence/review_manifest.py
 ```
 
 ## Appendix C — §3.5 runner, resources and focused test in `sha256sum --check` format (19 lines)
@@ -2592,24 +2596,24 @@ not an execution step: the runner performs the same verification itself.
 
 <!-- r5-appendix-c:start -->
 ```text
-869f71d246389bbc1a7d5b8f99ca54e37b3f4f815ef22b97f3e40584d20353d2  tools/r5_runner/r5run.py
-e9be1ab01c7a97e9747bafdc5930badaebddec8a1de6df910cd953f5f9a4b2ca  tools/r5_runner/blocks/s01.sh
+593dbb32d213100a92e23f4ff447c5ca209170e4907d2255a300364e82334282  tools/r5_runner/r5run.py
+057bef68019135191b26a08b76f6f79334941f86720a110e3f17f2375b208d17  tools/r5_runner/blocks/s01.sh
 a0cda6026583275d45c1a8b88cc0ed77ba97a9973408d66990469901ef78d264  tools/r5_runner/blocks/s02.sh
 2d4c39b8ccf9d84afc4a439b08611ce3f5bca32a3b97021bb6caca8d8759676b  tools/r5_runner/blocks/s03.sh
 1a948d6758f6ece09dbafc8f250a5682ec2b096cbed814eb25a8ed57657ef0a1  tools/r5_runner/blocks/s04a.sh
 55ab56d97581e442bf24c3ebe6ab9e6b6714a1aaac04f0f0d620e3d45d4aff85  tools/r5_runner/blocks/s04b-start.sh
 7dddbaef33807f4158792c7270d5a6d7e38049938a87953c7c905c44c8738050  tools/r5_runner/blocks/s04b-sync.argv
 a77be397cf2b9a00737f25a5c4d4e17dc706e2d5478353f9afc2dbdbb95c261e  tools/r5_runner/blocks/s04b-end.sh
-6a65f59792fdb858543078604b9d7cdee17c492481d0b4c41a3bc2fb6c20d7f3  tools/r5_runner/blocks/s04c.sh
-918d01cbd56697009011baead30ce2de544c3562acdbbf10c799b271ce522f79  tools/r5_runner/blocks/s04d.sh
+edaa1641cc0b5cb568e67ee08c3e18199728d6f1807fe2f5715c73d5388768be  tools/r5_runner/blocks/s04c.sh
+2a33f831b652d5906b77a9fe216cdb82da4702335cb99cea33bc7bade1acb536  tools/r5_runner/blocks/s04d.sh
 7750e2502d7ecea05350d3d596b15d59b0b7243789502cc954592862ff4cb64b  tools/r5_runner/blocks/s05.sh
 58a63f9cefb8323b339e92dd3f799e2570291803792c705a4face97eacc49868  tools/r5_runner/blocks/s06-s07.sh
 aa2a744fe87a7d79964f02c88d1021471fe2b0700202df7f421f9f005cd141d1  tools/r5_runner/blocks/s08.sh
 46bbcd1f6eee93531d08350699b83f71897e3c40cea35c2eedde54c517d02dc6  tools/r5_runner/blocks/s09.sh
 6502636bf63a5194574ca553e3ca8c2ac3889e2d2bfe97c76e890f60731828f7  tools/r5_runner/blocks/s10.sh
-6229421e579ecf92b37ae741aaf029810b22701fbc644a8ed655e71410475370  tools/r5_runner/blocks/s11.sh
+3944170aebb712466155159358012701cef2adfce8d9d18dd05e0c50c0f92d07  tools/r5_runner/blocks/s11.sh
 bf495fd370a236b04295e955ce083e63fd4ead1fa8e2fabe4ca788a21f1f2aa3  tools/r5_runner/blocks/s12-start.sh
 9aaf1069e4637e3b342712cb33817c4282c1fa8efef8296f54974c6dd59d46db  tools/r5_runner/blocks/s12-end.sh
-efa4ab463d785e8780820336a614d3b96486c7c60b19176db32aa8d467d1a886  tests/test_r5_runner.py
+416baa4818910059d9a3b1b1567ae0889928bbef0405fc102215cfb6bff2a62e  tests/test_r5_runner.py
 ```
 <!-- r5-appendix-c:end -->

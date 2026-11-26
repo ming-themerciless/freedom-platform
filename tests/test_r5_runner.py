@@ -50,8 +50,8 @@ ASSIGNMENT = ROOT / R.ASSIGNMENT
 R5_AMENDMENTS = ((
     'want=(30,"28a4f4c2b7596e9042f6b12a34f5684b3499a3fafd997e306fe25f6798e8a526",True,'
     '"c9afaf7cd32a398e9714e39779fef522d6af053ec71cd2c403e0a4c2eaba4b5c",False)',
-    'want=(38,"2a7564bb71efbe467d4ccc504fcbfd4f98cf78545aef8c66e866d821a82e1ca9",True,'
-    '"4fa1c2b1fcf9cedf7fb1028feeeda4d0e229ed061ef3cc19047ca24cd42bca8d",False)',
+    'want=(39,"92a59795a840a5f9b5548e25d0a5711cc39a02a4f682ba3beaad0f31ee9587cc",True,'
+    '"7efe11d080fc1d6374ad5ff0748b81a1c1815999aa9e15a79a067bbb0a2673a2",False)',
 ), (
     "04218ed2d834c1c7abe417a850831d8956f087711befd692eefc2e61b2668572  rp11-launch\n",
     "7e2b7bde86a5ec8aaf112c3377fbdb3c862ffcb7acfff944c965b1aa0fddc67e  rp11-launch\n",
@@ -64,8 +64,9 @@ R5_AMENDMENTS = ((
 ),)
 # G1 re-pin (2026-11-23): R5 introduced version 31 here; the launcher Python 3.14 rebase moved the
 # review manifest to version 32, the current-target/G11 source refresh to version 33 and the G8
-# documentation/source-consistency refresh to version 34, so the
-# amendment's replacement tuple is version 34 (version 33 is superseded history). R3's original
+# documentation/source-consistency refresh to version 34. Later refreshes reached version 39
+# (G9-R1, 2026-11-26), so the amendment's replacement tuple is version 39 (earlier versions are
+# superseded history). R3's original
 # tuple (the first element above) is unchanged: it is what the R3 derivation is checked against.
 PY = "/opt/freedom-blades/runtime/venv-web/bin/python"
 
@@ -250,6 +251,11 @@ def _between(text: str, start: str, end: str) -> str:
 def _file_identity(relative: str) -> tuple[str, int]:
     data = (ROOT / relative).read_bytes()
     return hashlib.sha256(data).hexdigest(), len(data)
+
+
+def test_the_handback_excerpt_selects_the_s18_line_of_the_pinned_manifest_version() -> None:
+    wanted = R5_AMENDMENTS[0][1].removeprefix("want=(").split(",", 1)[0]
+    assert R.MANIFEST_RESULT_PREFIX == f"{wanted} "
 
 
 def test_the_assignment_pins_the_28_inputs_at_their_current_bytes() -> None:

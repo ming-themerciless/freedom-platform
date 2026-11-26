@@ -1,11 +1,9 @@
 # RP-11 G6 preparation handback (2026-11-26)
 
-**G6 stays open.** This is repository preparation only. Codex's first review
-found a blocking protected-parent omission, G6-R1. It is **remediated, and Codex's
-re-review is clear**: no blocking source finding remains (see Independent
-review). No digest is recorded or pinned, and no
-SA-2 build, install, `run_pass_a`, A-2/AUTH, service, activation, staging or
-production action took place.
+**Current status (2026-11-26): G6 is technically complete** at commit `2afca20`;
+see [Follow-up: G6 technical completion](#follow-up-g6-technical-completion-2026-11-26).
+The sections before that follow-up record the earlier preparation stage, when G6
+was open, no digest was recorded and no reference build had run.
 
 ## Behavior (`infra/rp11-h1/build.py`)
 
@@ -149,3 +147,62 @@ That authorization does not cover installation, a production build, A-2/AUTH,
 `run_pass_a`, any service or activation, or staging or production. G6 closes
 only when the independent review of those inputs is accepted; G9 and G10 remain
 separate.
+
+## Follow-up: G6 technical completion (2026-11-26)
+
+Supersedes the statements above that G6 is open or that no digest is recorded.
+Results were supplied with the documentation instruction and not re-observed by
+the recorder.
+
+**Publication and acquisition.** Commit
+`2afca2098625a3e09b05d3f51918c82ccebeb543` was published to canonical
+`docs/platform-plan` (`ls-remote` matched). `oracle-test`
+`/opt/freedom-blades/rp11-source` fetched it cleanly and detached at it from
+`575218e`; `git fsck` clean.
+
+**Reference builds.** Two root-owned, protected, non-installing builds under
+`/root/rp11-g6-ref-2afca20/a` and `/b`, with pinned wheel `jeepney-0.9.0`, sha256
+`97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683`.
+The trees were byte-identical, 97 files. Public review and cross-gate passed for
+both. Each value below was independently derived and matched on both builds.
+
+| Input | Value |
+|---|---|
+| `tree_sha256` (shell derivation) | `824c973907f9b954651973796bdc37633cb7fa931a1a56cd9aca1e66e62bdaca` |
+| `capture_tool_sha256` (`capture_contract` derivation) | `f831d38c884822cd261b2da2c99da3d4958474d21eee2691b3e5e08028ea5134` |
+
+**Review.** Codex review has no blocking finding; G6-R1 was remediated.
+
+**Suites** (`oracle-test`; canonical suites at the exact commit, run serially):
+
+| Run | Result |
+|---|---|
+| Canonical bot | 8487 passed, 281 skipped, 6 warnings, 2329.59 s |
+| Canonical web, with `TEST_DATABASE_URL` | 2894 passed, 80 skipped, 1137 warnings, 1086.05 s |
+| Foundry Node | 171 passed, 0 failed, 0 skipped, 7076.51276 ms |
+| Root, G6 module | 39 passed, 1 skipped |
+| Unprivileged, focused | 797 passed, 3 skipped |
+
+Skip dispositions:
+
+* **Canonical bot, 281:** the documented unprivileged root/ownership/provisioning
+  and role-grant gates, the unprovisioned `RP11_LAUNCH_BUILD_ROOT`, two `RLIMIT`
+  cases, two opt-in measurement cases, plus the new real-root G6 case.
+* **Canonical web, 80:** permitted matrix cells, covered by the per-route success
+  tests.
+* **Root G6 module, 1:** the unsafe-temp case, skipped because the basetemp was
+  protected.
+* **Unprivileged focused, 3:** the real-root G6 case and two `RLIMIT` cases.
+
+The earlier
+broader local run that included `tests/test_route3_release_record.py`
+(1126 passed, 5 skipped, **1 failed**; see Earlier results) stays disclosed as
+recorded; this follow-up does not change its disposition.
+
+**Binding.** The evidence is tied to implementation commit `2afca20`. The
+documentation-only successor that records it changes no SA-2 input bytes. The
+Limits section above still applies.
+
+**Remaining gates:** G9 (A-6), G10 (A-2/AUTH) and the actual `run_pass_a`. G1 is
+accepted for review only. No install, A-2/AUTH, `run_pass_a`, service action or
+activation, staging or production action occurred or is authorized.

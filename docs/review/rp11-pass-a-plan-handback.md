@@ -398,3 +398,15 @@ final web rerun passed; that final rerun supersedes the initial run as the web r
 
 **Remaining gates:** G6 final capture-tool digest and integrity-pinned SA-2 build review; G9/A-6; G10/A-2/AUTH; the
 actual `run_pass_a`. Services, staging and production remain unauthorized.
+
+## Follow-up 11 (2026-11-26) — G6 technically complete
+
+Supersedes every statement above that G6 is open. At commit
+`2afca2098625a3e09b05d3f51918c82ccebeb543` the final capture-tool digest and the
+integrity-pinned SA-2 reference builds are recorded and reviewed, with no blocking
+Codex finding. Digests, builds, suite figures and the retained Route 3 disclosure:
+[G6 handback follow-up](rp11-g6-preparation-handback.md#follow-up-g6-technical-completion-2026-11-26).
+
+**Remaining gates:** G9/A-6, G10/A-2/AUTH and the actual `run_pass_a`. G1 is accepted
+for review only. No install, A-2/AUTH, `run_pass_a`, service action or activation,
+staging or production action occurred or is authorized.

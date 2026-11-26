@@ -6,11 +6,31 @@ Baseline v1.9 remains active. Phase 3 and Phase 4 gates are approved; Phase 5
 implementation and unrestricted testing on the disposable `oracle-test` server
 remain authorized.
 
-### RP-11 implementation continuation — current as of 2026-11-25
+### RP-11 implementation continuation — current as of 2026-11-26
 
-**Current RP-11 position (2026-11-25, final v38 validation and publication). This
-supersedes every dated RP-11 statement here that differs, including those saying the
-manifest is v37, G7 is unmeasured, source acquisition is absent, Codex review is
+**Current RP-11 position (2026-11-26, G6 technical completion). This supersedes every
+dated RP-11 statement here that differs, including those saying G6, the final
+capture-tool digest or the integrity-pinned SA-2 build review is open.** Facts
+supplied with the documentation instruction; not re-observed by the recorder.
+
+* **G6 is technically complete** at implementation commit
+  `2afca2098625a3e09b05d3f51918c82ccebeb543`: `tree_sha256`
+  `824c973907f9b954651973796bdc37633cb7fa931a1a56cd9aca1e66e62bdaca`,
+  `capture_tool_sha256`
+  `f831d38c884822cd261b2da2c99da3d4958474d21eee2691b3e5e08028ea5134`.
+  Two non-installing reference builds on `oracle-test` were byte-identical; Codex review
+  has no blocking finding (G6-R1 remediated).
+* **Remaining gates:** G9 (A-6), G10 (A-2/AUTH) and the actual `run_pass_a`. G1 remains
+  accepted for review only.
+* No install, A-2/AUTH, `run_pass_a`, service action or activation, staging or production
+  action occurred or is authorized.
+
+Record: [change log C-RP11-G6-20261126](change-log.md); figures:
+[G6 handback follow-up](../review/rp11-g6-preparation-handback.md).
+
+**Earlier RP-11 position (2026-11-25, final v38 validation and publication; superseded
+where the current position above differs, including G6). It superseded earlier statements
+that the manifest is v37, G7 is unmeasured, source acquisition is absent, Codex review is
 pending, or v38 publication, re-acquisition or remote lock validation is pending.**
 Facts observed by Codex; not re-observed by the recorder.
 

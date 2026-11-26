@@ -6,9 +6,29 @@ Production and staging mutation, real secrets and real player data remain
 outside that authority and need Peter's separate explicit, attended
 authorization.
 
-**Current RP-11 position (2026-11-25, final v38 validation and publication). This
-supersedes every dated RP-11 statement here that differs, including those saying the
-manifest is v37, G7 is unmeasured, source acquisition is absent, Codex review is
+**Current RP-11 position (2026-11-26, G6 technical completion). This supersedes every
+dated RP-11 statement here that differs, including those saying G6, the final
+capture-tool digest or the integrity-pinned SA-2 build review is open.** Facts
+supplied with the documentation instruction; not re-observed by the recorder.
+
+* **G6 is technically complete** at implementation commit
+  `2afca2098625a3e09b05d3f51918c82ccebeb543`: `tree_sha256`
+  `824c973907f9b954651973796bdc37633cb7fa931a1a56cd9aca1e66e62bdaca`,
+  `capture_tool_sha256`
+  `f831d38c884822cd261b2da2c99da3d4958474d21eee2691b3e5e08028ea5134`.
+  Two non-installing reference builds on `oracle-test` were byte-identical; Codex review
+  has no blocking finding (G6-R1 remediated).
+* **Remaining gates:** G9 (A-6), G10 (A-2/AUTH) and the actual `run_pass_a`. G1 remains
+  accepted for review only.
+* No install, A-2/AUTH, `run_pass_a`, service action or activation, staging or production
+  action occurred or is authorized.
+
+Record: [change log C-RP11-G6-20261126](../project-management/change-log.md); figures:
+[G6 handback follow-up](rp11-g6-preparation-handback.md).
+
+**Earlier RP-11 position (2026-11-25, final v38 validation and publication; superseded
+where the current position above differs, including G6). It superseded earlier statements
+that the manifest is v37, G7 is unmeasured, source acquisition is absent, Codex review is
 pending, or v38 publication, re-acquisition or remote lock validation is pending.**
 Facts observed by Codex; not re-observed by the recorder.
 
@@ -296,9 +316,9 @@ task and its required tests are complete. If Claude is unavailable, record it
 as a blocker and continue independent documentation/review work; do not
 silently substitute another implementation owner.
 
-Current gates remain (updated 2026-11-25): G6 final capture-tool digest and integrity-pinned SA-2 build review, G9/A-6 and G10/A-2/AUTH are open; G7 v38 publication, re-acquisition and remote lock validation are complete; G4 disposable filesystem acceptance is complete (both roots, 2026-11-25; final suite evidence recorded); G1 accepted for review only (not authorized to run); no A-2; AUTH-SYNC, AUTH-READ and
-AUTH-DBREAD ungranted; operational Pass A not implemented or run; SA-2 not
-rebuilt; no production installation or activation; S4 probes 2, 3, 5 and 6
+Current gates remain (updated 2026-11-26): G6 is technically complete; G9/A-6, G10/A-2/AUTH and the actual `run_pass_a` are open; G7 v38 publication, re-acquisition and remote lock validation are complete; G4 disposable filesystem acceptance is complete (both roots, 2026-11-25; final suite evidence recorded); G1 accepted for review only (not authorized to run); no A-2; AUTH-SYNC, AUTH-READ and
+AUTH-DBREAD ungranted; operational Pass A not implemented or run; no SA-2
+install (only non-installing G6 reference builds on `oracle-test`); no production installation or activation; S4 probes 2, 3, 5 and 6
 remain incomplete. The G8 entry composition is implemented and its Codex review passed (sentinel amended for exactly the one factory; no run path). Preserve the dirty working
 tree and unrelated in-progress changes; do not reset or clean it.
 

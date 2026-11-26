@@ -29,6 +29,25 @@ symlinks, directories 0755, files 0644) and renamed into place, so a failed
 build leaves nothing at ``<dir>``. The adapter and the entry point check this
 state again before the entry point runs as root.
 
+Integrity review (RP-11 G6). The capture-tool digest and the SA-2 tree digest
+are both derived from one read of the **built tree**, never from the checkout:
+
+    python3 build.py --review <dir>
+    python3 build.py --review <dir> --expect-tree-sha256 <hex> \\
+                                    --expect-capture-tool-sha256 <hex>
+
+The first form prints the review inputs (one canonical JSON line) and accepts
+nothing. The second is the gate: it exits 0 only if both digests equal the
+reviewer's values, which come from outside; none is recorded here. Either form
+must run as root, on a root-owned tree whose every ancestor up to ``/`` is a
+real root-owned directory not writable by group or others (the install-parent
+contract), so nobody else can swap the tree or a directory above it; the path
+may not contain ``..``. It refuses a tree without the modes above, or holding a
+link, special file, bytecode, empty directory or lacking a capture-tool source.
+The build runs the same reading, without the root and ancestor requirement, on
+its own staging tree and fails unless that tree is exactly the files and bytes
+it wrote.
+
 Standard library only, and it imports nothing from the repository.
 """
 
@@ -37,6 +56,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
+import json
 import os
 import re
 import shutil
@@ -126,6 +146,26 @@ ENTRY_SOURCES = (
     "tools/phase_5_0_evidence/identity.py",
     "tools/phase_5_0_evidence/records.py",
 )
+
+# The ``rp11-capture-tool/1`` construction of ``capture_contract``, restated here
+# because this file imports nothing from the repository; a test keeps the schema,
+# the source list and the digest equal to ``capture_contract``'s. The paths are
+# relative to ``lib/`` in the built tree.
+TOOL_DIGEST_SCHEMA = "rp11-capture-tool/1"
+RP11_SOURCES = (
+    "tools/phase_5_0_evidence/capture_contract.py",
+    "tools/phase_5_0_evidence/errors.py",
+    "tools/phase_5_0_evidence/execution/boundary.py",
+    "tools/phase_5_0_evidence/execution/capture_mechanism.py",
+    "tools/phase_5_0_evidence/execution/capture_store.py",
+    "tools/phase_5_0_evidence/execution/descriptors.py",
+    "tools/phase_5_0_evidence/execution/retention_check.py",
+)
+REVIEW_SCHEMA = "rp11-sa2-review/1"
+
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+_PLAIN_NAME = re.compile(r"[A-Za-z0-9._+@/-]+")
+_MAX_TREE_FILE_BYTES = 8 << 20
 
 _PIN = re.compile(r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.]+) \\ --hash=sha256:([0-9a-f]{64})")
 _MEMBER_PART = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
@@ -217,17 +257,21 @@ def _member_parts(member: zipfile.ZipInfo, namespaces: tuple[str, str]) -> list[
     return parts
 
 
-def _write_new(target: Path, data: bytes) -> None:
-    """Create ``target``; an existing path, including a symlink, is a build error."""
+def _write_new(root: Path, name: str, data: bytes, placed: dict[str, str]) -> None:
+    """Create ``root/name``; an existing path, including a symlink, is a build error.
+
+    ``placed`` records the digest of the bytes handed to the write."""
+    target = root / name
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(target, "xb") as handle:
             handle.write(data)
     except FileExistsError as exc:
         raise BuildError(f"{target} would be written twice") from exc
+    placed[name] = hashlib.sha256(data).hexdigest()
 
 
-def _unpack(data: bytes, lib: Path, namespaces: tuple[str, str]) -> None:
+def _unpack(data: bytes, root: Path, namespaces: tuple[str, str], placed: dict[str, str]) -> None:
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         members = [m for m in archive.infolist() if not m.is_dir()]
         if len(members) > _MAX_MEMBERS:
@@ -236,7 +280,7 @@ def _unpack(data: bytes, lib: Path, namespaces: tuple[str, str]) -> None:
             raise BuildError("wheel unpacks too large")
         for member in members:
             parts = _member_parts(member, namespaces)
-            _write_new(lib.joinpath(*parts), archive.read(member))
+            _write_new(root, "/".join(["lib", *parts]), archive.read(member), placed)
 
 
 def _unsafe_tree(top: Path, owner: int) -> str | None:
@@ -271,6 +315,127 @@ def _install_parent_problem(parent: Path) -> str | None:
         current = current.parent
 
 
+def _tree_file_sha256(path: str) -> str:
+    """SHA-256 of one artifact file, read once from one open, unchanged file."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+    try:
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode) or before.st_size > _MAX_TREE_FILE_BYTES:
+            raise BuildError(f"{path} is not a bounded regular file")
+        digest, size = hashlib.sha256(), 0
+        while size <= _MAX_TREE_FILE_BYTES:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                break
+            digest.update(chunk)
+            size += len(chunk)
+        after = os.fstat(fd)
+    finally:
+        os.close(fd)
+    if _identity(before) != _identity(after) or size != after.st_size:
+        raise BuildError(f"{path} changed while it was read")
+    return digest.hexdigest()
+
+
+def _tree_digests(tree: Path, owner: int) -> dict[str, str]:
+    """``{relative name: sha256}`` of every file in a safe artifact tree."""
+
+    def unreadable(exc: OSError) -> None:
+        raise BuildError(f"cannot list {exc.filename}: {exc.strerror}")
+
+    def check(path: str, mode: int, is_kind) -> None:
+        info = os.lstat(path)
+        if not is_kind(info.st_mode):
+            raise BuildError(f"{path} is a link, special file or wrong type")
+        if info.st_uid != owner:
+            raise BuildError(f"{path}: owner uid {info.st_uid}")
+        if stat.S_IMODE(info.st_mode) != mode:
+            raise BuildError(f"{path}: mode {stat.S_IMODE(info.st_mode):o}")
+
+    top = os.path.abspath(tree)
+    check(top, 0o755, stat.S_ISDIR)
+    files: dict[str, str] = {}
+    for directory, dirnames, filenames in os.walk(top, onerror=unreadable):
+        if not (dirnames or filenames):
+            raise BuildError(f"{directory} is an empty directory")
+        for name in dirnames:
+            if name == "__pycache__":
+                raise BuildError(f"{directory} holds bytecode")
+            check(os.path.join(directory, name), 0o755, stat.S_ISDIR)
+        for name in filenames:
+            path = os.path.join(directory, name)
+            relative = os.path.relpath(path, top)
+            if not _PLAIN_NAME.fullmatch(relative) or name.endswith(".pyc"):
+                raise BuildError(f"unexpected file name {relative!r}")
+            check(path, 0o644, stat.S_ISREG)
+            files[relative] = _tree_file_sha256(path)
+    return files
+
+
+def _read_tree_inputs(tree: Path, owner: int) -> dict:
+    """The digests of ``tree``, whose objects must belong to ``owner``.
+
+    Internal: for ``build`` on its own staging tree and for synthetic tests. It
+    checks nothing above ``tree``, so it is not a review; use ``review_inputs``.
+
+    Both digests come from the same per-file digests. ``tree_sha256`` is the
+    ``ROUTE3_SA2_TREE_SHA256`` recipe (``sha256sum`` listing, bytewise sorted)."""
+    try:
+        files = _tree_digests(Path(tree), owner)
+    except OSError as exc:
+        raise BuildError(f"cannot review the tree: {exc}") from exc
+    missing = [name for name in RP11_SOURCES if f"lib/{name}" not in files]
+    if missing:
+        raise BuildError(f"capture-tool sources absent from the tree: {', '.join(missing)}")
+    ordered = sorted(files, key=str.encode)
+    listing = "".join(f"{files[name]}  ./{name}\n" for name in ordered)
+    # capture_contract.canonical_bytes
+    document = {
+        "schema": TOOL_DIGEST_SCHEMA,
+        "sources": [[name, files[f"lib/{name}"]] for name in RP11_SOURCES],
+    }
+    canonical = json.dumps(
+        document, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False
+    )
+    return {
+        "schema": REVIEW_SCHEMA,
+        "tree_sha256": hashlib.sha256(listing.encode()).hexdigest(),
+        "capture_tool_schema": TOOL_DIGEST_SCHEMA,
+        "capture_tool_sha256": hashlib.sha256((canonical + "\n").encode("ascii")).hexdigest(),
+        "files": [[name, files[name]] for name in ordered],
+    }
+
+
+def review_inputs(tree: Path) -> dict:
+    """The integrity review inputs of a built tree, from that tree's bytes only.
+
+    Fails closed unless the caller is root, the tree is root-owned and every
+    directory above it satisfies the install-parent contract."""
+    if os.geteuid() != 0:
+        raise BuildError("integrity review must run as root")
+    if ".." in Path(tree).parts:
+        raise BuildError("the reviewed path may not contain '..'")
+    # One absolute spelling for both the ancestor check and the reading.
+    top = Path(os.path.abspath(tree))
+    problem = _install_parent_problem(top.parent)
+    if problem:
+        raise BuildError(f"unsafe review location: {problem}")
+    return _read_tree_inputs(top, 0)
+
+
+def verify_review(tree: Path, tree_sha256: str, capture_tool_sha256: str) -> dict:
+    """The gate: the tree's review inputs, only if both externally supplied digests match."""
+    expected = {"tree_sha256": tree_sha256, "capture_tool_sha256": capture_tool_sha256}
+    for key, value in expected.items():
+        if not isinstance(value, str) or not _SHA256.fullmatch(value):
+            raise BuildError(f"expected {key} must be 64 lowercase hex digits")
+    inputs = review_inputs(tree)
+    for key, value in expected.items():
+        if inputs[key] != value:
+            raise BuildError(f"{key} is {inputs[key]}, expected {value}")
+    return inputs
+
+
 def build(wheel: Path, dest: Path, roles: Path | None = None) -> Path:
     data = read_verified_wheel(wheel)
     dest = Path(os.path.abspath(dest))
@@ -283,14 +448,14 @@ def build(wheel: Path, dest: Path, roles: Path | None = None) -> Path:
             raise BuildError(f"unsafe install location: {problem}")
     staging = Path(tempfile.mkdtemp(prefix=f".{dest.name}.", dir=dest.parent))
     try:
-        lib = staging / "lib"
-        lib.mkdir()
-        _unpack(data, lib, _wheel_namespaces(wheel.name))
+        (staging / "lib").mkdir()
+        placed: dict[str, str] = {}
+        _unpack(data, staging, _wheel_namespaces(wheel.name), placed)
         for source in (*SOURCES, *ENTRY_SOURCES):
-            _write_new(lib / source, (ROOT / source).read_bytes())
-        _write_new(lib / "rp11_roles.py", (roles or HERE / "rp11_roles.py").read_bytes())
-        _write_new(staging / "rp11_h1.py", (HERE / "rp11_h1.py").read_bytes())
-        _write_new(staging / "rp11_entry.py", (HERE / "rp11_entry.py").read_bytes())
+            _write_new(staging, f"lib/{source}", (ROOT / source).read_bytes(), placed)
+        _write_new(staging, "lib/rp11_roles.py", (roles or HERE / "rp11_roles.py").read_bytes(), placed)
+        _write_new(staging, "rp11_h1.py", (HERE / "rp11_h1.py").read_bytes(), placed)
+        _write_new(staging, "rp11_entry.py", (HERE / "rp11_entry.py").read_bytes(), placed)
         for directory, _dirnames, filenames in os.walk(staging):
             os.chmod(directory, 0o755)
             for name in filenames:
@@ -298,6 +463,8 @@ def build(wheel: Path, dest: Path, roles: Path | None = None) -> Path:
         problem = _unsafe_tree(staging, os.geteuid())
         if problem:
             raise BuildError(f"built tree is unsafe: {problem}")
+        if dict(_read_tree_inputs(staging, os.geteuid())["files"]) != placed:
+            raise BuildError("built tree is not the bytes the build placed")
         os.rename(staging, dest)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
@@ -307,12 +474,32 @@ def build(wheel: Path, dest: Path, roles: Path | None = None) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--wheel", type=Path, required=True)
-    parser.add_argument("--dest", type=Path, required=True)
+    parser.add_argument("--wheel", type=Path)
+    parser.add_argument("--dest", type=Path)
     parser.add_argument("--roles", type=Path, help="replace lib/rp11_roles.py (tests only)")
+    parser.add_argument("--review", type=Path, help="review a built tree; builds nothing")
+    parser.add_argument("--expect-tree-sha256")
+    parser.add_argument("--expect-capture-tool-sha256")
     args = parser.parse_args(argv)
+    expected = (args.expect_tree_sha256, args.expect_capture_tool_sha256)
+    if args.review is not None:
+        if any(value is not None for value in (args.wheel, args.dest, args.roles)):
+            parser.error("--review takes no build option")
+        if (expected[0] is None) != (expected[1] is None):
+            parser.error("give both expected digests or neither")
+    elif args.wheel is None or args.dest is None:
+        parser.error("--wheel and --dest are required to build")
+    elif expected != (None, None):
+        parser.error("expected digests apply only to --review")
     try:
-        print(build(args.wheel, args.dest, args.roles))
+        if args.review is None:
+            print(build(args.wheel, args.dest, args.roles))
+        else:
+            if expected[0] is None:
+                inputs = review_inputs(args.review)
+            else:
+                inputs = verify_review(args.review, *expected)
+            print(json.dumps(inputs, sort_keys=True, separators=(",", ":")))
     except (BuildError, OSError) as exc:
         print(f"build.py: {exc}", file=sys.stderr)
         return 1

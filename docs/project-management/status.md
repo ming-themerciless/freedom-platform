@@ -6,9 +6,22 @@ Baseline v1.9 remains active. Phase 3 and Phase 4 gates are approved; Phase 5
 implementation and unrestricted testing on the disposable `oracle-test` server
 remain authorized.
 
-### RP-11 implementation continuation — current as of 2026-11-26
+### RP-11 implementation continuation — current as of 2026-11-27
 
-**Current RP-11 position (2026-11-26, G6 technical completion). This supersedes every
+**Current RP-11 position (2026-11-27).** Codex independently accepted the
+C-1 through C-4 classifier corrections for A-6 at implementation commit
+`7373fd405c719f63927eac7c2fc9b87a82d6dbb4` (manifest v39), after Claude
+remediated G9-R1. The exact commit was published and re-acquired detached
+on `oracle-test`. See the [independent acceptance and validation record](../review/rp11-g9-md5-independent-acceptance.md).
+
+G6 remains technically complete at `2afca20`. For G9, A-6 is met for the
+accepted classifier digest. RP-10 remains open and A1-C is
+`not_run (RP-10 unmet)`. G1 remains accepted for review only. G10 requires
+the reviewed single-host contract and Peter's written A-2 grant naming the
+operator, with A-5 data attestation and the applicable AUTH grants. Pass A
+execution remains separately gated.
+
+**Earlier RP-11 position (2026-11-26, G6 technical completion). This superseded every
 dated RP-11 statement here that differs, including those saying G6, the final
 capture-tool digest or the integrity-pinned SA-2 build review is open.** Facts
 supplied with the documentation instruction; not re-observed by the recorder.

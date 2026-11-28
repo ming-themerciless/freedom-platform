@@ -909,6 +909,14 @@ PERMITTED_RP11_REVIEW_PRECURSOR = frozenset({
 })
 
 
+#: The RP-11 Pass A config/authority binding **review precursor** (2026-11-28). A pure
+#: validator over supplied bytes that nothing imports; declaring it permits its
+#: presence for review and grants no acquisition, start or run. One file, not a prefix.
+PERMITTED_RP11_PREFLIGHT_PRECURSOR = frozenset({
+    "tools/rp11_pass_a_preflight.py",
+})
+
+
 #: The Route 3 manager/Polkit adapter slice (active delivery plan, 2026-10-12):
 #: an application-owned boundary and its system-bus adapter. It is inactive in
 #: bot, web and worker production configuration; only the controlled `start` and
@@ -1156,6 +1164,8 @@ def scope_violation(path: str) -> str | None:
         return None
     if path in PERMITTED_RP11_REVIEW_PRECURSOR:
         return None
+    if path in PERMITTED_RP11_PREFLIGHT_PRECURSOR:
+        return None
     if path.startswith("adapters/web/templates/"):
         if path in PERMITTED_TEMPLATES:
             return None
@@ -1275,6 +1285,22 @@ def test_the_rp11_review_precursor_allowlist_is_narrow() -> None:
         assert scope_violation(neighbour) is not None, neighbour
 
 
+def test_the_rp11_preflight_precursor_allowlist_is_narrow() -> None:
+    """One exact module, in its own list, and no neighbour of it is permitted."""
+    precursor = frozenset({"tools/rp11_pass_a_preflight.py"})
+    assert PERMITTED_RP11_PREFLIGHT_PRECURSOR == precursor
+    assert scope_violation("tools/rp11_pass_a_preflight.py") is None
+    for name, allowlist in PRODUCTION_ALLOWLISTS.items():
+        if name != "PERMITTED_RP11_PREFLIGHT_PRECURSOR":
+            assert not (precursor & allowlist), name
+    for neighbour in (
+        "tools/rp11_pass_a_preflight_extra.py",
+        "tools/rp11_pass_a_preflight/__init__.py",
+        "tools/rp11_pass_a_start.py",
+    ):
+        assert scope_violation(neighbour) is not None, neighbour
+
+
 @pytest.mark.parametrize(
     "path",
     [
@@ -1371,6 +1397,7 @@ PRODUCTION_ALLOWLISTS = {
     "PERMITTED_R5_RUNNER_RESTORATION": PERMITTED_R5_RUNNER_RESTORATION,
     "PERMITTED_R2_SNAPSHOT_IDEMPOTENCY": PERMITTED_R2_SNAPSHOT_IDEMPOTENCY,
     "PERMITTED_RP11_REVIEW_PRECURSOR": PERMITTED_RP11_REVIEW_PRECURSOR,
+    "PERMITTED_RP11_PREFLIGHT_PRECURSOR": PERMITTED_RP11_PREFLIGHT_PRECURSOR,
 }
 
 

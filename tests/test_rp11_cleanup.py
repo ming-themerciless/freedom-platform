@@ -1507,9 +1507,17 @@ def test_the_attempt_directory_and_journal_modes(fx, layout):
 # a launcher, so this is not G8 and widens no runtime authority. Any other reference in that file,
 # any change to this statement, and the same import in any other file is still an offender; a
 # stale entry (the statement no longer present) fails too, so the exception cannot outlive its use.
+# ``rp11_pass_a_preflight`` (2026-11-28, review precursor) must judge the machine A-2 with the one
+# ``rp11-a2/3`` parser and read its records with the one canonical serialization. Both modules are
+# pure (hashlib, re, dataclasses, canonical JSON); neither runs a role. Nothing imports the
+# precursor, which its own test asserts. The two statements below are all it may contain.
 _ROLE_REFERENCE_EXCEPTIONS = {
     "tools/phase_5_0_evidence/execution/start_binding.py": (
         "from application.rp11.journal import JournalKind, consume_run, parse_journal\n",
+    ),
+    "tools/rp11_pass_a_preflight.py": (
+        "from application.rp11.authority import A2Pins, AuthorityError\n",
+        "from application.rp11.canonical import CanonicalError, canonical_bytes, parse_canonical\n",
     ),
 }
 

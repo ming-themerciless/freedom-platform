@@ -461,7 +461,10 @@ def test_the_module_is_pure_and_nothing_operational_imports_it() -> None:
     }
     names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
     assert not names & {"open", "exec", "eval", "__import__", "run_pass_a"}
+    # The one other importer is the config/authority binding precursor, which is itself
+    # imported by nothing (``test_rp11_pass_a_preflight.py``).
+    precursor = ROOT / "tools/rp11_pass_a_preflight.py"
     for relative in ("infra", "tools", "application", "adapters", "domain"):
         for path in (ROOT / relative).rglob("*.py"):
-            if path != MODULE and "__pycache__" not in path.parts:
+            if path not in (MODULE, precursor) and "__pycache__" not in path.parts:
                 assert "rp11_pass_a_expectations" not in path.read_text(encoding="utf-8"), path

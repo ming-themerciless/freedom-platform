@@ -10,6 +10,8 @@ authorization.
 The D-1 expectations precursor passed independent review after remediation.
 See [the policy record](rp11-single-host-pass-a-amendment-candidate.md#14-owner-policy-decisions--2026-11-28)
 and [the implementation handback](rp11-d1-expectations-precursor-handback.md).
+Latest slice: an unrun, unreviewed config/authority binding precursor
+([handback](rp11-pass-a-preflight-handback.md); see "Immediate next action").
 
 **G9 disposition (2026-11-27).** Codex independently accepted the
 C-1 through C-4 classifier corrections for A-6 at implementation commit
@@ -247,9 +249,22 @@ of the latest admitted act, plus synthetic tests; see the
 [handback](rp11-d1-seam-d2-handback.md). After remediation, Codex observed
 **5,009 passed** across three local selections and verified deterministic
 v40 regeneration and pin consistency. G6 remains evidence for its earlier
-tree and A-6 is unchanged. **Next action:** continue the evaluator/config
-composition and authority binding. SA-2 build, installation, activation
-and Pass A execution retain their separate authorization.
+tree and A-6 is unchanged. **Next action then** (config/authority binding;
+see below). SA-2 build, installation, activation and Pass A execution retain
+their separate authorization.
+
+**Update (2026-11-28, latest; independently reviewed).** Claude added an inert,
+unwired config/authority binding
+precursor, `tools/rp11_pass_a_preflight.py`, with synthetic tests. It checks
+externally pinned bytes (config, machine and written A-2, A-1, A-6, acquisition,
+A-5, execution authorization) against each other, the evaluator expectations,
+the exact 49-act plan and a supplied instant. **It authorizes no start**, no
+record or grant exists, and nothing builds its trust root. Claude remediated
+the unbound plan-duration finding. Codex observed **1,710 passed** after the fix.
+No covered source or pin changed. See the
+[handback](rp11-pass-a-preflight-handback.md). **Next action:** prepare protected
+loading, authenticated trust-root sourcing, and A-3 checks before operational
+composition. B-1 … B-12 are not closed by this.
 
 **Earlier (2026-11-27):** the [single-host Pass A amendment candidate](rp11-single-host-pass-a-amendment-candidate.md)
 is ready for owner policy review. It incorporates the v39

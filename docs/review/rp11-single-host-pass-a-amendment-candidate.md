@@ -507,3 +507,28 @@ records exact results and current v40 review digests.
   inference only covers v39. A-6 is unchanged (`journal.py` `83a3dc77…6b0d`).
   The v40 source candidate uses the review digests in the handback. The final
   contract and clean commit for a pass remain unresolved.
+
+### 14.4 Config/authority binding precursor — 2026-11-28 (NOT run, NOT reviewed)
+
+`tools/rp11_pass_a_preflight.py`, with synthetic tests; see the
+[handback](rp11-pass-a-preflight-handback.md). It is inert, unwired, outside the
+manifest and the SA-2 tree, and **authorizes no start**. No record, grant or
+trust root exists. It fixes, as candidate formats for review:
+
+* `pass-a.json` (`rp11-pass-a/1`): activation, pass id, root, host, operator,
+  commit, window, bands A0/A1, pins and expected values. **No record digest**,
+  so later records can pin it. This replaces the authorization-flag and
+  record-digest idea of the entry-contract proposal §2.
+* Written records (A-1, acquisition authorization and result, A-2, A-5,
+  execution authorization): one canonical block inside the pinned document.
+* D-5: `rp11-a2/3` is unchanged. The separate execution record pins both the
+  written and the machine A-2. The companion format passed independent review
+  for this development slice. Existing consume prerequisites still apply.
+* D-1 / B-3: expected values come from the pinned config, accepted by digest at
+  A-1 and A-2, together with a digest of the exact 49-act plan. Identity v2
+  also binds the whole-pass duration. A future caller must use the returned
+  immutable act policy and duration.
+* Authorship rests on an external trust root, which is not built or sourced.
+
+B-1 … B-12 are not closed. B-3 and B-4 are only partly addressed (format and
+grant coverage; no loader, no per-act enforcement).

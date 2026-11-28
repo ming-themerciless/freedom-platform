@@ -20,6 +20,13 @@ and verified reproducible v40 artifacts and pins. G6 remains evidence for its
 earlier tree and A-6 is unchanged. Operational entry, G10 and execution remain gated.
 [Handback](../review/rp11-d1-seam-d2-handback.md).
 
+**Config and authority binding precursor.** The v40 baseline is committed at
+`bf3875d`. Claude implemented a pure companion for pinned Pass A records.
+After binding the whole-pass duration to the immutable plan snapshot, the
+independent rerun passed **1,710 tests**. Protected loading, trusted pin
+sourcing, A-3 and operational composition remain open.
+[Preflight handback](../review/rp11-pass-a-preflight-handback.md).
+
 **G9 disposition (2026-11-27).** Codex independently accepted the
 C-1 through C-4 classifier corrections for A-6 at implementation commit
 `7373fd405c719f63927eac7c2fc9b87a82d6dbb4` (manifest v39), after Claude

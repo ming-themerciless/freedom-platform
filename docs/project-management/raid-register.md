@@ -1,5 +1,12 @@
 # RAID register
 
+**RP-11 dependency update, 2026-11-28.** Owner policy D-1 through D-10 is
+decided. The D-2 labels, D-1 seam and v40 pins passed independent review and
+focused verification. Open dependencies include the target diagnostic pin,
+the reviewed evaluator and authority binding, and new SA-2 reference builds
+for later artifact review. Open admission dependencies include the exact A-1 candidate and
+the subsequent owner records. See [the current handback](../review/rp11-d1-seam-d2-handback.md).
+
 **Current-state note, 2026-11-18.** Route 3 S1 inert provisioning ran on
 production and stopped at STOP-A (S1.0-S1.4 rc 0, S2.1 rc 0, S2.2 rc 12 as
 expected before the first post-S1 boot; no defect, no rollback need). Block F is

@@ -1985,7 +1985,7 @@
   "harness_name": "phase-5-0-evidence-harness",
   "harness_version": "0.7.0-pre-execution",
   "manifest_schema": "phase-5-0-evidence-review-manifest",
-  "manifest_version": 39,
+  "manifest_version": 40,
   "materializations": [
     {
       "after_step_id": "B6-03",
@@ -2960,7 +2960,7 @@
     },
     {
       "path": "tools/phase_5_0_evidence/capture_contract.py",
-      "sha256": "4e259baa903838f405469eaf0ba54ae2ecf27f235dfc20bfefc4abb6dd59ae25"
+      "sha256": "b03ca8297949cc2f4aeaaab9b3b8480a420fed1797612e7f9ab26283e943e96a"
     },
     {
       "path": "tools/phase_5_0_evidence/case_runtime.py",
@@ -2996,11 +2996,11 @@
     },
     {
       "path": "tools/phase_5_0_evidence/execution/capture_mechanism.py",
-      "sha256": "4e590ba2ce7de38f0c923205afb79f4923cc6bfda264d11f0f63aa368d7c1af3"
+      "sha256": "a7298b4b259825c071b7d09ee0a95ed2d7ab2e163851777b06d92464288c551c"
     },
     {
       "path": "tools/phase_5_0_evidence/execution/capture_store.py",
-      "sha256": "c038174db4e7293637eee831b58a0fd54dcc4194c5065fd90fd324e54a3fd081"
+      "sha256": "5ed3e326108821ab9d50a584f26b6ce633e56d64d7c6a15590a9992ac872973c"
     },
     {
       "path": "tools/phase_5_0_evidence/execution/case_program.py",
@@ -3048,11 +3048,11 @@
     },
     {
       "path": "tools/phase_5_0_evidence/execution/pass_a.py",
-      "sha256": "e1fccf88c28d979e3ee01c1b34118d01075a03af5d04f06d31aa543d686cfa36"
+      "sha256": "ebf36e9379f52955564a2c5bb0713c738aa311707b9d25449520ea9e251058d4"
     },
     {
       "path": "tools/phase_5_0_evidence/execution/pass_a_plan.py",
-      "sha256": "0b691f238606fb7eb237511c7f08510598f7f67ff3f772eaf63520485d4f67e3"
+      "sha256": "f42589fe182803ba78dc528aa7bca5967d4d2a83189d20ea1a6f6efdd0b80d56"
     },
     {
       "path": "tools/phase_5_0_evidence/execution/provisioner.py",
@@ -3144,7 +3144,7 @@
     },
     {
       "path": "tools/phase_5_0_evidence/review_manifest.py",
-      "sha256": "b7601a450278cddda5cbd014e205f225ac0799107b21a904d3877ef96b519492"
+      "sha256": "950d339a642178c5c27100f98339afe701f3ebae72911bae695fed543690f28a"
     },
     {
       "path": "tools/phase_5_0_evidence/rp11_launch.py",

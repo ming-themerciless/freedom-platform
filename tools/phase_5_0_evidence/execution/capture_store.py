@@ -134,6 +134,7 @@ STORE_FAILURES = frozenset(
         "publication-exists",
         "publication-failed",
         "close-failed",
+        "evidence-oversized",
     }
 )
 
@@ -178,6 +179,8 @@ class CaptureFilesystem(Protocol):
     def write_all(self, fd: int, data: bytes, *, stage: str) -> None: ...
 
     def digest(self, fd: int, *, stage: str) -> tuple[str, int]: ...
+
+    def read(self, fd: int, limit: int, *, stage: str) -> bytes: ...
 
     def fsync(self, fd: int, *, stage: str) -> None: ...
 
@@ -242,6 +245,18 @@ class PosixCaptureFilesystem:
                 return hasher.hexdigest(), offset
             hasher.update(chunk)
             offset += len(chunk)
+
+    def read(self, fd: int, limit: int, *, stage: str) -> bytes:
+        """At most ``limit`` bytes from the start of the file."""
+        chunks: list[bytes] = []
+        offset = 0
+        while offset < limit:
+            chunk = os.pread(fd, min(_DIGEST_CHUNK, limit - offset), offset)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            offset += len(chunk)
+        return b"".join(chunks)
 
     def fsync(self, fd: int, *, stage: str) -> None:
         os.fsync(fd)
@@ -372,6 +387,20 @@ def _identity(facts: os.stat_result) -> tuple[int, int]:
     return (facts.st_dev, facts.st_ino)
 
 
+def _unchanged_metadata(facts: os.stat_result) -> tuple[int, ...]:
+    """What a read must leave unchanged. Access time is left out: reading may move it."""
+    return (
+        facts.st_dev,
+        facts.st_ino,
+        facts.st_mode,
+        facts.st_uid,
+        facts.st_nlink,
+        facts.st_size,
+        facts.st_mtime_ns,
+        facts.st_ctime_ns,
+    )
+
+
 @dataclass
 class CaptureRootStore:
     """One pass's capture root, held open by descriptor for the pass."""
@@ -383,6 +412,10 @@ class CaptureRootStore:
     _directories: dict[str, int] = field(default_factory=dict)
     _states: dict[str, PublicationState] = field(default_factory=dict)
     _device: int | None = None
+    #: Bound at X-1: each ancestor's component and identity, from `/` down, and
+    #: each held directory's identity (`""` is the root itself).
+    _ancestors: list[tuple[str, tuple[int, int]]] = field(default_factory=list)
+    _directory_identities: dict[str, tuple[int, int]] = field(default_factory=dict)
 
     # -- what the final state records -----------------------------------------
 
@@ -456,6 +489,7 @@ class CaptureRootStore:
                 )
                 if _identity(facts) in forbidden_identities:
                     raise StoreFailure("X-1:verify-ancestor", "forbidden-location")
+                self._ancestors.append((component, _identity(facts)))
             leaf = components[-1]
             self._make_directory(current, leaf, "", stage="X-1:create-root")
             self._barrier(current, "X-1:root-entry-barrier", "directory-barrier-failed")
@@ -494,6 +528,7 @@ class CaptureRootStore:
         if entry is None or _identity(entry) != _identity(facts) or not stat.S_ISDIR(facts.st_mode):
             raise StoreFailure(verify, "identity-mismatch")
         self._require_mode(facts, DIRECTORY_MODE, verify)
+        self._directory_identities[name] = _identity(facts)
 
     # -- P-1 … P-4: the stream files ------------------------------------------
 
@@ -709,6 +744,113 @@ class CaptureRootStore:
             self._close_quietly(read_fd)
             raise
         self.close(read_fd, stage=stage)
+
+    # -- reading back what was admitted ----------------------------------------
+
+    def verify_publication(self, publication: Publication, size: int, *, stage: str) -> None:
+        """Both names of one published pair, again: bound inode, link count two,
+        owner, mode, size and exact bytes. Reads only, through the held directory
+        descriptor."""
+        directory, _, leaf = publication.name.rpartition("/")
+        container = self._directories[directory]
+        for member in (publication.staging.rpartition("/")[2], leaf):
+            self._verify_name(
+                container, member, publication.identity, 2, publication.sha256, size, stage=stage
+            )
+
+    def verify_bindings(self, *, stage: str) -> None:
+        """The capture root's path and every fixed subdirectory still name the
+        directories bound at X-1, or `StoreFailure`. Writes and lists nothing.
+
+        Each name is `lstat`ed no-follow relative to a descriptor already proven.
+        An ancestor is opened only after its entry showed the bound identity, so
+        that the walk can go on; the root and its subdirectories are not opened.
+        """
+        current = self._call(
+            stage, "open-refused", lambda: self.filesystem.open_directory(None, "/", stage=stage)
+        )
+        try:
+            for component, identity in self._ancestors:
+                self._require_entry(current, component, identity, stage)
+                following = self._call(
+                    stage,
+                    "open-refused",
+                    lambda: self.filesystem.open_directory(current, component, stage=stage),
+                )
+                self._close_quietly(current)
+                current = following
+                facts = self._call(stage, "verify-failed", lambda: self.filesystem.fstat(current, stage=stage))
+                if _identity(facts) != identity:
+                    raise StoreFailure(stage, "identity-mismatch")
+            leaf = parse_capture_root(self.capture_root)[-1]
+            facts = self._require_entry(current, leaf, self._directory_identities.get(""), stage)
+            self._require_mode(facts, DIRECTORY_MODE, stage)
+        except Exception:
+            self._close_quietly(current)
+            raise
+        self._close_quietly(current)
+        for name in SUBDIRECTORIES:
+            parent, _, leaf = name.rpartition("/")
+            facts = self._require_entry(
+                self._directories[parent], leaf, self._directory_identities.get(name), stage
+            )
+            self._require_mode(facts, DIRECTORY_MODE, stage)
+
+    def _require_entry(
+        self, container: int, leaf: str, identity: tuple[int, int] | None, stage: str
+    ) -> os.stat_result:
+        facts = self._call(
+            stage, "verify-failed", lambda: self.filesystem.lstat_at(container, leaf, stage=stage)
+        )
+        if facts is None or not stat.S_ISDIR(facts.st_mode) or _identity(facts) != identity:
+            raise StoreFailure(stage, "identity-mismatch")
+        return facts
+
+    def read_stream(self, name: str, digest: str, size: int, *, stage: str) -> bytes:
+        """The bytes of one stream file this store created, or `StoreFailure`.
+
+        The file is opened no-follow relative to the held directory descriptor
+        and must still be the inode bound in P-1, with link count one, owner,
+        mode, and exactly `size` bytes whose SHA-256 is `digest`. The bytes
+        returned are the bytes digested. After the read the descriptor's metadata
+        must be unchanged and the exact name must still be that inode.
+        """
+        directory, _, leaf = name.rpartition("/")
+        container = self._directories[directory]
+        read_fd = self._call(
+            stage, "open-refused", lambda: self.filesystem.open_read(container, leaf, stage=stage)
+        )
+        try:
+            facts = self._call(stage, "verify-failed", lambda: self.filesystem.fstat(read_fd, stage=stage))
+            if (
+                not stat.S_ISREG(facts.st_mode)
+                or facts.st_nlink != 1
+                or _identity(facts) != self._identities.get(name)
+            ):
+                raise StoreFailure(stage, "identity-mismatch")
+            self._require_mode(facts, FILE_MODE, stage)
+            if facts.st_size != size:
+                raise StoreFailure(stage, "size-mismatch")
+            data = self._call(
+                stage, "digest-failed", lambda: self.filesystem.read(read_fd, size + 1, stage=stage)
+            )
+            if len(data) != size:
+                raise StoreFailure(stage, "size-mismatch")
+            if sha256_hex(data) != digest:
+                raise StoreFailure(stage, "content-mismatch")
+            after = self._call(stage, "verify-failed", lambda: self.filesystem.fstat(read_fd, stage=stage))
+            entry = self._call(
+                stage, "verify-failed", lambda: self.filesystem.lstat_at(container, leaf, stage=stage)
+            )
+            if entry is None or any(
+                _unchanged_metadata(seen) != _unchanged_metadata(facts) for seen in (after, entry)
+            ):
+                raise StoreFailure(stage, "identity-mismatch")
+        except Exception:
+            self._close_quietly(read_fd)
+            raise
+        self.close(read_fd, stage=stage)
+        return data
 
     # -- the end of the pass ---------------------------------------------------
 

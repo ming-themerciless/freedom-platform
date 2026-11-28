@@ -6,7 +6,12 @@ Production and staging mutation, real secrets and real player data remain
 outside that authority and need Peter's separate explicit, attended
 authorization.
 
-**Current RP-11 position (2026-11-27).** Codex independently accepted the
+**Current RP-11 position (2026-11-28).** Peter approved D-1 through D-10.
+The D-1 expectations precursor passed independent review after remediation.
+See [the policy record](rp11-single-host-pass-a-amendment-candidate.md#14-owner-policy-decisions--2026-11-28)
+and [the implementation handback](rp11-d1-expectations-precursor-handback.md).
+
+**G9 disposition (2026-11-27).** Codex independently accepted the
 C-1 through C-4 classifier corrections for A-6 at implementation commit
 `7373fd405c719f63927eac7c2fc9b87a82d6dbb4` (manifest v39), after Claude
 remediated G9-R1. The exact commit was published and re-acquired detached
@@ -206,8 +211,50 @@ parent was not provisioned and no leaf was tested then.
 
 ### Immediate next action
 
-**Current (2026-11-27):** use the v39 [A-6 disposition](rp11-g9-md5-independent-acceptance.md)
-for the single-host Pass A entry contract. G10 requires the reviewed contract,
+**Current (2026-11-28; supersedes the 2026-11-27 paragraph below where they
+differ).** Peter approved Codex's recommendations on the candidate's policy
+choices. Full table and undecided details:
+[candidate §14](rp11-single-host-pass-a-amendment-candidate.md#14-owner-policy-decisions--2026-11-28).
+
+* D1: enforce material expected results in-pass, fail closed. In development a
+  mismatch goes to Claude remediation and Codex re-review without stopping for
+  approval. An actual pass stops and preserves evidence; no retry.
+* D2: retire AUTH-SYNC and Pass-A AUTH-DBREAD; move the four cluster host-status
+  reads to AUTH-READ; AUTH-ACQUIRE is separate.
+* D3: a named actor, one exact commit per separate grant.
+* D4: document omitted observations and gaps; restore `chattr` or
+  `laboratory/runs` only if required and possible without wider privileges; bind
+  the A0-06 suite evidence to the exact commit.
+* D5: bind the machine A-2 to the written grant by digest, with matching operator,
+  scope, window and pins; keep the consume guard prerequisites; no substitute
+  grant.
+* D6: a record-only successor is allowed; implementation and decision digests are
+  distinct.
+* D7: SIGTERM is an interruption: preserve evidence, no X-3.
+* D8: the named operator holds a separate execution authority.
+* D9: a named read-only evidence grant and mechanism.
+* D10: retain the root; a new attempt needs a separately authorized distinct root,
+  never `capture-b`.
+
+These are policy decisions, not grants. Codex's first targeted run of the
+[D1 expectations precursor](rp11-d1-expectations-precursor-handback.md) reported
+294 passed and 1 scope-guard failure. Claude has remediated that and the review
+findings. Codex re-reviewed and ran the focused evaluator, static scope,
+no-execution and capture tests: **979 passed**. The precursor remains inert.
+**Update (2026-11-28, later; independently reviewed).** Claude implemented the
+D-2 labels and an opt-in, unwired D-1 continuation seam with trusted read-back
+of the latest admitted act, plus synthetic tests; see the
+[handback](rp11-d1-seam-d2-handback.md). After remediation, Codex observed
+**5,009 passed** across three local selections and verified deterministic
+v40 regeneration and pin consistency. G6 remains evidence for its earlier
+tree and A-6 is unchanged. **Next action:** continue the evaluator/config
+composition and authority binding. SA-2 build, installation, activation
+and Pass A execution retain their separate authorization.
+
+**Earlier (2026-11-27):** the [single-host Pass A amendment candidate](rp11-single-host-pass-a-amendment-candidate.md)
+is ready for owner policy review. It incorporates the v39
+[A-6 disposition](rp11-g9-md5-independent-acceptance.md) and identifies the
+implementation blockers before A-1. G10 requires the reviewed contract,
 Peter's written A-2, A-5 and the applicable AUTH grants. Actual
 `run_pass_a` requires its own execution authorization.
 

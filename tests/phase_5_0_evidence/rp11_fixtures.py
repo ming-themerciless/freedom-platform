@@ -201,6 +201,9 @@ class FaultFilesystem:
     def open_read(self, dir_fd, name, *, stage):  # type: ignore[no-untyped-def]
         return self._invoke("open_read", stage, lambda: self.inner.open_read(dir_fd, name, stage=stage))
 
+    def read(self, fd, limit, *, stage):  # type: ignore[no-untyped-def]
+        return self._invoke("read", stage, lambda: self.inner.read(fd, limit, stage=stage))
+
     def write_all(self, fd, data, *, stage):  # type: ignore[no-untyped-def]
         if self.mode in self.FALSE_WRITES and not self.triggered and stage == self.stage:
             self.calls.append(("write_all", stage))

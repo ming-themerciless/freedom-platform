@@ -900,6 +900,15 @@ PERMITTED_R2_SNAPSHOT_IDEMPOTENCY = frozenset({
 })
 
 
+#: The RP-11 D1 expected-results **review precursor** (owner policy decision D1,
+#: 2026-11-28). A pure evaluator that nothing operational imports; declaring it
+#: permits its presence for review and authorizes no wiring or run. One file, not a
+#: prefix.
+PERMITTED_RP11_REVIEW_PRECURSOR = frozenset({
+    "tools/rp11_pass_a_expectations.py",
+})
+
+
 #: The Route 3 manager/Polkit adapter slice (active delivery plan, 2026-10-12):
 #: an application-owned boundary and its system-bus adapter. It is inactive in
 #: bot, web and worker production configuration; only the controlled `start` and
@@ -1145,6 +1154,8 @@ def scope_violation(path: str) -> str | None:
         return None
     if path in PERMITTED_R2_SNAPSHOT_IDEMPOTENCY:
         return None
+    if path in PERMITTED_RP11_REVIEW_PRECURSOR:
+        return None
     if path.startswith("adapters/web/templates/"):
         if path in PERMITTED_TEMPLATES:
             return None
@@ -1243,6 +1254,27 @@ def test_the_disposable_server_remediation_allowlist_is_narrow() -> None:
 
 
 
+def test_the_rp11_review_precursor_allowlist_is_narrow() -> None:
+    """One exact module, in its own list, and no neighbour of it is permitted."""
+    precursor = frozenset({"tools/rp11_pass_a_expectations.py"})
+    assert PERMITTED_RP11_REVIEW_PRECURSOR == precursor
+    assert scope_violation("tools/rp11_pass_a_expectations.py") is None
+    for allowlist in (
+        PERMITTED_P3_5_PRODUCTION,
+        PERMITTED_PHASE_4_PRODUCTION,
+        PERMITTED_PHASE_5_0_EVIDENCE_HARNESS,
+        PERMITTED_ROUTE_3_ADAPTER,
+        PERMITTED_R5_RUNNER_RESTORATION,
+    ):
+        assert not (precursor & allowlist)
+    for neighbour in (
+        "tools/rp11_pass_a_expectations_extra.py",
+        "tools/rp11_pass_a_expectations/__init__.py",
+        "tools/rp11_pass_a_runner.py",
+    ):
+        assert scope_violation(neighbour) is not None, neighbour
+
+
 @pytest.mark.parametrize(
     "path",
     [
@@ -1338,6 +1370,7 @@ PRODUCTION_ALLOWLISTS = {
     "PERMITTED_DISPOSABLE_SERVER_REMEDIATION": PERMITTED_DISPOSABLE_SERVER_REMEDIATION,
     "PERMITTED_R5_RUNNER_RESTORATION": PERMITTED_R5_RUNNER_RESTORATION,
     "PERMITTED_R2_SNAPSHOT_IDEMPOTENCY": PERMITTED_R2_SNAPSHOT_IDEMPOTENCY,
+    "PERMITTED_RP11_REVIEW_PRECURSOR": PERMITTED_RP11_REVIEW_PRECURSOR,
 }
 
 

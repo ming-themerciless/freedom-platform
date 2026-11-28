@@ -1,5 +1,14 @@
 # Decision register
 
+## RP-11 single-host Pass A policy — 2026-11-28
+
+Peter approved D-1 through D-10 as recorded in
+[amendment candidate §14](../review/rp11-single-host-pass-a-amendment-candidate.md#14-owner-policy-decisions--2026-11-28).
+D-1 requires an actual pass to stop on material mismatch and preserve evidence.
+Development review findings go directly through Claude remediation and Codex
+re-review. G10 retains its dated A-2, A-5 and applicable AUTH requirements.
+Execution requires its own explicit authority.
+
 ## Record — Route 3 S1 executed to STOP-A; reboot preparation authorized, reboot not — 2026-11-18
 
 Under Peter's written S1 authorization, S1 inert provisioning ran on production

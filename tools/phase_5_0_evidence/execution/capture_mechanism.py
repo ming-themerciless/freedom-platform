@@ -105,6 +105,7 @@ from ..capture_contract import (
     X3_SUCCEEDED,
     X4_INCONCLUSIVE,
     X4_VALID,
+    AdmittedEvidence,
     CaptureContractRefused,
     CaptureRecord,
     ExitOutcome,
@@ -176,6 +177,22 @@ ACT_STAGES = (
     *RECORD_STAGES.ordered(),
     *ADVANCE_STAGES.ordered(),
 )
+
+#: The stages of `CaptureSession.admitted_evidence`, in order. Reads only; they
+#: are not part of an act and are issued only when a caller asks for evidence.
+EVIDENCE_STAGES = (
+    "D1:bind-before",
+    "D1:verify-state",
+    "D1:verify-record",
+    "D1:read-stdout",
+    "D1:read-stderr",
+    "D1:bind-after",
+)
+#: `CaptureSession.verify_evidence_bindings`, after the caller has judged.
+JUDGED_STAGE = "D1:bind-judged"
+#: The most one stream may be materialized as evidence: the largest class bound of
+#: the Pass A plan (a test holds the two equal). Capture itself is not limited by it.
+MAX_EVIDENCE_STREAM_BYTES = 512 * 1024
 
 #: The act-level failures that are not a storage stage.
 LAUNCH_STAGE = "P-1:launch"
@@ -457,6 +474,87 @@ class CaptureSession:
                 stop=stop,
             )
         return outcome
+
+    def admitted_evidence(self) -> AdmittedEvidence:
+        """The latest admitted act, re-read and verified. Reads only.
+
+        It takes no argument, so no name, path or sequence number comes from the
+        caller. The admitting open state and the record are re-verified under both
+        names, then each stream file is read through the held directory
+        descriptor and checked against its P-1 inode and the record's size and
+        digest. Earlier acts are not re-read here; X-4 covers the whole chain.
+
+        A stream above `MAX_EVIDENCE_STREAM_BYTES` is refused before anything is
+        opened or read. The root path and the fixed subdirectories must name the
+        held directories both before the first open and after the last read.
+
+        A failed check raises `StoreFailure` and leaves the session `OPEN`: the
+        caller owns the one stop transition.
+        """
+        self._require(SessionState.OPEN, "no evidence is read")
+        if not self._records:
+            raise CaptureRefused("no act has been admitted")
+        entry, record = self._records[-1]
+        admitting = self._chain[-1]
+        before_stage, state_stage, record_stage, stdout_stage, stderr_stage, after_stage = (
+            EVIDENCE_STAGES
+        )
+        if (
+            admitting.state.records[-1] != entry
+            or self._store.publication_states.get(entry.name) is not PublicationState.ADMITTED
+        ):
+            raise StoreFailure(state_stage, "identity-mismatch")
+        record_publication = Publication(
+            name=entry.name,
+            staging=entry.staging,
+            sha256=entry.sha256,
+            device=entry.device,
+            inode=entry.inode,
+        )
+        for binding, stage in ((record.stdout, stdout_stage), (record.stderr, stderr_stage)):
+            if binding.size > MAX_EVIDENCE_STREAM_BYTES:
+                raise StoreFailure(stage, "evidence-oversized")
+        try:
+            self._store.verify_bindings(stage=before_stage)
+            self._store.verify_publication(
+                admitting.publication, len(admitting.state.to_bytes()), stage=state_stage
+            )
+            self._store.verify_publication(
+                record_publication, len(record.to_bytes()), stage=record_stage
+            )
+            stdout = self._store.read_stream(
+                record.stdout.name, record.stdout.sha256, record.stdout.size, stage=stdout_stage
+            )
+            stderr = self._store.read_stream(
+                record.stderr.name, record.stderr.sha256, record.stderr.size, stage=stderr_stage
+            )
+            self._store.verify_bindings(stage=after_stage)
+        except CaptureInterrupted:
+            self._state = SessionState.INTERRUPTED
+            raise
+        return AdmittedEvidence(
+            pass_id=self._request.pass_id,
+            invocation_id=self._request.invocation_id,
+            capture_seq=record.capture_seq,
+            record=record,
+            record_sha256=entry.sha256,
+            state_sha256=admitting.publication.sha256,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+    def verify_evidence_bindings(self) -> None:
+        """The namespace still names the held directories. Reads only.
+
+        For the caller to ask after judging evidence and before any later act.
+        Failure and interruption behave as in `admitted_evidence`.
+        """
+        self._require(SessionState.OPEN, "no binding is checked")
+        try:
+            self._store.verify_bindings(stage=JUDGED_STAGE)
+        except CaptureInterrupted:
+            self._state = SessionState.INTERRUPTED
+            raise
 
     def complete(self) -> FinalizationOutcome:
         """The pass ended without a stop: one X-3 attempt, then the seal."""
@@ -826,7 +924,10 @@ def create_capture_session(
 
 __all__ = [
     "ACT_STAGES",
+    "EVIDENCE_STAGES",
+    "JUDGED_STAGE",
     "LAUNCH_STAGE",
+    "MAX_EVIDENCE_STREAM_BYTES",
     "REQUEST_STAGE",
     "ActFailure",
     "ActOutcome",

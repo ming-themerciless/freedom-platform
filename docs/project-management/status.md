@@ -6,9 +6,21 @@ Baseline v1.9 remains active. Phase 3 and Phase 4 gates are approved; Phase 5
 implementation and unrestricted testing on the disposable `oracle-test` server
 remain authorized.
 
-### RP-11 implementation continuation — current as of 2026-11-27
+### RP-11 implementation continuation — current as of 2026-11-28
 
-**Current RP-11 position (2026-11-27).** Codex independently accepted the
+Peter approved the [single-host D-1 through D-10 policies](../review/rp11-single-host-pass-a-amendment-candidate.md#14-owner-policy-decisions--2026-11-28).
+The inert D-1 validator passed 979 focused tests after Claude remediation and
+Codex re-review. [Independent handback](../review/rp11-d1-expectations-precursor-handback.md).
+
+**Later the same day (independently reviewed):** the four cluster host-status
+acts are `AUTH-READ` (D-2) and an opt-in, unwired continuation seam can bind
+evidence read back from the current session's admitted chain and stop before the
+next act (D-1). Codex observed **5,009 passed** across three local test selections
+and verified reproducible v40 artifacts and pins. G6 remains evidence for its
+earlier tree and A-6 is unchanged. Operational entry, G10 and execution remain gated.
+[Handback](../review/rp11-d1-seam-d2-handback.md).
+
+**G9 disposition (2026-11-27).** Codex independently accepted the
 C-1 through C-4 classifier corrections for A-6 at implementation commit
 `7373fd405c719f63927eac7c2fc9b87a82d6dbb4` (manifest v39), after Claude
 remediated G9-R1. The exact commit was published and re-acquired detached

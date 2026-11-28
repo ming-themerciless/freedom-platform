@@ -38,8 +38,8 @@ f704c0f4f0ddbe9de92da9812dde6929f681ba778263746a603bde8b4b3563d6  infra/rp11-lau
 f08ba9de4374374fa91012021ce12fb83f6370be5547ee4e214232100c38e76f  infra/rp11-launch/build-root.manifest
 651ff85df120a6b8bddfff7b359074b4c239e94988544c9ef60af7c3af28dd16  infra/rp11-launch/expected.sha256
 e99cee65a228339e304d4e578643de409961539a8240230d4e41bb1baf6bb13a  infra/rp11-launch/verify/fixtures/cc1.v.baseline
-7efe11d080fc1d6374ad5ff0748b81a1c1815999aa9e15a79a067bbb0a2673a2  docs/review/phase-5-0-evidence-harness-review-manifest.json
-a45c9c5ef6a3f7c531e337037b2b521638ca54164af2a2bf4ea738205b72e984  docs/review/phase-5-0-evidence-harness-concrete-plan.md
+4254369f0678700e345dcfd9f1c239d9db054aa4537f2b89b2b86e353353faf7  docs/review/phase-5-0-evidence-harness-review-manifest.json
+a17b4b0f100c9be9dea36d6599810a746413b90805edfc9483b5f724cb32eb12  docs/review/phase-5-0-evidence-harness-concrete-plan.md
 87e318cdd77f1fae0a354f707d9fe32d163ba48b708bb455c670f6d4d333cfd1  infra/rp11-launch/build.sh
 62050b5dc1816f4f673b8c49b94c7463391edb6dbed9f69459f0bc6c5f1dc2a7  infra/rp11-launch/launch.c
 34b56cfc1adb4f14f2e09c740e5e25915194778ebf73c74c1d24502121425c4b  infra/rp11-launch/select.h
@@ -61,7 +61,7 @@ f0e811a4bd61782789b66f31ab4401797e52b8ac00ffeebb984bfcd71afb4a8a  infra/rp11-lau
 ff3d458cabae91512562cca6143542337b1306dc3df791da505c51a9519ab76f  tests/test_rp11_launch_toolchain.py
 bc24c0ee7b0c9f58853479adc908c60cf013b9652409e3d5cee0d710074a18b6  tests/rp11_launch_support.py
 a51bacda94ef5ed2fe1bea6a7e90bc7c94925237bd6f72f518f7ef0c338381ed  tools/phase_5_0_evidence/rp11_launch.py
-b7601a450278cddda5cbd014e205f225ac0799107b21a904d3877ef96b519492  tools/phase_5_0_evidence/review_manifest.py
+950d339a642178c5c27100f98339afe701f3ebae72911bae695fed543690f28a  tools/phase_5_0_evidence/review_manifest.py
 SUMS
   status=$?
   printf 'S4c.3 sha256sum-check exit=%s\n' "$status"

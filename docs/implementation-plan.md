@@ -2574,7 +2574,17 @@ not authority.*
 (`oracle-test`) are authorized. Production and staging mutation, real secrets and
 real player data remain outside that authority.
 
-**Current RP-11 position (2026-11-27).** Codex independently accepted the
+**Current RP-11 position (2026-11-28).** Peter approved the single-host
+[policy decisions D-1 through D-10](review/rp11-single-host-pass-a-amendment-candidate.md#14-owner-policy-decisions--2026-11-28).
+A future pass stops on a material mismatch and preserves evidence. Development
+findings proceed through Claude remediation and Codex re-review. The inert D-1
+precursor passed 979 focused checks after remediation. The next slice added
+verified current-invocation read-back and D-2 plan labels. Codex observed
+5,009 passing checks and reproducible v40 artifacts with consistent pins.
+Continue the evaluator/config composition and authority binding.
+[Current handback](review/rp11-d1-seam-d2-handback.md).
+
+**G9 disposition (2026-11-27).** Codex independently accepted the
 C-1 through C-4 classifier corrections for A-6 at implementation commit
 `7373fd405c719f63927eac7c2fc9b87a82d6dbb4` (manifest v39), after Claude
 remediated G9-R1. The exact commit was published and re-acquired detached

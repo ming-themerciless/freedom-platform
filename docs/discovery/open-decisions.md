@@ -1,5 +1,11 @@
 # Unresolved Decisions
 
+**RP-11 single-host disposition, 2026-11-28.** Peter approved the Pass A
+policy choices D-1 through D-10. The remaining work is implementation,
+verification and the separate authorization records. See the
+[decision register](../project-management/decision-register.md#rp-11-single-host-pass-a-policy--2026-11-28)
+and [single-host policy record](../review/rp11-single-host-pass-a-amendment-candidate.md#14-owner-policy-decisions--2026-11-28).
+
 **Current static-launcher disposition, 2026-10-01.** Peter Duscha accepted the
 D2-R2 design after independent Codex review and decided LD-9 option (i): Codex
 must independently decode the actual `.text` at D9-2 using its own decoder or

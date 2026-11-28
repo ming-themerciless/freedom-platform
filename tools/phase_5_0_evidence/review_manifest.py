@@ -692,7 +692,23 @@ MANIFEST_SCHEMA = "phase-5-0-evidence-review-manifest"
 #: step, vector, target fact, launcher file, schema or covered-set membership changes
 #: (66 covered sources). `is_executable` remains `False`. A digest remains review input,
 #: not execution approval.
-MANIFEST_VERSION = 39
+#: **40** is the RP-11 D1 continuation seam and D2 authority labels, 2026-11-28 (not an
+#: execution approval). The bytes of five covered sources change besides this note:
+#: `capture_contract.py` gains the `AdmittedEvidence` value;
+#: `execution/capture_store.py` gains a bounded `read`, the re-verification of an
+#: admitted pair and stream through the held directory descriptors, and of the root,
+#: ancestor and subdirectory bindings;
+#: `execution/capture_mechanism.py` gains the read-only `admitted_evidence`, with a
+#: 512 KiB per-stream materialization bound, and `verify_evidence_bindings`;
+#: `execution/pass_a.py` gains the opt-in continuation seam (default none); and
+#: `execution/pass_a_plan.py` labels the four cluster host-status acts `AUTH-READ`.
+#: The first three are `rp11-capture-tool/1` sources and the first four are in the SA-2
+#: tree, so the G6 capture-tool and tree digests no longer describe this tree. No
+#: capture schema, step, argv, environment, timeout, vector, target fact, launcher
+#: file or covered-set membership changes (66 covered sources). Nothing is wired and
+#: `run_pass_a` still has no caller. `journal.py` is unchanged. `is_executable`
+#: remains `False`. A digest remains review input, not execution approval.
+MANIFEST_VERSION = 40
 
 #: **27.** The `infra/rp11-launch/` files whose bytes the manifest pins
 #: (proposal §5.2, §5.11): image source, build definition, toolchain and

@@ -486,7 +486,9 @@ def test_run_pass_a_has_no_default_session_factory() -> None:
     signature = inspect.signature(run_pass_a)
     assert set(signature.parameters) == {
         "activation_id", "consume_journal", "genesis", "acts", "exit_policy", "session_factory",
+        "continuation",
     }
+    assert signature.parameters["continuation"].default is None, "the D1 seam is opt-in"
     parameter = signature.parameters["session_factory"]
     assert parameter.default is inspect.Parameter.empty and parameter.kind is parameter.KEYWORD_ONLY
 

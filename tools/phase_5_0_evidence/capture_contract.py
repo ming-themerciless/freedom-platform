@@ -1418,6 +1418,28 @@ RP11_SOURCES = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class AdmittedEvidence:
+    """One admitted act as the open session that captured it hands it out.
+
+    A value only: never retained, and part of no capture format. Its provenance is
+    its producer. Only `CaptureSession.admitted_evidence` makes one from a capture
+    root, after re-verifying the admitted pair and both stream files; nothing in the
+    value itself proves that.
+    """
+
+    pass_id: str
+    invocation_id: str
+    capture_seq: int
+    record: CaptureRecord
+    #: The digest under which the current chain admitted ``record``.
+    record_sha256: str
+    #: The digest of the durable open state that admitted it.
+    state_sha256: str
+    stdout: bytes
+    stderr: bytes
+
+
 def capture_tool_sha256(source_bytes: Mapping[str, bytes]) -> str:
     _require(set(source_bytes) == set(RP11_SOURCES), "source-set-mismatch")
     document = {
@@ -1454,6 +1476,7 @@ __all__ = [
     "X4_INCONCLUSIVE",
     "X4_VALID",
     "AccountedObject",
+    "AdmittedEvidence",
     "CaptureContractRefused",
     "CaptureRecord",
     "ExitOutcome",

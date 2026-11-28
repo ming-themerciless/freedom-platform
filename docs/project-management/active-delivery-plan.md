@@ -24,6 +24,15 @@ Owner and acceptance authority: Peter Duscha
 
 ## Current delivery position
 
+**RP-11 single-host development, 2026-11-28.** D-1 through D-10 are approved
+policy. The inert D-1 validator passed 979 focused checks after independent
+review and remediation. The D-2 labels and opt-in D-1 continuation passed
+independent review and 5,009 local checks. The v40 artifacts reproduced and
+the dependent pins passed. Continue with the evaluator/config composition
+and authority binding while the operational entry remains gated.
+[Current handback](../review/rp11-d1-seam-d2-handback.md); earlier:
+[precursor](../review/rp11-d1-expectations-precursor-handback.md).
+
 **Production baseline.** Ubuntu 26.04.1, Ubuntu Python 3.14.4 and Ubuntu
 PostgreSQL 18.6 are current; the attended Ubuntu continuation and the Lavalink
 residue removal (music is removed under OD-40) closed on 2026-11-11 with no open

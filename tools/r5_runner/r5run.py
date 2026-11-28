@@ -73,7 +73,7 @@ RUN_ID_PATTERN = re.compile(r"p5-r5-fresh-\d{8}T\d{6}Z-[0-9a-f]{8}")
 #: whose own identity is supplied on the command line from the assignment.
 PINS: dict[str, tuple[str, int]] = {
     "tools/r5_runner/blocks/s01.sh": (
-        "057bef68019135191b26a08b76f6f79334941f86720a110e3f17f2375b208d17",
+        "e9c7b36548d49a5c31f0f54ba8221dd0dde882c6f422453ecf934de7aac0af2f",
         11516,
     ),
     "tools/r5_runner/blocks/s02.sh": (
@@ -101,11 +101,11 @@ PINS: dict[str, tuple[str, int]] = {
         232,
     ),
     "tools/r5_runner/blocks/s04c.sh": (
-        "edaa1641cc0b5cb568e67ee08c3e18199728d6f1807fe2f5715c73d5388768be",
+        "ac00067252f6fcb6ed5e0439e7433c96be692190cdbcacd095592ba52d14701e",
         4420,
     ),
     "tools/r5_runner/blocks/s04d.sh": (
-        "2a33f831b652d5906b77a9fe216cdb82da4702335cb99cea33bc7bade1acb536",
+        "ed4edf7c00b9b978844ca61e8b558cdd3508a042c341af0cd688912f8bed77db",
         8708,
     ),
     "tools/r5_runner/blocks/s05.sh": (
@@ -129,7 +129,7 @@ PINS: dict[str, tuple[str, int]] = {
         2029,
     ),
     "tools/r5_runner/blocks/s11.sh": (
-        "3944170aebb712466155159358012701cef2adfce8d9d18dd05e0c50c0f92d07",
+        "0db18d2b892c2315e9a908c3ab9cabfaed4b8351e205968c4efd75e1961daef6",
         10066,
     ),
     "tools/r5_runner/blocks/s12-start.sh": (
@@ -141,8 +141,8 @@ PINS: dict[str, tuple[str, int]] = {
         1283,
     ),
     "tests/test_r5_runner.py": (
-        "416baa4818910059d9a3b1b1567ae0889928bbef0405fc102215cfb6bff2a62e",
-        37271,
+        "b5ecf96ada819cc88e638f1a99f939d331c6541ac344a50c25278f03f3fa5120",
+        37273,
     ),
 }
 
@@ -155,7 +155,7 @@ BASELINE_SHA256 = "e99cee65a228339e304d4e578643de409961539a8240230d4e41bb1baf6bb
 BASELINE_LENGTH = 5305
 #: Start of the S1.8 result line, which begins with the review-manifest version
 #: the block expects; the handback excerpt selects the line by it.
-MANIFEST_RESULT_PREFIX = "39 "
+MANIFEST_RESULT_PREFIX = "40 "
 
 EXIT_PASS = 0
 EXIT_HARD_STOP = 1

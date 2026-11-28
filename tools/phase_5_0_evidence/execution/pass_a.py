@@ -46,6 +46,24 @@ acceptable; ``session_factory`` is what turns the genesis request into a session
 There is deliberately no default exit policy: whether a non-zero exit ends the pass
 is the Pass A plan's decision, not this module's.
 
+**Opt-in continuation seam (decision D1).** A caller may supply an
+``ActContinuation``. Without one the pass behaves exactly as it did before the seam
+existed. With one:
+
+* it must say, before any effect, that it covers exactly this plan, or the plan is
+  refused;
+* after each admitted act whose exit ``exit_policy`` accepted, the session re-reads
+  that act's evidence from its own admitted chain (``admitted_evidence``) and the
+  continuation judges it; only a return of exactly ``True`` lets the pass go on,
+  including from the last act to completion;
+* evidence that cannot be re-verified, or is not permitted, ends the pass through the
+  same single stop transition, before the next act;
+* after a permit, the capture root and its subdirectories must still name the held
+  directories, or the pass ends the same way.
+
+The seam judges nothing itself and holds no expected value. Nothing in the
+repository passes a continuation to a pass.
+
 **Packaged and imported, not invoked.** Since approved G8, ``rp11_entry.main``
 imports this module so that it sits inside the protected artifact closure, and
 ``build.ENTRY_SOURCES`` lists it, so the closure test forces the two to agree.
@@ -59,11 +77,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Sequence
+from typing import Callable, Protocol, Sequence
 
 from ..capture_contract import (
     X3_SUCCEEDED,
     X4_VALID,
+    AdmittedEvidence,
     ExitOutcome,
     HandbackBinding,
 )
@@ -77,6 +96,7 @@ from .capture_mechanism import (
     GenesisRequest,
     SessionState,
 )
+from .capture_store import StoreFailure
 from .start_binding import StartBindingRefused, require_start_binding
 
 #: Decides, for one admitted act, whether its recorded exit lets the pass go on.
@@ -89,11 +109,25 @@ ExitPolicy = Callable[[ActRequest, ExitOutcome], bool]
 #: it raises propagates, because no session exists to finalize.
 SessionFactory = Callable[[GenesisRequest], CaptureSession]
 
+
+class ActContinuation(Protocol):
+    """The opt-in judgement of each admitted act's evidence (decision D1)."""
+
+    def covers(self, plan: tuple[ActRequest, ...]) -> bool:
+        """Exactly ``True`` only if every act of ``plan``, and no other, will be judged."""
+
+    def permits(self, request: ActRequest, evidence: AdmittedEvidence) -> bool:
+        """Exactly ``True`` lets the pass go on after this act."""
+
+
 #: Stop reasons this module itself assigns (they match the capture contract's
 #: ``REASON`` grammar). An act failure's reason is the mechanism's classification.
 REASON_NO_DURABLE_GENESIS = "no-durable-genesis"
 REASON_UNACCEPTABLE_EXIT = "unacceptable-exit"
 REASON_UNEXPECTED_ERROR = "orchestrator-error"
+#: Only with a continuation: the admitted evidence did not re-verify, or was refused.
+REASON_EVIDENCE_UNVERIFIED = "evidence-unverified"
+REASON_CONTINUATION_REFUSED = "continuation-refused"
 #: Note attached to the original error when its one stop attempt also failed.
 NOTE_STOP_ATTEMPT_FAILED = "orchestrator-stop-attempt-failed"
 
@@ -112,6 +146,7 @@ class PassAPlanRefused(HarnessError):
             "malformed-request",
             "malformed-policy",
             "malformed-factory",
+            "malformed-continuation",
             "malformed-session",
         }
     )
@@ -163,6 +198,7 @@ def run_pass_a(
     acts: Sequence[ActRequest],
     exit_policy: ExitPolicy,
     session_factory: SessionFactory,
+    continuation: ActContinuation | None = None,
 ) -> PassAResult:
     """Run one pass's finite plan, stop at the first failure, finalize exactly once.
 
@@ -172,7 +208,7 @@ def run_pass_a(
     that pairing succeeded. Raises ``PassAPlanRefused`` for a malformed plan, policy
     or factory before any effect; every other raise is described in the module
     docstring."""
-    plan = _validated_plan(acts, exit_policy, genesis, session_factory)
+    plan = _validated_plan(acts, exit_policy, genesis, session_factory, continuation)
     try:
         require_start_binding(activation_id, genesis.invocation_id, consume_journal)
     except StartBindingRefused as refusal:
@@ -196,7 +232,7 @@ def run_pass_a(
             session.binding(),
         )
     try:
-        return _drive(session, plan, exit_policy)
+        return _drive(session, plan, exit_policy, continuation)
     except Exception as original:
         # ``CaptureInterrupted`` is a ``BaseException`` and never reaches here. A
         # session that is still open gets its one X-3 attempt; a sealed one has had it.
@@ -223,6 +259,7 @@ def _validated_plan(
     exit_policy: ExitPolicy,
     genesis: GenesisRequest,
     session_factory: SessionFactory,
+    continuation: ActContinuation | None = None,
 ) -> tuple[ActRequest, ...]:
     """A private snapshot of the plan, or a refusal, before any effect.
 
@@ -243,11 +280,39 @@ def _validated_plan(
         raise PassAPlanRefused("malformed-policy")
     if not callable(session_factory):
         raise PassAPlanRefused("malformed-factory")
+    if continuation is not None:
+        # Only the two lookups are guarded: an error raised inside ``covers`` propagates.
+        try:
+            covers, permits = continuation.covers, continuation.permits
+        except AttributeError:
+            raise PassAPlanRefused("malformed-continuation") from None
+        if not (callable(covers) and callable(permits) and covers(plan) is True):
+            raise PassAPlanRefused("malformed-continuation")
     return plan
 
 
+def _continuation_stop_reason(
+    session: CaptureSession, request: ActRequest, continuation: ActContinuation
+) -> str | None:
+    """Why the pass must stop after this admitted act, or ``None`` to go on."""
+    try:
+        evidence = session.admitted_evidence()
+    except StoreFailure:
+        return REASON_EVIDENCE_UNVERIFIED
+    if continuation.permits(request, evidence) is not True:
+        return REASON_CONTINUATION_REFUSED
+    try:
+        session.verify_evidence_bindings()
+    except StoreFailure:
+        return REASON_EVIDENCE_UNVERIFIED
+    return None
+
+
 def _drive(
-    session: CaptureSession, plan: tuple[ActRequest, ...], exit_policy: ExitPolicy
+    session: CaptureSession,
+    plan: tuple[ActRequest, ...],
+    exit_policy: ExitPolicy,
+    continuation: ActContinuation | None = None,
 ) -> PassAResult:
     outcomes: list[ActOutcome] = []
     for request in plan:
@@ -269,6 +334,12 @@ def _drive(
             return _ended(
                 session, PassAStatus.STOPPED, REASON_UNACCEPTABLE_EXIT, outcomes, None, finalization
             )
+        if continuation is None:
+            continue
+        reason = _continuation_stop_reason(session, request, continuation)
+        if reason is not None:
+            finalization = session.stop(reason=reason, step_or_case_id=request.step_or_case_id)
+            return _ended(session, PassAStatus.STOPPED, reason, outcomes, None, finalization)
     finalization = session.complete()
     if finalization.x3_outcome == X3_SUCCEEDED and finalization.x4_validity == X4_VALID:
         return _ended(session, PassAStatus.COMPLETED, None, outcomes, None, finalization)
@@ -296,9 +367,12 @@ def _ended(
 
 
 __all__ = [
+    "REASON_CONTINUATION_REFUSED",
+    "REASON_EVIDENCE_UNVERIFIED",
     "REASON_NO_DURABLE_GENESIS",
     "REASON_UNACCEPTABLE_EXIT",
     "REASON_UNEXPECTED_ERROR",
+    "ActContinuation",
     "ExitPolicy",
     "NOTE_STOP_ATTEMPT_FAILED",
     "PassAPlanRefused",

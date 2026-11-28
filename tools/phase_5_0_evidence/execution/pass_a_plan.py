@@ -50,7 +50,7 @@
 Nothing in this module starts a process, opens a file, arms a launcher, builds a session
 or calls ``run_pass_a``. The entry does not import it: it is a value layer that a later,
 separately authorized wiring step consumes. It lives beside ``pass_a`` in the execution
-tier and its bytes are covered by the review manifest (version 38), so changing a command, an environment or a measurement moves the
+tier and its bytes are covered by the review manifest (version 40), so changing a command, an environment or a measurement moves the
 reviewed digest and every pin derived from it.
 """
 
@@ -565,7 +565,8 @@ class PlannedStep:
     #: Exit statuses that let the pass continue. Everything else, including a signal,
     #: stops it.
     accepted_exits: tuple[int, ...] = (0,)
-    #: Which authorization row of the old draft covers the step (a label, not a grant).
+    #: Which authorization row covers the step (a label, not a grant; nothing enforces it).
+    #: Decision D2 retired AUTH-DBREAD for Pass A: every planned step is AUTH-READ.
     auth_row: str = "AUTH-READ"
 
     def __post_init__(self) -> None:
@@ -582,8 +583,8 @@ class PlannedStep:
             raise PassAPlanError("malformed-step")
 
 
-def _s(step_id: str, klass: str, env: str, *argv: str, exits: tuple[int, ...] = (0,), auth: str = "AUTH-READ") -> PlannedStep:
-    return PlannedStep(step_id, klass, env, tuple(argv), exits, auth)
+def _s(step_id: str, klass: str, env: str, *argv: str, exits: tuple[int, ...] = (0,)) -> PlannedStep:
+    return PlannedStep(step_id, klass, env, tuple(argv), exits)
 
 
 def _git(*args: str) -> tuple[str, ...]:
@@ -640,8 +641,8 @@ def _lab_survey(prefix: str, *, group_check: bool) -> list[PlannedStep]:
 def _db_survey(prefix: str) -> list[PlannedStep]:
     """A1-29 and A1-30: host-level cluster status only (the psql reads are withdrawn)."""
     return [
-        _s(f"{prefix}29", "T-read", "systemd", "/usr/bin/systemctl", "is-active", "postgresql@18-main", auth="AUTH-DBREAD"),
-        _s(f"{prefix}30", "T-read", "plain", "/usr/bin/pg_lsclusters", "--no-header", auth="AUTH-DBREAD"),
+        _s(f"{prefix}29", "T-read", "systemd", "/usr/bin/systemctl", "is-active", "postgresql@18-main"),
+        _s(f"{prefix}30", "T-read", "plain", "/usr/bin/pg_lsclusters", "--no-header"),
     ]
 
 

@@ -50,8 +50,8 @@ ASSIGNMENT = ROOT / R.ASSIGNMENT
 R5_AMENDMENTS = ((
     'want=(30,"28a4f4c2b7596e9042f6b12a34f5684b3499a3fafd997e306fe25f6798e8a526",True,'
     '"c9afaf7cd32a398e9714e39779fef522d6af053ec71cd2c403e0a4c2eaba4b5c",False)',
-    'want=(39,"92a59795a840a5f9b5548e25d0a5711cc39a02a4f682ba3beaad0f31ee9587cc",True,'
-    '"7efe11d080fc1d6374ad5ff0748b81a1c1815999aa9e15a79a067bbb0a2673a2",False)',
+    'want=(40,"2e6d5a1da67007c541728e01aeaa62097c9b5eddb5c1008d912ee6c4cfb7babd",True,'
+    '"4254369f0678700e345dcfd9f1c239d9db054aa4537f2b89b2b86e353353faf7",False)',
 ), (
     "04218ed2d834c1c7abe417a850831d8956f087711befd692eefc2e61b2668572  rp11-launch\n",
     "7e2b7bde86a5ec8aaf112c3377fbdb3c862ffcb7acfff944c965b1aa0fddc67e  rp11-launch\n",
@@ -64,8 +64,8 @@ R5_AMENDMENTS = ((
 ),)
 # G1 re-pin (2026-11-23): R5 introduced version 31 here; the launcher Python 3.14 rebase moved the
 # review manifest to version 32, the current-target/G11 source refresh to version 33 and the G8
-# documentation/source-consistency refresh to version 34. Later refreshes reached version 39
-# (G9-R1, 2026-11-26), so the amendment's replacement tuple is version 39 (earlier versions are
+# documentation/source-consistency refresh to version 34. Later refreshes reached version 40
+# (D-1/D-2, 2026-11-28), so the amendment's replacement tuple is version 40 (earlier versions are
 # superseded history). R3's original
 # tuple (the first element above) is unchanged: it is what the R3 derivation is checked against.
 PY = "/opt/freedom-blades/runtime/venv-web/bin/python"
